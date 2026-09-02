@@ -1,12 +1,10 @@
 name = "artesanfc"
 compatibility_date = "2026-01-01"
-pages_build_output_dir = "public"
 
-# ------------------------------------------------------------
-# La base de datos D1 se vincula en la Fase 3 (Base de datos).
-# Cuando se cree con `wrangler d1 create artesanfc-db`, descomenta
-# este bloque y pega el database_id que te entregue el comando.
-# ------------------------------------------------------------
+[assets]
+directory = "public"
+
+# La base de datos D1 se vincula en la Fase 3
 # [[d1_databases]]
 # binding = "DB"
 # database_name = "artesanfc-db"
