@@ -4,8 +4,7 @@ compatibility_date = "2026-01-01"
 [assets]
 directory = "public"
 
-# La base de datos D1 se vincula en la Fase 3
-# [[d1_databases]]
-# binding = "DB"
-# database_name = "artesanfc-db"
-# database_id = "<se-genera-al-crear-la-base>"
+[[d1_databases]]
+binding = "DB"
+database_name = "artesanfc-db"
+database_id = "c1feb5a1-0fca-4d4b-82bd-76e5bc10527f"
