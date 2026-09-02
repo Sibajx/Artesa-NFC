@@ -1,4 +1,4 @@
-name = "artesanfc"
+name = "artesa-nfc"
 main = "src/index.js"
 compatibility_date = "2026-01-01"
 
