@@ -141,3 +141,24 @@ docs/*     -> documentación
 
 **Estado:** Aceptado  
 **Decisión:** primer recorrido completo con artesano de Cuilápam + una máscara.
+## ADR-025 — Tipografía inicial de ArtesaNFC
+
+**Estado:** Aceptado para v1  
+**Fecha:** 2026-09-16
+
+**Decisión:** Utilizar:
+
+```text
+Display: Instrument Serif
+UI / Texto: Manrope
+```
+
+**Motivo:** La combinación equilibra una presencia editorial y artesanal con una capa de interfaz contemporánea, limpia y legible. Instrument Serif aporta carácter a la narrativa y a las piezas; Manrope mantiene claridad en navegación, metadatos, certificados y contenido funcional.
+
+**Reglas:**
+- Instrument Serif se reserva para títulos, hero, nombres de piezas, nombres de artesanos y frases de alto impacto.
+- Manrope se utiliza para navegación, cuerpo de texto, metadatos, botones, formularios, certificados y footer.
+- Las páginas de pieza no deben introducir tipografías distintas de forma arbitraria.
+- La tipografía puede revisarse en versiones futuras si existe una razón clara de identidad, legibilidad o producto.
+
+**Consecuencias:** Esta decisión debe reflejarse en `docs/DESIGN_SYSTEM.md`. Un cambio futuro debe registrarse mediante una nueva ADR que reemplace o superseda esta decisión.
