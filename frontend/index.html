@@ -17,6 +17,20 @@
   <link rel="stylesheet" href="assets/css/components.css">
   <link rel="stylesheet" href="assets/css/animations.css">
   <link rel="stylesheet" href="assets/css/pages.css">
+
+  <!-- No-JS fallback: .fade-in (animations.css) starts hidden and is only
+       revealed by main.js's IntersectionObserver. Without JS that reveal
+       never runs, so this makes the same content visible/non-transformed
+       instead. prefers-reduced-motion already forces this in animations.css
+       regardless of JS, so this doesn't change that behavior. -->
+  <noscript>
+    <style>
+      .fade-in {
+        opacity: 1;
+        transform: none;
+      }
+    </style>
+  </noscript>
 </head>
 <body>
 
@@ -52,60 +66,108 @@
 
     <section id="hero" class="hero home-section--immersive" aria-labelledby="hero-title">
       <div class="hero__media-placeholder" aria-hidden="true"></div>
-      <p class="hero__eyebrow">ArtesaNFC</p>
-      <h1 id="hero-title" class="hero__title">La artesanía como protagonista.</h1>
-      <p class="hero__subtitle">
-        Cada pieza cuenta su origen, su proceso y a la persona que la creó.
-      </p>
-      <a class="editorial-link" href="#manifesto">Descubrir →</a>
+      <div class="hero__content">
+        <p class="hero__eyebrow">ArtesaNFC</p>
+        <h1 id="hero-title" class="hero__title">La artesanía, primero.</h1>
+        <p class="hero__subtitle">
+          Cada pieza guarda un origen, un proceso y una persona detrás.
+          La tecnología solo ayuda a contarlo.
+        </p>
+        <a class="editorial-link" href="#manifesto">Descubrir →</a>
+      </div>
     </section>
 
     <section id="manifesto" class="home-section container" aria-labelledby="manifesto-title">
-      <h2 id="manifesto-title" class="section-heading">Mostrar antes que explicar</h2>
-      <p>
-        ArtesaNFC conecta cada pieza física con su historia digital: el
-        artesano que la creó, su origen y su proceso.
+      <h2 id="manifesto-title" class="section-heading">Quien la hizo, importa</h2>
+      <p class="section-lead">
+        Cada pieza tiene un origen, un proceso y una persona detrás.
+        ArtesaNFC no reemplaza esa historia: la acompaña y la hace
+        accesible desde la propia pieza física.
       </p>
+      <dl class="manifesto-points">
+        <div class="manifesto-points__item">
+          <dt>Origen</dt>
+          <dd>De dónde viene la pieza y su material.</dd>
+        </div>
+        <div class="manifesto-points__item">
+          <dt>Proceso</dt>
+          <dd>Cómo se hizo: técnica, tiempo y oficio.</dd>
+        </div>
+        <div class="manifesto-points__item">
+          <dt>Autoría</dt>
+          <dd>Quién la creó y su relación con la pieza.</dd>
+        </div>
+      </dl>
     </section>
 
     <section id="nfc-experience" class="home-section container" aria-labelledby="nfc-experience-title">
-      <h2 id="nfc-experience-title" class="section-heading">Tecnología discreta</h2>
-      <p>
-        Un pequeño chip NFC en la pieza abre su identidad digital con un
-        simple acercamiento del teléfono.
+      <h2 id="nfc-experience-title" class="section-heading">Tecnología silenciosa</h2>
+      <p class="section-lead">
+        Una etiqueta NFC acompaña la pieza. Al acercar un teléfono
+        compatible, se abre su historia digital sin necesidad de
+        instalar una aplicación.
       </p>
+      <div class="nfc-flow">
+        <span class="nfc-flow__step">Pieza física</span>
+        <span class="nfc-flow__arrow" aria-hidden="true">→</span>
+        <span class="nfc-flow__step">Acercamiento NFC</span>
+        <span class="nfc-flow__arrow" aria-hidden="true">→</span>
+        <span class="nfc-flow__step">Historia digital</span>
+      </div>
     </section>
 
     <section id="featured-pieces" class="home-section container" aria-labelledby="featured-pieces-title">
       <h2 id="featured-pieces-title" class="section-heading">Piezas destacadas</h2>
-      <p class="section-note">Contenido dinámico pendiente — Sprint 2/3.</p>
+      <p class="section-note">Piezas de muestra — el catálogo completo llega en próximos sprints.</p>
       <ul class="card-grid" role="list">
-        <li class="card">
+        <li class="card fade-in">
           <div class="card__media-placeholder" aria-hidden="true"></div>
-          <p class="card__title">Pieza destacada</p>
-          <p class="card__meta">Artesano · Origen</p>
+          <p class="card__title">Vasija de barro negro</p>
+          <p class="card__meta">Oaxaca, México</p>
+          <p class="card__descriptor">Barro bruñido y quemado a baja temperatura.</p>
+          <a class="editorial-link card__action" href="/piezas">Explorar pieza →</a>
         </li>
-        <li class="card">
+        <li class="card fade-in">
           <div class="card__media-placeholder" aria-hidden="true"></div>
-          <p class="card__title">Pieza destacada</p>
-          <p class="card__meta">Artesano · Origen</p>
+          <p class="card__title">Textil de telar de cintura</p>
+          <p class="card__meta">Chiapas, México</p>
+          <p class="card__descriptor">Hilo teñido con tintes naturales.</p>
+          <a class="editorial-link card__action" href="/piezas">Explorar pieza →</a>
+        </li>
+        <li class="card fade-in">
+          <div class="card__media-placeholder" aria-hidden="true"></div>
+          <p class="card__title">Máscara tallada en madera</p>
+          <p class="card__meta">Michoacán, México</p>
+          <p class="card__descriptor">Talla y pintura tradicional.</p>
+          <a class="editorial-link card__action" href="/piezas">Explorar pieza →</a>
         </li>
       </ul>
     </section>
 
     <section id="artisans" class="home-section container" aria-labelledby="artisans-title">
       <h2 id="artisans-title" class="section-heading">Artesanos</h2>
-      <p class="section-note">Contenido dinámico pendiente — Sprint 2/3.</p>
+      <p class="section-note">Perfiles de muestra — el directorio completo llega en próximos sprints.</p>
       <ul class="card-grid" role="list">
-        <li class="card">
+        <li class="card fade-in">
           <div class="card__media-placeholder" aria-hidden="true"></div>
-          <p class="card__title">Nombre del artesano</p>
-          <p class="card__meta">Localidad</p>
+          <p class="card__title">Alfarera de barro negro</p>
+          <p class="card__meta">Oaxaca, México</p>
+          <p class="card__descriptor">Alfarería tradicional hecha a mano.</p>
+          <a class="editorial-link card__action" href="/artesanos">Conocer al artesano →</a>
         </li>
-        <li class="card">
+        <li class="card fade-in">
           <div class="card__media-placeholder" aria-hidden="true"></div>
-          <p class="card__title">Nombre del artesano</p>
-          <p class="card__meta">Localidad</p>
+          <p class="card__title">Tejedor de telar de cintura</p>
+          <p class="card__meta">Chiapas, México</p>
+          <p class="card__descriptor">Textil con tintes naturales.</p>
+          <a class="editorial-link card__action" href="/artesanos">Conocer al artesano →</a>
+        </li>
+        <li class="card fade-in">
+          <div class="card__media-placeholder" aria-hidden="true"></div>
+          <p class="card__title">Tallador de madera</p>
+          <p class="card__meta">Michoacán, México</p>
+          <p class="card__descriptor">Talla y pintado tradicional.</p>
+          <a class="editorial-link card__action" href="/artesanos">Conocer al artesano →</a>
         </li>
       </ul>
     </section>
@@ -135,6 +197,10 @@
     <section id="technology" class="home-section home-section--dark" aria-labelledby="technology-title">
       <div class="container">
         <h2 id="technology-title" class="section-heading">Tecnología</h2>
+        <p class="section-lead section-lead--inverse">
+          La tecnología sostiene la historia de cada pieza; no compite
+          con ella.
+        </p>
         <ul class="tech-terms">
           <li class="tech-terms__item">Identidad digital</li>
           <li class="tech-terms__item">NFC</li>
@@ -147,16 +213,20 @@
 
     <section id="about" class="home-section container" aria-labelledby="about-title">
       <h2 id="about-title" class="section-heading">Nosotros</h2>
-      <p>
-        ArtesaNFC nace para presentar, documentar y autenticar piezas
-        artesanales únicas, cuidando la relación entre la pieza y quien
-        la creó.
+      <p class="section-lead">
+        ArtesaNFC conecta cada pieza artesanal con el contexto que la
+        explica: quién la hizo, cómo y dónde. Documentamos ese origen y
+        lo hacemos accesible desde la propia pieza física, cuidando que
+        la tecnología nunca compita con el oficio que representa.
       </p>
     </section>
 
     <section id="contact" class="home-section container" aria-labelledby="contact-title">
       <h2 id="contact-title" class="section-heading">Contacto</h2>
-      <p class="section-note">Información de contacto próximamente.</p>
+      <p class="section-lead">
+        ¿Eres artesano, coleccionista o simplemente quieres saber más?
+        Muy pronto habilitaremos un canal directo de contacto.
+      </p>
     </section>
 
   </main>

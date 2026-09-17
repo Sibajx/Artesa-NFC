@@ -1,6 +1,18 @@
 /* ArtesaNFC — Home page shell
    Hero shell and section base layouts only. No final art direction. */
 
+/* Clearance under the sticky header (components.css .site-header) for
+   anchor-jump and keyboard-focus scrolling (nav links, the hero
+   "Descubrir" link, and Tab landing on card action links) — the header's
+   real height flexes with the responsive logo size, so this is a safe
+   upper bound rather than a duplicate of that calculation. Does not
+   affect normal in-flow spacing/rhythm; only where the browser scrolls
+   a target into view. */
+.home-section,
+.hero {
+  scroll-margin-top: 6.5rem;
+}
+
 /* min-height/display/flex layout for #hero comes from .home-section--immersive
    (layout.css) — kept as the single source of truth for that behavior. */
 .hero {
@@ -22,6 +34,16 @@
   }
 }
 
+/* Groups eyebrow/title/subtitle/link so hero composition reads as one
+   editorial block, independent of the immersive section's own centering. */
+.hero__content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  max-width: 640px;
+}
+
 .hero__eyebrow {
   font-size: var(--text-small);
   letter-spacing: 0.15em;
@@ -37,6 +59,66 @@
   font-size: var(--text-body-l);
   color: var(--color-text-muted);
   max-width: 45ch;
+}
+
+/* Larger intro paragraph used under a section heading — Manifesto, NFC,
+   About, Contact, Technology. Composition differs per section via the
+   elements that follow it (dl, flow, cards, terms), not this class. */
+.section-lead {
+  font-size: var(--text-body-l);
+  color: var(--color-text-muted);
+  max-width: 60ch;
+  margin-bottom: var(--space-md);
+}
+
+.section-lead--inverse {
+  color: var(--color-text-inverse);
+  opacity: 0.8;
+}
+
+/* Manifesto — Origen/Proceso/Autoría, distinct from About's single
+   paragraph per DESIGN_SYSTEM.md §16 (Manifesto vs. Nosotros). */
+.manifesto-points {
+  display: grid;
+  gap: var(--space-md);
+}
+
+@media (min-width: 768px) {
+  .manifesto-points {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.manifesto-points__item dt {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: var(--text-small);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.manifesto-points__item dd {
+  margin-top: var(--space-xs);
+  color: var(--color-text-muted);
+  max-width: 32ch;
+}
+
+/* NFC section — physical piece → NFC → digital story, editorial only,
+   no interactive simulation. */
+.nfc-flow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.nfc-flow__step {
+  font-family: var(--font-display);
+  font-size: var(--text-heading-2);
+}
+
+.nfc-flow__arrow {
+  color: var(--color-text-muted);
 }
 
 /* Placeholder media slot — no production asset yet.
@@ -78,6 +160,17 @@
 .card__meta {
   color: var(--color-text-muted);
   font-size: var(--text-small);
+}
+
+.card__descriptor {
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+}
+
+/* Pins the discrete action link to the bottom of the card even when
+   descriptor length varies between cards in the same row. */
+.card__action {
+  margin-top: auto;
 }
 
 /* Steps list — "how it works" */
