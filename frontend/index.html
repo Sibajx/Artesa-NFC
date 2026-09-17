@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ArtesaNFC</title>
+  <meta name="description" content="ArtesaNFC — piezas artesanales únicas, conectadas con su artesano y su historia.">
+  <meta name="robots" content="index, follow">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Manrope:wght@400;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="assets/css/tokens.css">
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/layout.css">
+  <link rel="stylesheet" href="assets/css/components.css">
+  <link rel="stylesheet" href="assets/css/animations.css">
+  <link rel="stylesheet" href="assets/css/pages.css">
+</head>
+<body>
+
+  <a class="skip-link" href="#main-content">Saltar al contenido principal</a>
+
+  <header class="site-header" data-scrolled="false" data-scroll-dir="up">
+    <a class="logo" href="/">ArtesaNFC</a>
+    <button
+      type="button"
+      class="hamburger"
+      id="menu-toggle"
+      aria-expanded="false"
+      aria-controls="primary-navigation"
+      aria-label="Abrir menú"
+    >
+      <span class="hamburger__lines" aria-hidden="true"></span>
+    </button>
+  </header>
+
+  <div id="nav-backdrop" class="nav-backdrop" data-state="closed" aria-hidden="true" hidden></div>
+
+  <nav id="primary-navigation" class="nav-panel" aria-label="Principal" data-state="closed" hidden>
+    <ul class="nav-panel__list" role="list">
+      <li><a class="nav-panel__link" href="#hero">Home</a></li>
+      <li><a class="nav-panel__link" href="/artesanos">Artesanos</a></li>
+      <li><a class="nav-panel__link" href="/piezas">Piezas</a></li>
+      <li><a class="nav-panel__link" href="#about">Nosotros</a></li>
+      <li><a class="nav-panel__link" href="#contact">Contacto</a></li>
+    </ul>
+  </nav>
+
+  <main id="main-content">
+
+    <section id="hero" class="hero home-section--immersive" aria-labelledby="hero-title">
+      <div class="hero__media-placeholder" aria-hidden="true"></div>
+      <p class="hero__eyebrow">ArtesaNFC</p>
+      <h1 id="hero-title" class="hero__title">La artesanía como protagonista.</h1>
+      <p class="hero__subtitle">
+        Cada pieza cuenta su origen, su proceso y a la persona que la creó.
+      </p>
+      <a class="editorial-link" href="#manifesto">Descubrir →</a>
+    </section>
+
+    <section id="manifesto" class="home-section container" aria-labelledby="manifesto-title">
+      <h2 id="manifesto-title" class="section-heading">Mostrar antes que explicar</h2>
+      <p>
+        ArtesaNFC conecta cada pieza física con su historia digital: el
+        artesano que la creó, su origen y su proceso.
+      </p>
+    </section>
+
+    <section id="nfc-experience" class="home-section container" aria-labelledby="nfc-experience-title">
+      <h2 id="nfc-experience-title" class="section-heading">Tecnología discreta</h2>
+      <p>
+        Un pequeño chip NFC en la pieza abre su identidad digital con un
+        simple acercamiento del teléfono.
+      </p>
+    </section>
+
+    <section id="featured-pieces" class="home-section container" aria-labelledby="featured-pieces-title">
+      <h2 id="featured-pieces-title" class="section-heading">Piezas destacadas</h2>
+      <p class="section-note">Contenido dinámico pendiente — Sprint 2/3.</p>
+      <ul class="card-grid" role="list">
+        <li class="card">
+          <div class="card__media-placeholder" aria-hidden="true"></div>
+          <p class="card__title">Pieza destacada</p>
+          <p class="card__meta">Artesano · Origen</p>
+        </li>
+        <li class="card">
+          <div class="card__media-placeholder" aria-hidden="true"></div>
+          <p class="card__title">Pieza destacada</p>
+          <p class="card__meta">Artesano · Origen</p>
+        </li>
+      </ul>
+    </section>
+
+    <section id="artisans" class="home-section container" aria-labelledby="artisans-title">
+      <h2 id="artisans-title" class="section-heading">Artesanos</h2>
+      <p class="section-note">Contenido dinámico pendiente — Sprint 2/3.</p>
+      <ul class="card-grid" role="list">
+        <li class="card">
+          <div class="card__media-placeholder" aria-hidden="true"></div>
+          <p class="card__title">Nombre del artesano</p>
+          <p class="card__meta">Localidad</p>
+        </li>
+        <li class="card">
+          <div class="card__media-placeholder" aria-hidden="true"></div>
+          <p class="card__title">Nombre del artesano</p>
+          <p class="card__meta">Localidad</p>
+        </li>
+      </ul>
+    </section>
+
+    <section id="how-it-works" class="home-section container" aria-labelledby="how-it-works-title">
+      <h2 id="how-it-works-title" class="section-heading">Cómo funciona</h2>
+      <ol class="steps-list" role="list">
+        <li class="steps-list__step">
+          <span class="steps-list__step-number">01</span>
+          <p>Descubre una pieza en la galería.</p>
+        </li>
+        <li class="steps-list__step">
+          <span class="steps-list__step-number">02</span>
+          <p>Conoce al artesano detrás de ella.</p>
+        </li>
+        <li class="steps-list__step">
+          <span class="steps-list__step-number">03</span>
+          <p>Acércate a la pieza física con NFC.</p>
+        </li>
+        <li class="steps-list__step">
+          <span class="steps-list__step-number">04</span>
+          <p>Consulta su identidad digital.</p>
+        </li>
+      </ol>
+    </section>
+
+    <section id="technology" class="home-section home-section--dark" aria-labelledby="technology-title">
+      <div class="container">
+        <h2 id="technology-title" class="section-heading">Tecnología</h2>
+        <ul class="tech-terms">
+          <li class="tech-terms__item">Identidad digital</li>
+          <li class="tech-terms__item">NFC</li>
+          <li class="tech-terms__item">Autenticidad</li>
+          <li class="tech-terms__item">Trazabilidad</li>
+          <li class="tech-terms__item">Registro</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="about" class="home-section container" aria-labelledby="about-title">
+      <h2 id="about-title" class="section-heading">Nosotros</h2>
+      <p>
+        ArtesaNFC nace para presentar, documentar y autenticar piezas
+        artesanales únicas, cuidando la relación entre la pieza y quien
+        la creó.
+      </p>
+    </section>
+
+    <section id="contact" class="home-section container" aria-labelledby="contact-title">
+      <h2 id="contact-title" class="section-heading">Contacto</h2>
+      <p class="section-note">Información de contacto próximamente.</p>
+    </section>
+
+  </main>
+
+  <footer class="site-footer">
+    <p>ArtesaNFC</p>
+    <nav class="site-footer__nav" aria-label="Footer">
+      <a href="#hero">Home</a>
+      <a href="/artesanos">Artesanos</a>
+      <a href="/piezas">Piezas</a>
+      <a href="#about">Nosotros</a>
+      <a href="#contact">Contacto</a>
+    </nav>
+  </footer>
+
+  <script src="assets/js/main.js" defer></script>
+</body>
+</html>

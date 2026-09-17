@@ -1,0 +1,33 @@
+/* ArtesaNFC — Motion system foundation
+   Minimal reusable transition classes. No scroll choreography yet
+   (DESIGN_SYSTEM.md §14 defers "scrub narrativo" / scene-level motion
+   to later issues). */
+
+.fade-in {
+  opacity: 0;
+  transform: translateY(1rem);
+  transition: opacity var(--duration-editorial) var(--ease-out),
+    transform var(--duration-editorial) var(--ease-out);
+}
+
+.fade-in.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Reduced motion — DESIGN_SYSTEM.md §18 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .fade-in {
+    opacity: 1;
+    transform: none;
+  }
+}
