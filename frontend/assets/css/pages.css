@@ -121,13 +121,23 @@
   color: var(--color-text-muted);
 }
 
-/* Placeholder media slot — no production asset yet.
-   A future issue replaces this with the hero video per DESIGN_SYSTEM.md §7. */
-.hero__media-placeholder {
+/* Hero media — video/poster behind hero content (Issue #19).
+   base.css's global `video { height: auto }` is meant for in-flow media;
+   this scopes an override since the hero video fills an absolutely
+   positioned box instead (DESIGN_SYSTEM.md §7). */
+.hero__media {
   position: absolute;
   inset: 0;
   z-index: -1;
+  overflow: hidden;
   background: var(--color-soft-white);
+}
+
+.hero__video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
 }
 
 .section-heading {
@@ -139,17 +149,45 @@
   font-size: var(--text-small);
 }
 
-/* Placeholder cards — structural only, replaced by real data in Sprint 2/3 */
+/* Cards — structural only, replaced by real data in Sprint 2/3 */
 .card {
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
 }
 
-.card__media-placeholder {
+/* Card media — <picture> wrapper (Issue #19). aspect-ratio lives on the
+   wrapper (not just the img) so the ratio holds immediately, before the
+   image finishes loading, preventing layout shift. */
+.card__media {
+  display: block;
   aspect-ratio: 4 / 5;
+  overflow: hidden;
   background: var(--color-surface-dark);
-  opacity: 0.08;
+}
+
+.card__media-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+/* Card media reveal (Issue #19 fix) — an <img> has no implicit
+   transition of its own when it finishes loading, so a lazy-loaded
+   photo just pops in instantly the moment its request completes,
+   independently of the card's .fade-in/.is-visible timing (main.js,
+   animations.css) — masking the reveal instead of taking part in it.
+   Mirroring the same is-visible toggle here makes the image fade in
+   together with the rest of the card. One-time only: .is-visible is
+   never removed (main.js unobserves after the first intersection). */
+.fade-in .card__media-img {
+  opacity: 0;
+  transition: opacity var(--duration-editorial) var(--ease-out);
+}
+
+.fade-in.is-visible .card__media-img {
+  opacity: 1;
 }
 
 .card__title {

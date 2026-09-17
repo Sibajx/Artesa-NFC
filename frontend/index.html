@@ -22,12 +22,19 @@
        revealed by main.js's IntersectionObserver. Without JS that reveal
        never runs, so this makes the same content visible/non-transformed
        instead. prefers-reduced-motion already forces this in animations.css
-       regardless of JS, so this doesn't change that behavior. -->
+       regardless of JS, so this doesn't change that behavior.
+       ".card.fade-in .card__media-img" (not just ".card__media-img")
+       matches pages.css's ".fade-in .card__media-img" hide-rule weight
+       (0,2,0) with (0,3,0) — both classes already sit on the same <li> —
+       so this wins the cascade without !important. -->
   <noscript>
     <style>
       .fade-in {
         opacity: 1;
         transform: none;
+      }
+      .card.fade-in .card__media-img {
+        opacity: 1;
       }
     </style>
   </noscript>
@@ -65,7 +72,22 @@
   <main id="main-content">
 
     <section id="hero" class="hero home-section--immersive" aria-labelledby="hero-title">
-      <div class="hero__media-placeholder" aria-hidden="true"></div>
+      <div class="hero__media" aria-hidden="true">
+        <video
+          class="hero__video"
+          poster="assets/img/hero-poster-placeholder.jpg"
+          muted
+          loop
+          playsinline
+          preload="none"
+        >
+          <!-- Placeholder video source intentionally omitted: no local
+               video encoder (e.g. ffmpeg) was available in this
+               environment (Issue #19). The poster above is a complete,
+               functional fallback; add a <source> here once a real or
+               placeholder video file exists. -->
+        </video>
+      </div>
       <div class="hero__content">
         <p class="hero__eyebrow">ArtesaNFC</p>
         <h1 id="hero-title" class="hero__title">La artesanía, primero.</h1>
@@ -121,21 +143,66 @@
       <p class="section-note">Piezas de muestra — el catálogo completo llega en próximos sprints.</p>
       <ul class="card-grid" role="list">
         <li class="card fade-in">
-          <div class="card__media-placeholder" aria-hidden="true"></div>
+          <picture class="card__media">
+            <!-- AVIF source pending local encoder support (no avifenc/
+                 ffmpeg available in this environment — Issue #19). Add
+                 <source type="image/avif" srcset="..."> above the WebP
+                 source once an AVIF placeholder or real asset exists. -->
+            <source type="image/webp" srcset="assets/img/card-placeholder.webp">
+            <img
+              class="card__media-img"
+              src="assets/img/card-placeholder.jpg"
+              alt="Marcador de posición — contenido pendiente"
+              width="640"
+              height="800"
+              loading="lazy"
+              decoding="async"
+            >
+          </picture>
           <p class="card__title">Vasija de barro negro</p>
           <p class="card__meta">Oaxaca, México</p>
           <p class="card__descriptor">Barro bruñido y quemado a baja temperatura.</p>
           <a class="editorial-link card__action" href="/piezas">Explorar pieza →</a>
         </li>
         <li class="card fade-in">
-          <div class="card__media-placeholder" aria-hidden="true"></div>
+          <picture class="card__media">
+            <!-- AVIF source pending local encoder support (no avifenc/
+                 ffmpeg available in this environment — Issue #19). Add
+                 <source type="image/avif" srcset="..."> above the WebP
+                 source once an AVIF placeholder or real asset exists. -->
+            <source type="image/webp" srcset="assets/img/card-placeholder.webp">
+            <img
+              class="card__media-img"
+              src="assets/img/card-placeholder.jpg"
+              alt="Marcador de posición — contenido pendiente"
+              width="640"
+              height="800"
+              loading="lazy"
+              decoding="async"
+            >
+          </picture>
           <p class="card__title">Textil de telar de cintura</p>
           <p class="card__meta">Chiapas, México</p>
           <p class="card__descriptor">Hilo teñido con tintes naturales.</p>
           <a class="editorial-link card__action" href="/piezas">Explorar pieza →</a>
         </li>
         <li class="card fade-in">
-          <div class="card__media-placeholder" aria-hidden="true"></div>
+          <picture class="card__media">
+            <!-- AVIF source pending local encoder support (no avifenc/
+                 ffmpeg available in this environment — Issue #19). Add
+                 <source type="image/avif" srcset="..."> above the WebP
+                 source once an AVIF placeholder or real asset exists. -->
+            <source type="image/webp" srcset="assets/img/card-placeholder.webp">
+            <img
+              class="card__media-img"
+              src="assets/img/card-placeholder.jpg"
+              alt="Marcador de posición — contenido pendiente"
+              width="640"
+              height="800"
+              loading="lazy"
+              decoding="async"
+            >
+          </picture>
           <p class="card__title">Máscara tallada en madera</p>
           <p class="card__meta">Michoacán, México</p>
           <p class="card__descriptor">Talla y pintura tradicional.</p>
@@ -149,21 +216,66 @@
       <p class="section-note">Perfiles de muestra — el directorio completo llega en próximos sprints.</p>
       <ul class="card-grid" role="list">
         <li class="card fade-in">
-          <div class="card__media-placeholder" aria-hidden="true"></div>
+          <picture class="card__media">
+            <!-- AVIF source pending local encoder support (no avifenc/
+                 ffmpeg available in this environment — Issue #19). Add
+                 <source type="image/avif" srcset="..."> above the WebP
+                 source once an AVIF placeholder or real asset exists. -->
+            <source type="image/webp" srcset="assets/img/card-placeholder.webp">
+            <img
+              class="card__media-img"
+              src="assets/img/card-placeholder.jpg"
+              alt="Marcador de posición — contenido pendiente"
+              width="640"
+              height="800"
+              loading="lazy"
+              decoding="async"
+            >
+          </picture>
           <p class="card__title">Alfarera de barro negro</p>
           <p class="card__meta">Oaxaca, México</p>
           <p class="card__descriptor">Alfarería tradicional hecha a mano.</p>
           <a class="editorial-link card__action" href="/artesanos">Conocer al artesano →</a>
         </li>
         <li class="card fade-in">
-          <div class="card__media-placeholder" aria-hidden="true"></div>
+          <picture class="card__media">
+            <!-- AVIF source pending local encoder support (no avifenc/
+                 ffmpeg available in this environment — Issue #19). Add
+                 <source type="image/avif" srcset="..."> above the WebP
+                 source once an AVIF placeholder or real asset exists. -->
+            <source type="image/webp" srcset="assets/img/card-placeholder.webp">
+            <img
+              class="card__media-img"
+              src="assets/img/card-placeholder.jpg"
+              alt="Marcador de posición — contenido pendiente"
+              width="640"
+              height="800"
+              loading="lazy"
+              decoding="async"
+            >
+          </picture>
           <p class="card__title">Tejedor de telar de cintura</p>
           <p class="card__meta">Chiapas, México</p>
           <p class="card__descriptor">Textil con tintes naturales.</p>
           <a class="editorial-link card__action" href="/artesanos">Conocer al artesano →</a>
         </li>
         <li class="card fade-in">
-          <div class="card__media-placeholder" aria-hidden="true"></div>
+          <picture class="card__media">
+            <!-- AVIF source pending local encoder support (no avifenc/
+                 ffmpeg available in this environment — Issue #19). Add
+                 <source type="image/avif" srcset="..."> above the WebP
+                 source once an AVIF placeholder or real asset exists. -->
+            <source type="image/webp" srcset="assets/img/card-placeholder.webp">
+            <img
+              class="card__media-img"
+              src="assets/img/card-placeholder.jpg"
+              alt="Marcador de posición — contenido pendiente"
+              width="640"
+              height="800"
+              loading="lazy"
+              decoding="async"
+            >
+          </picture>
           <p class="card__title">Tallador de madera</p>
           <p class="card__meta">Michoacán, México</p>
           <p class="card__descriptor">Talla y pintado tradicional.</p>
