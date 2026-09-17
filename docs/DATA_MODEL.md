@@ -113,7 +113,7 @@ columnas en `PIECE`.
 | Campo | Tipo | Obligatorio | Notas |
 |---|---|---|---|
 | `id` | UUID (PK, v4) | Sí | Interno. |
-| `piece_id` | UUID (FK → piece.id), unique | Sí | Una pieza tiene 0..1 certificado. |
+| `piece_id` | UUID (FK → piece.id) | Sí | **Ya no es globalmente unique.** Una pieza puede tener **múltiples registros históricos** de `CERTIFICATE` a lo largo del tiempo (reemisión/reemplazo, `SECURITY.md` §14.1), pero como máximo **uno** de esos registros puede tener `status = 'active'` para una pieza dada en cualquier momento (ver restricción C', sección 4, y unique constraints, sección 6). |
 | `token_hash` | text, unique, nullable | Condicional | Hash del token privado. Nulo mientras `status = draft` (el token aún no se ha emitido); obligatorio cuando `status = active` o `status = revoked`. **El token en texto plano nunca se persiste.** |
 | `issued_at` | timestamptz | No | Fecha de emisión; nulo mientras el certificado está en `draft`. |
 | `status` | enum (`draft`\|`active`\|`revoked`) | Sí | `draft`: registro creado pero token aún no emitido/activado (`token_hash` nulo). `active`: token emitido, hasheado y resoluble (`token_hash` obligatorio). `revoked`: invalidado (`token_hash` se conserva; ver regla de revocación abajo). |
@@ -129,6 +129,43 @@ Reglas de integridad conceptuales:
   Evita el conflicto entre "`token_hash` obligatorio" y "`draft` = token aún no emitido": mientras no se emite el token, el certificado permanece en `draft` sin `token_hash`; en cuanto se emite, pasa a `active` con `token_hash` ya presente y ese valor no se limpia al revocar.
 - **Revocación:** `CHECK ((status = 'revoked' AND revoked_at IS NOT NULL) OR (status != 'revoked' AND revoked_at IS NULL))`.
   Un certificado revocado siempre tiene `revoked_at`; en cualquier otro estado, `revoked_at` permanece nulo.
+- **Como máximo un certificado activo por pieza (nuevo, resuelve
+  `CROSS-DOCUMENT CHANGE REQUIRED` de `SECURITY.md` §14.1/§20):** unique
+  index **parcial** conceptualmente equivalente a
+  `UNIQUE(piece_id) WHERE status = 'active'`. Permite múltiples filas
+  históricas de `CERTIFICATE` para la misma `piece_id` (ej. `revoked`),
+  pero como máximo una fila con `status = 'active'` en cualquier
+  momento para esa pieza — mismo patrón ya aprobado para `nfc_tag`
+  (sección 2.4, restricción B).
+- **Historial preservado:** un certificado `revoked` **nunca** se borra
+  ni se sobrescribe al emitir un reemplazo; permanece como fila
+  histórica independiente, con su propio `token_hash` (del token
+  anterior, ya inválido) intacto.
+- **Token de reemplazo independiente:** un certificado de reemplazo es
+  una **fila nueva** de `CERTIFICATE` (no una actualización de la fila
+  revocada), con un `token_hash` calculado a partir de un token
+  completamente nuevo, generado de forma independiente (sección 2,
+  ADR-007) — nunca derivado del token anterior. La verificación exige
+  `status = 'active'` (sección 2.3 arriba, `SECURITY.md` §3.2/§14), por
+  lo que un `token_hash` de una fila `revoked` nunca vuelve a producir
+  `authentic`, sin importar cuántos certificados de reemplazo existan
+  después para la misma pieza.
+
+**Aprobado por Alexis (Product Owner) el 2026-09-16 — sin enlace
+explícito de reemplazo en el MVP:** este documento **no** agrega una
+columna que enlace explícitamente un certificado de reemplazo con el
+certificado `revoked` al que sucede (ej. `replaces_certificate_id`).
+Motivo: el historial de certificados ya está preservado al permitir
+múltiples filas de `CERTIFICATE` por pieza (arriba); `issued_at`,
+`revoked_at` y `status` ya dan suficiente historial de ciclo de vida
+para el piloto actual (2 artesanos, 4 piezas); el MVP no necesita una
+cadena explícita certificado-a-certificado, y sobre-diseñar esa
+relación para el volumen actual no está justificado. Esto queda
+**fuera de alcance del MVP**, no como decisión pendiente: una relación
+de reemplazo auto-referenciada (`replaces_certificate_id` u
+equivalente) puede agregarse más adelante mediante una migración
+**aditiva** si surge una necesidad real de producto/auditoría — no se
+anticipa aquí ni se bloquea el resto de este documento por ello.
 
 Límites de seguridad que este documento sí fija (y no delega):
 
@@ -242,11 +279,18 @@ Puntos de extensión previstos, sin comprometer una estructura final:
 ```text
 ARTISAN 1 ──── N PIECE
 PIECE    N ──── 1 ARTISAN
-PIECE    1 ──── 0..1 CERTIFICATE
+PIECE    1 ──── N CERTIFICATE histórico (máximo 1 activo, ver restricción C')
 PIECE    1 ──── 0..1 NFC_TAG activo (histórico preservado, ver restricción B)
 ARTISAN  1 ──── N MEDIA_ASSET (artisan_id asignado)
 PIECE    1 ──── N MEDIA_ASSET (piece_id asignado)
 ```
+
+**Cambio respecto a la versión anterior de este documento:** la
+relación `PIECE ──── CERTIFICATE` deja de ser `0..1` en total y pasa a
+ser `1..N` histórico con máximo un `active` a la vez, para resolver el
+`CROSS-DOCUMENT CHANGE REQUIRED` planteado por `SECURITY.md` §14.1/§20
+(reemisión de certificado sin destruir el historial revocado). Ninguna
+otra relación de este diagrama cambia.
 
 Restricciones a nivel de base de datos:
 
@@ -254,7 +298,16 @@ Restricciones a nivel de base de datos:
 - **B.** `nfc_tag`: unique index parcial sobre `piece_id` donde
   `status IN ('programmed', 'locked')`, para garantizar como máximo un tag
   activo por pieza, preservando el resto como historial (aprobado).
-- **C.** `certificate.piece_id` es unique (0..1 certificado por pieza).
+- **C'.** `certificate` (**reemplaza a la restricción C anterior, que
+  exigía `piece_id` unique de forma global**): `piece_id` **ya no es
+  unique global**. En su lugar, unique index **parcial** sobre
+  `piece_id` donde `status = 'active'`, conceptualmente equivalente a
+  `UNIQUE(piece_id) WHERE status = 'active'` — como máximo un
+  certificado `active` por pieza en cualquier momento, preservando el
+  resto (`revoked`, y cualquier `draft` histórico) como historial. Mismo
+  patrón que la restricción B para `nfc_tag`. Ver sección 2.3 para el
+  detalle conceptual y sección 6 para el listado de unique constraints
+  actualizado.
 - **D.** `media_asset`: `CHECK (num_nonnulls(artisan_id, piece_id) <= 1)`
   — permite 0 (temporalmente sin dueño) o 1 (dueño asignado), pero nunca 2
   a la vez (aprobado: relaciones explícitas en vez de diseño polimórfico,
@@ -276,7 +329,7 @@ Comportamiento de borrado en FKs (aprobado):
 | Relación | Comportamiento | Motivo |
 |---|---|---|
 | `piece.artisan_id → artisan.id` | `RESTRICT` | No se permite borrar un artesano con piezas asociadas; usar archivado/estado. |
-| `certificate.piece_id → piece.id` | `RESTRICT` | El certificado forma parte de la cadena de autenticidad/historial y no debe quedar huérfano ni borrarse por accidente; revocar en vez de borrar la pieza. |
+| `certificate.piece_id → piece.id` | `RESTRICT` | El certificado forma parte de la cadena de autenticidad/historial y no debe quedar huérfano ni borrarse por accidente; revocar en vez de borrar la pieza. Aplica a **todas** las filas históricas de `CERTIFICATE` de esa pieza (activas y revocadas), no solo a la fila `active`. |
 | `nfc_tag.piece_id → piece.id` | `RESTRICT` | El registro de NFC forma parte del historial de autenticidad (sección 2.4) y no debe eliminarse por cascada; desasignar se modela con `status = replaced`/`retired`, no con borrado. |
 | `media_asset.piece_id → piece.id` | `SET NULL` | Un recurso multimedia puede quedar temporalmente sin pieza asociada por archivo, migración o reasignación. |
 | `media_asset.artisan_id → artisan.id` | `SET NULL` | Ídem, para medios asociados a un artesano. |
@@ -291,8 +344,13 @@ desvinculado temporalmente no rompe la cadena de autenticidad.
 - `artisan.slug`
 - `piece.slug`
 - `piece.public_code`
-- `certificate.token_hash` (unique cuando no es `NULL`, dado que es nulo mientras `status = draft`)
-- `certificate.piece_id`
+- `certificate.token_hash` (unique cuando no es `NULL`, dado que es nulo mientras `status = draft`) — **se mantiene unique global**, sin cambios: cada `token_hash` persistido, activo o revocado, sigue siendo único en toda la tabla.
+- `certificate.piece_id` **parcial, para certificados activos**:
+  conceptualmente `UNIQUE(piece_id) WHERE status = 'active'` (restricción
+  C', sección 4). **Ya no es unique global** — una pieza puede tener
+  varias filas históricas de `CERTIFICATE` (ej. una `revoked` y una
+  `active` simultáneamente), pero nunca dos filas `active` para la
+  misma pieza. Mismo patrón que `nfc_tag.piece_id` abajo.
 - `nfc_tag.physical_uid` (unique cuando no es `NULL`)
 - `nfc_tag.piece_id` parcial para tags activos (restricción B, sección 4)
 
@@ -305,6 +363,12 @@ desvinculado temporalmente no rompe la cadena de autenticidad.
 - `piece.publication_status`, `artisan.publication_status` (filtrado en
   listados públicos).
 - `certificate.status`.
+- `certificate (piece_id, status)`: para resolver eficientemente "el
+  certificado activo de esta pieza" y para listar el historial completo
+  de certificados de una pieza (administración/auditoría) sin recorrer
+  toda la tabla; el unique index parcial de la sección 6 ya cubre el
+  caso `status = 'active'` de forma indexada, este índice compuesto
+  cubre además las consultas de historial que incluyen `revoked`/`draft`.
 - `media_asset (artisan_id, piece_id, role, position)` para ordenar
   galería en una sola consulta.
 - `audit_event.occurred_at` y `audit_event (entity_type, entity_id)`.
@@ -313,7 +377,10 @@ desvinculado temporalmente no rompe la cadena de autenticidad.
 
 - **Siempre obligatorios:** `id`, `created_at`, `updated_at` (excepto
   `audit_event`, sin `updated_at`); `slug` en `artisan`/`piece`;
-  `artisan_id` en `piece`; `piece_id` en `certificate`.
+  `artisan_id` en `piece`; `piece_id` en `certificate` (obligatorio en
+  **cada fila** de `certificate`; ya no implica una sola fila por
+  pieza — una pieza puede tener varias filas de `certificate` a lo
+  largo del tiempo, sección 2.3, sección 4).
 - **Opcionales por diseño:** todo campo narrativo/editorial
   (`biography`, `history`, `description`, `dimensions`, `origin`, etc.),
   porque el inventario actual tiene información parcial (`PROJECT.md`
@@ -397,7 +464,74 @@ Owner) el 2026-09-16, incluyendo los dos últimos pendientes:
 - Comportamiento de borrado en FKs para `certificate.piece_id`,
   `nfc_tag.piece_id` y `media_asset.artisan_id`/`piece_id` (sección 5).
 
+## 14. Reemisión de certificado / historial (resuelve `CROSS-DOCUMENT CHANGE REQUIRED` de `SECURITY.md`)
+
+Esta revisión (2026-09-16, rama `docs/certificate-history`) resuelve el
+único `CROSS-DOCUMENT CHANGE REQUIRED` pendiente identificado en
+`SECURITY.md` §14.1 y §20: `certificate.piece_id` deja de ser unique de
+forma global y pasa a tener un unique index **parcial** sobre
+`piece_id` donde `status = 'active'` (restricción C', sección 4;
+detalle conceptual en sección 2.3; unique constraints actualizados en
+sección 6; índice compuesto adicional en sección 7).
+
+Resumen de lo que cambia:
+
+- Una pieza puede tener **múltiples registros históricos** de
+  `CERTIFICATE` (secciones 2.3, 4).
+- Como máximo **uno** de esos registros puede tener `status = 'active'`
+  por pieza, en cualquier momento (secciones 2.3, 4, 6).
+- Los certificados `revoked` **permanecen preservados**, nunca se
+  borran ni se sobrescriben (sección 2.3).
+- Un certificado de reemplazo recibe un `token_hash` derivado de un
+  **token completamente nuevo e independiente** (sección 2.3, ADR-007).
+- Un `token_hash` de una fila `revoked` **nunca** vuelve a producir
+  `authentic`, porque la verificación exige `status = 'active'`
+  (sección 2.3, ya consistente con `SECURITY.md` §3.2/§14).
+- `certificate.token_hash` **sigue siendo unique global**, sin cambios
+  (sección 6).
+
+Esta revisión **no modifica** el comportamiento observable de la API:
+`API_CONTRACT.md` no se toca en esta tarea, y la resolución pública de
+certificado sigue teniendo únicamente los estados `authentic` /
+`unavailable` (`API_CONTRACT.md` §7, sin cambios).
+
+**Enlace explícito de reemplazo — fuera de alcance del MVP (aprobado
+por Alexis el 2026-09-16, ver también sección 2.3):** este documento no
+agrega una columna que enlace explícitamente un certificado de
+reemplazo con el certificado `revoked` al que sucede (ej.
+`replaces_certificate_id`). El historial de certificados ya queda
+preservado por permitir múltiples filas por pieza, y `issued_at` /
+`revoked_at` / `status` bastan como historial de ciclo de vida para el
+piloto actual — no se sobre-diseña una cadena certificado-a-certificado
+para 2 artesanos / 4 piezas. Si en el futuro surge una necesidad real de
+producto o auditoría, una relación auto-referenciada puede agregarse
+mediante una migración aditiva, sin alterar lo definido en esta
+revisión.
+
+## 15. Estado de las decisiones (actualizado)
+
+Todos los puntos que en versiones anteriores de este documento estaban
+marcados como `PROPOSED DECISION` fueron resueltos por Alexis (Product
+Owner) el 2026-09-16, incluyendo los dos últimos pendientes de esa
+revisión:
+
+- Unidades permitidas en `dimensions.unit`: `mm | cm | in` (sección 2.2).
+- Comportamiento de borrado en FKs para `certificate.piece_id`,
+  `nfc_tag.piece_id` y `media_asset.artisan_id`/`piece_id` (sección 5).
+
+Esta revisión posterior (reemisión de certificado / historial, sección
+14) resuelve el `CROSS-DOCUMENT CHANGE REQUIRED` de `SECURITY.md`
+descrito arriba. El único punto que había quedado marcado como
+`PROPOSED DECISION` en esa revisión (columna explícita de trazabilidad
+certificado-reemplazo → certificado-reemplazado, ej.
+`replaces_certificate_id`) fue resuelto por Alexis (Product Owner) el
+2026-09-16: **no se agrega en el MVP** (sección 2.3, sección 14) — el
+historial ya preservado vía múltiples filas de `CERTIFICATE` por pieza,
+junto con `issued_at`/`revoked_at`/`status`, es suficiente para el
+piloto actual; una relación auto-referenciada queda como extensión
+aditiva futura si una necesidad real de producto/auditoría lo justifica.
+
 **No quedan `PROPOSED DECISION` abiertos en este documento.** Cualquier
-punto no cubierto aquí pertenece explícitamente a otro documento (ver
-sección 0: `SECURITY.md`, `API_CONTRACT.md`, migración de datos legado) o
-a un ADR futuro (ownership, sección 3).
+otro punto no cubierto aquí pertenece explícitamente a otro documento
+(ver sección 0: `SECURITY.md`, `API_CONTRACT.md`, migración de datos
+legado) o a un ADR futuro (ownership, sección 3).
