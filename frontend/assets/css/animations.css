@@ -41,4 +41,13 @@
   .card.fade-in .card__media-img {
     opacity: 1;
   }
+
+  /* Approved decision, Issue #23: reduced motion prioritizes stable UI
+     availability over the scroll-driven hide/show in components.css — the
+     header must stay put, not hide, snap, or scroll-translate. This is a
+     failsafe on top of main.js already refusing to set data-hidden="true"
+     while prefers-reduced-motion is active. */
+  .site-header {
+    transform: none !important;
+  }
 }
