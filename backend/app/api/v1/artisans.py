@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import String, cast, select
+from fastapi import APIRouter, Depends
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
+from app.api.v1.common import media_order_by, not_found
 from app.models.artisan import Artisan
 from app.models.enums import PublicationStatus
 from app.models.media_asset import MediaAsset, MediaAssetStatus, MediaRole
@@ -14,20 +15,6 @@ from app.schemas.common import ListEnvelope, ListMeta
 from app.schemas.media import media_asset_to_public
 
 router = APIRouter(prefix="/artisans", tags=["artisans"])
-
-# API_CONTRACT.md section 10: unknown slug and unpublished slug must be
-# byte-for-byte identical externally, so there is exactly one 404 body.
-NOT_FOUND_ERROR = {"code": "not_found", "message": "The requested resource does not exist."}
-
-
-def _artisan_not_found() -> HTTPException:
-    return HTTPException(status_code=404, detail=NOT_FOUND_ERROR)
-
-
-def _media_order_by():
-    # Deterministic tie-break: position ASC, role ASC (as text, not native
-    # enum OID order), storage_path ASC.
-    return (MediaAsset.position.asc(), cast(MediaAsset.role, String).asc(), MediaAsset.storage_path.asc())
 
 
 @router.get("", response_model=ListEnvelope[ArtisanSummary])
@@ -59,7 +46,7 @@ def get_artisan(slug: str, db: Session = Depends(get_db)) -> ArtisanPublic:
     ).scalar_one_or_none()
 
     if artisan is None:
-        raise _artisan_not_found()
+        raise not_found()
 
     media_rows = (
         db.execute(
@@ -68,7 +55,7 @@ def get_artisan(slug: str, db: Session = Depends(get_db)) -> ArtisanPublic:
                 MediaAsset.artisan_id == artisan.id,
                 MediaAsset.status == MediaAssetStatus.active,
             )
-            .order_by(*_media_order_by())
+            .order_by(*media_order_by())
         )
         .scalars()
         .all()
@@ -97,7 +84,7 @@ def get_artisan(slug: str, db: Session = Depends(get_db)) -> ArtisanPublic:
                     MediaAsset.role == MediaRole.hero,
                     MediaAsset.status == MediaAssetStatus.active,
                 )
-                .order_by(*_media_order_by())
+                .order_by(*media_order_by())
             )
             .scalars()
             .all()
