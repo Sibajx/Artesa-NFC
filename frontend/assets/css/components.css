@@ -185,9 +185,15 @@
 }
 
 .nav-panel__link {
+  display: inline-block;
   font-family: var(--font-display);
   font-size: var(--text-heading-2);
   text-decoration: none;
+  /* Touch target — DESIGN_SYSTEM.md §17 (44px min). Same expand/cancel
+     technique as .editorial-link; a smaller offset since the large
+     display font already sits close to 44px on its own. */
+  padding-block: 0.25rem;
+  margin-block: -0.25rem;
 }
 
 .nav-panel__link:hover,
@@ -195,9 +201,22 @@
   opacity: 0.7;
 }
 
-/* Body scroll lock while the nav panel is open — applied by main.js */
+/* Body scroll lock while the nav panel is open — applied by main.js.
+   position:fixed (not just overflow:hidden) is required for a reliable
+   lock on iOS Safari, which otherwise still scrolls the background
+   behind an open drawer. --scroll-lock-offset and
+   --scroll-lock-scrollbar-width are set by main.js at open time and
+   cleared on close, when the exact prior scroll position is also
+   restored via window.scrollTo. The scrollbar-width padding avoids a
+   horizontal content shift on desktop browsers with a non-overlay
+   scrollbar. */
 body.has-locked-scroll {
+  position: fixed;
+  top: calc(-1 * var(--scroll-lock-offset, 0px));
+  left: 0;
+  right: 0;
   overflow: hidden;
+  padding-right: var(--scroll-lock-scrollbar-width, 0px);
 }
 
 /* Minimal editorial link — DESIGN_SYSTEM.md §8 */
@@ -206,4 +225,10 @@ body.has-locked-scroll {
   font-family: var(--font-ui);
   font-weight: 600;
   text-decoration: underline;
+  /* Touch target — DESIGN_SYSTEM.md §17 (44px min). Padding expands the
+     tappable area; the equal negative margin cancels it back out of the
+     surrounding flow, so visible spacing/layout is unchanged. No
+     background/border is added, so it never reads as a button. */
+  padding-block: 0.625rem;
+  margin-block: -0.625rem;
 }
