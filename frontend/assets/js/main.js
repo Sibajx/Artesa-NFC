@@ -1,8 +1,8 @@
 // ArtesaNFC — Home foundation behavior.
 // Scope: hamburger menu open/close, aria sync, Escape to close,
-// optional scroll lock, and a lightweight scroll-direction hook for
-// future header/logo treatments. No animation choreography, no
-// dependencies, no API calls.
+// optional scroll lock, a lightweight scroll-direction hook for
+// future header/logo treatments, and a minimal .fade-in reveal.
+// No scroll-jacking, no narrative scrub, no dependencies, no API calls.
 
 (function () {
   "use strict";
@@ -141,5 +141,35 @@
       },
       { passive: true }
     );
+  }
+
+  // Scroll reveal — minimal wiring for the .fade-in class already defined
+  // in animations.css (DESIGN_SYSTEM.md §9: fade/reveal on cards).
+  // prefers-reduced-motion is handled entirely in CSS; no branching needed
+  // here.
+  var revealTargets = document.querySelectorAll(".fade-in");
+
+  if (revealTargets.length) {
+    if ("IntersectionObserver" in window) {
+      var revealObserver = new IntersectionObserver(
+        function (entries) {
+          entries.forEach(function (entry) {
+            if (entry.isIntersecting) {
+              entry.target.classList.add("is-visible");
+              revealObserver.unobserve(entry.target);
+            }
+          });
+        },
+        { threshold: 0.2 }
+      );
+
+      for (var i = 0; i < revealTargets.length; i++) {
+        revealObserver.observe(revealTargets[i]);
+      }
+    } else {
+      for (var j = 0; j < revealTargets.length; j++) {
+        revealTargets[j].classList.add("is-visible");
+      }
+    }
   }
 })();
