@@ -15,6 +15,57 @@
   // Tracks whether the off-canvas nav is open so the scroll-driven header
   // hide/show below (Issue #23) never fights an open menu.
   var isNavOpen = false;
+  // Off-canvas background accessibility (Issue #25) — content outside the
+  // drawer that must be taken out of the accessibility tree/tab order
+  // while it's open.
+  var mainContent = document.getElementById("main-content");
+  var siteFooter = document.querySelector(".site-footer");
+  // Scroll position captured at open time so it can be restored exactly
+  // on close (mobile/iOS scroll lock, Issue #25).
+  var lockedScrollY = 0;
+
+  // Off-canvas background accessibility (Issue #25). Tab is already
+  // trapped inside the open panel below, but that alone doesn't stop
+  // assistive tech that navigates outside the Tab order (e.g. a screen
+  // reader's swipe/virtual cursor) from reaching background content.
+  // inert removes these regions from the tab order and AT tree in
+  // supporting browsers; aria-hidden is a fallback for browsers without
+  // inert support.
+  function setBackgroundInert(isInert) {
+    [mainContent, siteFooter].forEach(function (el) {
+      if (!el) {
+        return;
+      }
+      el.inert = isInert;
+      if (isInert) {
+        el.setAttribute("aria-hidden", "true");
+      } else {
+        el.removeAttribute("aria-hidden");
+      }
+    });
+  }
+
+  // Mobile/iOS background scroll lock (Issue #25) — overflow:hidden alone
+  // does not reliably stop iOS Safari from scrolling the page behind an
+  // open drawer. Pinning body to its current scroll offset via
+  // position:fixed (see .has-locked-scroll in components.css) blocks
+  // that; the offset and scrollbar width are passed to CSS as custom
+  // properties so main.js never sets layout styles directly, and the
+  // exact scroll position is restored on unlock.
+  function lockBodyScroll() {
+    lockedScrollY = window.scrollY || window.pageYOffset || 0;
+    var scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    document.body.style.setProperty("--scroll-lock-offset", lockedScrollY + "px");
+    document.body.style.setProperty("--scroll-lock-scrollbar-width", scrollbarWidth + "px");
+    document.body.classList.add("has-locked-scroll");
+  }
+
+  function unlockBodyScroll() {
+    document.body.classList.remove("has-locked-scroll");
+    document.body.style.removeProperty("--scroll-lock-offset");
+    document.body.style.removeProperty("--scroll-lock-scrollbar-width");
+    window.scrollTo(0, lockedScrollY);
+  }
 
   function openMenu() {
     isNavOpen = true;
@@ -34,7 +85,8 @@
     });
     menuToggle.setAttribute("aria-expanded", "true");
     menuToggle.setAttribute("aria-label", "Cerrar menú");
-    document.body.classList.add("has-locked-scroll");
+    lockBodyScroll();
+    setBackgroundInert(true);
 
     var firstLink = navPanel.querySelector(".nav-panel__link");
     if (firstLink) {
@@ -52,7 +104,8 @@
     }
     menuToggle.setAttribute("aria-expanded", "false");
     menuToggle.setAttribute("aria-label", "Abrir menú");
-    document.body.classList.remove("has-locked-scroll");
+    setBackgroundInert(false);
+    unlockBodyScroll();
 
     window.setTimeout(function () {
       if (navPanel.dataset.state === "closed") {
@@ -131,7 +184,7 @@
     var ticking = false;
     // Ignore deltas smaller than this — absorbs mobile momentum/rubber-band
     // jitter and tiny direction changes so the header doesn't flicker.
-    var HEADER_HIDE_THRESHOLD = 12;
+    var HEADER_HIDE_THRESHOLD = 8;
     // Stay visible until scrolled meaningfully past the top, so the header
     // never hides while still near the start of the page.
     var HEADER_REVEAL_MIN_SCROLL = 96;
