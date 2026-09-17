@@ -28,6 +28,20 @@
   }
 }
 
+/* Mobile/tablet hero content position — min-height:100vh and
+   .hero__media (position:absolute, filling .hero's full padding box
+   regardless of this padding-top) both stay untouched, so the section
+   remains a full 100vh video-ready hero; only where .hero__content sits
+   within it changes. Centering a short mobile-scale content block in a
+   full 100vh box left too much empty space above it — this anchors it
+   in the upper third instead, scaling with actual viewport height. */
+@media (max-width: 1199px) {
+  .hero {
+    justify-content: flex-start;
+    padding-top: clamp(var(--space-lg), 20vh, var(--space-xl));
+  }
+}
+
 @media (min-width: 1200px) {
   .hero {
     padding: var(--margin-desktop);

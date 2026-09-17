@@ -40,6 +40,26 @@
   }
 }
 
+/* Off-canvas nav open — body.has-locked-scroll makes <body> position:fixed
+   (see below), which makes body (not the viewport) the nearest scroll
+   container for .site-header's position:sticky, detaching it from the
+   true viewport and pushing it off-screen by however far the page had
+   been scrolled. Pinning the header to position:fixed here bypasses that
+   entirely: position:fixed on an ancestor does not by itself become the
+   containing block for a fixed descendant, so this still resolves
+   against the real viewport regardless of body's own offset. Reuses the
+   header's existing z-index:100 (already above .nav-panel's 95 and
+   .nav-backdrop's 90) — no new stacking value needed. The header's
+   opaque background fully covers the strip where it briefly leaves
+   normal document flow, so this causes no visible shift. */
+body.has-locked-scroll .site-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+}
+
 /* Logo fade-on-scroll hook — behavior added progressively via main.js */
 .site-header[data-scrolled="true"] .logo {
   opacity: 0.6;
@@ -184,6 +204,20 @@
   gap: var(--space-sm);
 }
 
+/* Nudges the link group above true vertical center on mobile/tablet
+   (upper-middle rather than dead-center) — a transform so it doesn't
+   touch .nav-panel's own centering, width, padding, or the list's own
+   gap/alignment. vh-based so the offset scales with actual viewport
+   height instead of feeling disproportionate between a phone and a
+   tablet. Untouched at >=1200px. */
+@media (max-width: 1199px) {
+  .nav-panel__list {
+    transform: translateY(
+      calc(-1 * clamp(var(--space-sm), 8vh, var(--space-lg)))
+    );
+  }
+}
+
 .nav-panel__link {
   display: inline-block;
   font-family: var(--font-display);
@@ -217,6 +251,7 @@ body.has-locked-scroll {
   right: 0;
   overflow: hidden;
   padding-right: var(--scroll-lock-scrollbar-width, 0px);
+  padding-top: var(--header-height, 0px);
 }
 
 /* Minimal editorial link — DESIGN_SYSTEM.md §8 */

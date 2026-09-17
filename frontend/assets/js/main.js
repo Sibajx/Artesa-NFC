@@ -57,6 +57,9 @@
     var scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
     document.body.style.setProperty("--scroll-lock-offset", lockedScrollY + "px");
     document.body.style.setProperty("--scroll-lock-scrollbar-width", scrollbarWidth + "px");
+    if (header) {
+      document.body.style.setProperty("--header-height", header.getBoundingClientRect().height + "px");
+    }
     document.body.classList.add("has-locked-scroll");
   }
 
@@ -64,6 +67,7 @@
     document.body.classList.remove("has-locked-scroll");
     document.body.style.removeProperty("--scroll-lock-offset");
     document.body.style.removeProperty("--scroll-lock-scrollbar-width");
+    document.body.style.removeProperty("--header-height");
     window.scrollTo(0, lockedScrollY);
   }
 
