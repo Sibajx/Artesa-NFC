@@ -13,9 +13,19 @@
   padding: var(--space-sm) var(--margin-mobile);
   background: var(--color-bg);
   color: var(--color-text);
+  transform: translateY(0);
   transition: background var(--duration-ui) var(--ease-standard),
     color var(--duration-ui) var(--ease-standard),
-    opacity var(--duration-editorial) var(--ease-standard);
+    opacity var(--duration-editorial) var(--ease-standard),
+    transform var(--duration-ui) var(--ease-standard);
+}
+
+/* Hide-on-scroll-down / reveal-on-scroll-up (Issue #23) — data-hidden is
+   set by main.js with hysteresis and is never set while the off-canvas
+   nav is open. transform-only so the sticky header never triggers layout
+   shift in the content below it. */
+.site-header[data-hidden="true"] {
+  transform: translateY(-100%);
 }
 
 @media (min-width: 768px) {

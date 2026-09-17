@@ -12,8 +12,15 @@
   var navBackdrop = document.getElementById("nav-backdrop");
   var header = document.querySelector(".site-header");
   var TRANSITION_MS = 300; // matches --duration-ui in tokens.css
+  // Tracks whether the off-canvas nav is open so the scroll-driven header
+  // hide/show below (Issue #23) never fights an open menu.
+  var isNavOpen = false;
 
   function openMenu() {
+    isNavOpen = true;
+    if (header) {
+      header.dataset.hidden = "false";
+    }
     navPanel.hidden = false;
     if (navBackdrop) {
       navBackdrop.hidden = false;
@@ -37,6 +44,7 @@
 
   function closeMenu(options) {
     var returnFocus = !options || options.returnFocus !== false;
+    isNavOpen = false;
 
     navPanel.dataset.state = "closed";
     if (navBackdrop) {
@@ -115,18 +123,44 @@
     });
   }
 
-  // Scroll direction/state hook — used by future issues to fade the
-  // header/logo on scroll (DESIGN_SYSTEM.md §6). Only sets data
-  // attributes here; no visual behavior beyond what components.css
-  // already reads from data-scrolled.
+  // Scroll direction/state hook (DESIGN_SYSTEM.md §6). Sets data-scrolled
+  // (read by components.css for the logo fade) and drives the header
+  // hide-on-down/show-on-up behavior via data-hidden (Issue #23).
   if (header) {
     var lastScrollY = window.scrollY;
     var ticking = false;
+    // Ignore deltas smaller than this — absorbs mobile momentum/rubber-band
+    // jitter and tiny direction changes so the header doesn't flicker.
+    var HEADER_HIDE_THRESHOLD = 12;
+    // Stay visible until scrolled meaningfully past the top, so the header
+    // never hides while still near the start of the page.
+    var HEADER_REVEAL_MIN_SCROLL = 96;
+    var headerReducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+    function setHeaderHidden(hidden) {
+      header.dataset.hidden = hidden ? "true" : "false";
+    }
 
     function updateScrollState() {
       var currentScrollY = window.scrollY;
+      var delta = currentScrollY - lastScrollY;
+
       header.dataset.scrolled = currentScrollY > 8 ? "true" : "false";
-      header.dataset.scrollDir = currentScrollY > lastScrollY ? "down" : "up";
+
+      if (headerReducedMotionQuery.matches || isNavOpen) {
+        // Reduced motion: header must stay statically visible, never
+        // translated by scroll (approved decision, Issue #23). An open
+        // nav menu must also never be left behind a hidden header.
+        setHeaderHidden(false);
+      } else if (currentScrollY <= HEADER_REVEAL_MIN_SCROLL) {
+        setHeaderHidden(false);
+      } else if (Math.abs(delta) > HEADER_HIDE_THRESHOLD) {
+        header.dataset.scrollDir = delta > 0 ? "down" : "up";
+        setHeaderHidden(delta > 0);
+      }
+      // Within the hysteresis band: keep the current hidden state and
+      // scrollDir as-is instead of reacting to the tiny delta.
+
       lastScrollY = currentScrollY;
       ticking = false;
     }
