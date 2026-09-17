@@ -221,7 +221,7 @@ restricción B en sección 4.
 | `piece_id` | UUID (FK → piece.id), nullable | No | Ídem. |
 | `media_type` | enum (`image`\|`video`\|`model_3d`\|`sequence_360`) | Sí | — |
 | `role` | enum | Sí | Catálogo inicial aprobado: `hero`, `gallery`, `detail`, `process`, `portrait`, `document`, `model_3d`, `sequence_360`. Extensible sin nueva ADR si se documenta aquí. |
-| `storage_path` / `url` | text | Sí | Ubicación del recurso. |
+| `storage_path` | text | Sí | Ubicación/clave interna del recurso (nombre de columna canónico en base de datos, aprobado 2026-09-17). No es una URL pública desplegada; la URL pública se deriva más adelante en la capa de API/media a partir de este valor. |
 | `alt_text` | text | Sí para `image` | Accesibilidad (`PROJECT.md` §3, responsabilidad de ChatGPT). |
 | `position` | integer | Sí, default `0` | Orden de despliegue dentro del mismo dueño (`artisan_id`/`piece_id`) + `role`. |
 | `format_metadata` | jsonb | No | Ej. duración de video, poligonaje de modelo 3D, número de frames de la secuencia 360. |
