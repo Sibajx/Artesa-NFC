@@ -1,0 +1,62 @@
+/* ArtesaNFC — Design tokens
+   Source: docs/DESIGN_SYSTEM.md §3 (color), §4 (typography), §5 (layout),
+   §14 (motion), §17 (touch targets), §20 (CSS convention / base tokens).
+   This file defines values only — no selectors beyond :root. */
+
+:root {
+  /* Color — DESIGN_SYSTEM.md §3, §20 */
+  --color-bg: #F5F3EE;
+  --color-surface-dark: #111111;
+  --color-text: #171717;
+  --color-text-inverse: #F7F7F4;
+  --color-text-muted: #66635E;
+  --color-soft-white: #F7F7F4;
+
+  /* Per-piece theming hooks — DESIGN_SYSTEM.md §3
+     Pieces may override these locally without changing global tokens. */
+  --piece-accent: currentColor;
+  --piece-accent-secondary: currentColor;
+  --piece-bg: var(--color-bg);
+  --piece-text: var(--color-text);
+
+  /* Spacing scale — DESIGN_SYSTEM.md §20 */
+  --space-xs: 0.5rem;
+  --space-sm: 1rem;
+  --space-md: 2rem;
+  --space-lg: 4rem;
+  --space-xl: 8rem;
+
+  /* Layout — DESIGN_SYSTEM.md §5
+     Exact margin/rhythm values are midpoints of the approved ranges. */
+  --margin-mobile: 20px;
+  --margin-tablet: 40px;
+  --margin-desktop: 64px;
+  --section-space-micro: 60px;
+  --section-space: 128px;
+  --section-space-immersive: 100vh;
+  --container-max: 1440px;
+
+  /* Typography — DESIGN_SYSTEM.md §4 */
+  --font-display: 'Instrument Serif', serif;
+  --font-ui: 'Manrope', sans-serif;
+
+  --text-display-xl: clamp(4rem, 9vw, 9rem);
+  --text-display-l: clamp(3rem, 6vw, 6rem);
+  --text-heading-1: clamp(2.2rem, 4vw, 4rem);
+  --text-heading-2: clamp(1.7rem, 3vw, 2.8rem);
+  --text-body-l: 1.25rem;
+  --text-body: 1rem;
+  --text-small: 0.875rem;
+  --text-micro: 0.75rem;
+
+  /* Motion — DESIGN_SYSTEM.md §14 (representative values within approved ranges) */
+  --duration-micro: 180ms;
+  --duration-ui: 300ms;
+  --duration-editorial: 700ms;
+  --duration-scene: 1200ms;
+  --ease-standard: ease;
+  --ease-out: ease-out;
+
+  /* Accessibility — DESIGN_SYSTEM.md §17 */
+  --touch-target-min: 44px;
+}

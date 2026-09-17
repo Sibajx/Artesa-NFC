@@ -1,0 +1,319 @@
+/* ArtesaNFC — Home page shell
+   Hero shell and section base layouts only. No final art direction. */
+
+/* Clearance under the sticky header (components.css .site-header) for
+   anchor-jump and keyboard-focus scrolling (nav links, the hero
+   "Descubrir" link, and Tab landing on card action links) — the header's
+   real height flexes with the responsive logo size, so this is a safe
+   upper bound rather than a duplicate of that calculation. Does not
+   affect normal in-flow spacing/rhythm; only where the browser scrolls
+   a target into view. */
+.home-section,
+.hero {
+  scroll-margin-top: 6.5rem;
+}
+
+/* min-height/display/flex layout for #hero comes from .home-section--immersive
+   (layout.css) — kept as the single source of truth for that behavior. */
+.hero {
+  position: relative;
+  gap: var(--space-sm);
+  padding: var(--margin-mobile);
+  text-align: left;
+}
+
+@media (min-width: 768px) {
+  .hero {
+    padding: var(--margin-tablet);
+  }
+}
+
+/* Mobile/tablet hero content position — min-height:100vh and
+   .hero__media (position:absolute, filling .hero's full padding box
+   regardless of this padding-top) both stay untouched, so the section
+   remains a full 100vh video-ready hero; only where .hero__content sits
+   within it changes. Centering a short mobile-scale content block in a
+   full 100vh box left too much empty space above it — this anchors it
+   in the upper third instead, scaling with actual viewport height. */
+@media (max-width: 1199px) {
+  .hero {
+    justify-content: flex-start;
+    padding-top: clamp(var(--space-lg), 20vh, var(--space-xl));
+  }
+}
+
+@media (min-width: 1200px) {
+  .hero {
+    padding: var(--margin-desktop);
+  }
+}
+
+/* Groups eyebrow/title/subtitle/link so hero composition reads as one
+   editorial block, independent of the immersive section's own centering. */
+.hero__content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  /* Fixed 640px matches current desktop hierarchy up to ~1390px viewport
+     (46vw stays below 640px there, so MIN wins and nothing changes).
+     Past that, --text-display-xl (clamp up to 9rem) keeps growing while
+     a hard 640px cap would force long words past the box edge — this
+     lets the box grow with the viewport instead, up to 900px. */
+  max-width: clamp(640px, 46vw, 900px);
+}
+
+.hero__eyebrow {
+  font-size: var(--text-small);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.hero__title {
+  max-width: 16ch;
+  /* Safety net: at very large viewports --text-display-xl can still grow
+     faster than .hero__content's widened cap above. Breaking within a
+     word here only ever engages in that edge case — normal desktop
+     wrapping (word boundaries) is unaffected. */
+  overflow-wrap: break-word;
+}
+
+.hero__subtitle {
+  font-size: var(--text-body-l);
+  color: var(--color-text-muted);
+  max-width: 45ch;
+}
+
+/* Larger intro paragraph used under a section heading — Manifesto, NFC,
+   About, Contact, Technology. Composition differs per section via the
+   elements that follow it (dl, flow, cards, terms), not this class. */
+.section-lead {
+  font-size: var(--text-body-l);
+  color: var(--color-text-muted);
+  max-width: 60ch;
+  margin-bottom: var(--space-md);
+}
+
+.section-lead--inverse {
+  color: var(--color-text-inverse);
+  opacity: 0.8;
+}
+
+/* Manifesto — Origen/Proceso/Autoría, distinct from About's single
+   paragraph per DESIGN_SYSTEM.md §16 (Manifesto vs. Nosotros). */
+.manifesto-points {
+  display: grid;
+  gap: var(--space-md);
+}
+
+@media (min-width: 768px) {
+  .manifesto-points {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.manifesto-points__item dt {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: var(--text-small);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.manifesto-points__item dd {
+  margin-top: var(--space-xs);
+  color: var(--color-text-muted);
+  max-width: 32ch;
+}
+
+/* NFC section — physical piece → NFC → digital story, editorial only,
+   no interactive simulation. */
+.nfc-flow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+/* Below the nav-panel's own small-mobile breakpoint (components.css,
+   max-width: 480px): heading-sized steps no longer fit three-across-wrap
+   without risking an arrow left alone on its own line. Stacking the
+   sequence vertically removes the wrap entirely instead of patching it. */
+@media (max-width: 479px) {
+  .nfc-flow {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .nfc-flow__arrow {
+    transform: rotate(90deg);
+  }
+}
+
+.nfc-flow__step {
+  font-family: var(--font-display);
+  font-size: var(--text-heading-2);
+}
+
+.nfc-flow__arrow {
+  color: var(--color-text-muted);
+}
+
+/* Hero media — video/poster behind hero content (Issue #19).
+   base.css's global `video { height: auto }` is meant for in-flow media;
+   this scopes an override since the hero video fills an absolutely
+   positioned box instead (DESIGN_SYSTEM.md §7). */
+.hero__media {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  background: var(--color-soft-white);
+}
+
+.hero__video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.section-heading {
+  margin-bottom: var(--space-md);
+}
+
+.section-note {
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+}
+
+/* Cards — structural only, replaced by real data in Sprint 2/3 */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+/* Card media — <picture> wrapper (Issue #19). aspect-ratio lives on the
+   wrapper (not just the img) so the ratio holds immediately, before the
+   image finishes loading, preventing layout shift. */
+.card__media {
+  display: block;
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+  background: var(--color-surface-dark);
+}
+
+.card__media-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+/* Card media reveal (Issue #19 fix) — an <img> has no implicit
+   transition of its own when it finishes loading, so a lazy-loaded
+   photo just pops in instantly the moment its request completes,
+   independently of the card's .fade-in/.is-visible timing (main.js,
+   animations.css) — masking the reveal instead of taking part in it.
+   Mirroring the same is-visible toggle here makes the image fade in
+   together with the rest of the card. One-time only: .is-visible is
+   never removed (main.js unobserves after the first intersection). */
+.fade-in .card__media-img {
+  opacity: 0;
+  transition: opacity var(--duration-editorial) var(--ease-out);
+}
+
+.fade-in.is-visible .card__media-img {
+  opacity: 1;
+}
+
+.card__title {
+  font-family: var(--font-display);
+  font-size: var(--text-heading-1);
+}
+
+.card__meta {
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+}
+
+.card__descriptor {
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+}
+
+/* Pins the discrete action link to the bottom of the card even when
+   descriptor length varies between cards in the same row. */
+.card__action {
+  margin-top: auto;
+}
+
+/* Steps list — "how it works" */
+.steps-list {
+  display: grid;
+  gap: var(--space-md);
+}
+
+/* Bounded (not open-ended min-width) so this rule and the 1200px rule
+   below can never both match the same viewport — the tablet/desktop
+   column counts are mutually exclusive by range, not by relying on
+   which declaration happens to appear later in the cascade. */
+@media (min-width: 768px) and (max-width: 1199px) {
+  .steps-list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1200px) {
+  .steps-list {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.steps-list__step-number {
+  font-family: var(--font-display);
+  font-size: var(--text-heading-1);
+  display: block;
+}
+
+/* Technology section term list */
+.tech-terms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm) var(--space-md);
+}
+
+.tech-terms__item {
+  font-size: var(--text-small);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-inverse);
+  opacity: 0.7;
+}
+
+.site-footer {
+  padding: var(--space-lg) var(--margin-mobile);
+  background: var(--color-surface-dark);
+  color: var(--color-text-inverse);
+}
+
+@media (min-width: 768px) {
+  .site-footer {
+    padding-inline: var(--margin-tablet);
+  }
+}
+
+@media (min-width: 1200px) {
+  .site-footer {
+    padding-inline: var(--margin-desktop);
+  }
+}
+
+.site-footer__nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm) var(--space-md);
+  margin-top: var(--space-sm);
+}

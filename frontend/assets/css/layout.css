@@ -1,0 +1,66 @@
+/* ArtesaNFC — Layout foundation
+   Container, grid, responsive margins, section spacing.
+   Breakpoints: mobile <768px, tablet 768–1199px, desktop >=1200px
+   (implementation default; DESIGN_SYSTEM.md defines column/margin targets
+   per breakpoint tier, not exact pixel boundaries). */
+
+.container {
+  width: 100%;
+  max-width: var(--container-max);
+  margin-inline: auto;
+  padding-inline: var(--margin-mobile);
+}
+
+@media (min-width: 768px) {
+  .container {
+    padding-inline: var(--margin-tablet);
+  }
+}
+
+@media (min-width: 1200px) {
+  .container {
+    padding-inline: var(--margin-desktop);
+  }
+}
+
+/* Home section rhythm — DESIGN_SYSTEM.md §5 */
+.home-section {
+  padding-block: var(--section-space-micro);
+}
+
+@media (min-width: 768px) {
+  .home-section {
+    padding-block: var(--section-space);
+  }
+}
+
+.home-section--immersive {
+  min-height: var(--section-space-immersive);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.home-section--dark {
+  background: var(--color-surface-dark);
+  color: var(--color-text-inverse);
+}
+
+/* Simple reusable grid for card-based sections */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(1, 1fr);
+  gap: var(--space-md);
+}
+
+@media (min-width: 768px) {
+  .card-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1200px) {
+  .card-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}

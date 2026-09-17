@@ -1,0 +1,53 @@
+/* ArtesaNFC — Motion system foundation
+   Minimal reusable transition classes. No scroll choreography yet
+   (DESIGN_SYSTEM.md §14 defers "scrub narrativo" / scene-level motion
+   to later issues). */
+
+.fade-in {
+  opacity: 0;
+  transform: translateY(1rem);
+  transition: opacity var(--duration-editorial) var(--ease-out),
+    transform var(--duration-editorial) var(--ease-out);
+}
+
+.fade-in.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Reduced motion — DESIGN_SYSTEM.md §18 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .fade-in {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* Keeps card media (pages.css .fade-in .card__media-img) in sync with
+     the reduced-motion override above — otherwise it would stay hidden
+     until scrolled into view, since its opacity depends on .is-visible
+     (Issue #19 fix). Matches pages.css's ".fade-in .card__media-img"
+     selector weight (0,2,0) with ".card.fade-in .card__media-img"
+     (0,3,0) — both classes already sit on the same <li> — so this wins
+     the cascade without !important, regardless of stylesheet order. */
+  .card.fade-in .card__media-img {
+    opacity: 1;
+  }
+
+  /* Approved decision, Issue #23: reduced motion prioritizes stable UI
+     availability over the scroll-driven hide/show in components.css — the
+     header must stay put, not hide, snap, or scroll-translate. This is a
+     failsafe on top of main.js already refusing to set data-hidden="true"
+     while prefers-reduced-motion is active. */
+  .site-header {
+    transform: none !important;
+  }
+}

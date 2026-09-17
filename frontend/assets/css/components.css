@@ -1,0 +1,269 @@
+/* ArtesaNFC — Reusable components
+   Header, logo, hamburger, nav panel, minimal editorial link/button.
+   No page-specific art direction here. */
+
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--margin-mobile);
+  background: var(--color-bg);
+  color: var(--color-text);
+  transform: translateY(0);
+  transition: background var(--duration-ui) var(--ease-standard),
+    color var(--duration-ui) var(--ease-standard),
+    opacity var(--duration-editorial) var(--ease-standard),
+    transform var(--duration-ui) var(--ease-standard);
+}
+
+/* Hide-on-scroll-down / reveal-on-scroll-up (Issue #23) — data-hidden is
+   set by main.js with hysteresis and is never set while the off-canvas
+   nav is open. transform-only so the sticky header never triggers layout
+   shift in the content below it. */
+.site-header[data-hidden="true"] {
+  transform: translateY(-100%);
+}
+
+@media (min-width: 768px) {
+  .site-header {
+    padding-inline: var(--margin-tablet);
+  }
+}
+
+@media (min-width: 1200px) {
+  .site-header {
+    padding-inline: var(--margin-desktop);
+  }
+}
+
+/* Off-canvas nav open — body.has-locked-scroll makes <body> position:fixed
+   (see below), which makes body (not the viewport) the nearest scroll
+   container for .site-header's position:sticky, detaching it from the
+   true viewport and pushing it off-screen by however far the page had
+   been scrolled. Pinning the header to position:fixed here bypasses that
+   entirely: position:fixed on an ancestor does not by itself become the
+   containing block for a fixed descendant, so this still resolves
+   against the real viewport regardless of body's own offset. Reuses the
+   header's existing z-index:100 (already above .nav-panel's 95 and
+   .nav-backdrop's 90) — no new stacking value needed. The header's
+   opaque background fully covers the strip where it briefly leaves
+   normal document flow, so this causes no visible shift. */
+body.has-locked-scroll .site-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+}
+
+/* Logo fade-on-scroll hook — behavior added progressively via main.js */
+.site-header[data-scrolled="true"] .logo {
+  opacity: 0.6;
+}
+
+.logo {
+  font-family: var(--font-display);
+  font-size: var(--text-heading-2);
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  transition: opacity var(--duration-editorial) var(--ease-standard);
+}
+
+/* Hamburger button — min 44x44 touch target, DESIGN_SYSTEM.md §17 */
+.hamburger {
+  position: relative;
+  width: var(--touch-target-min);
+  height: var(--touch-target-min);
+  flex-shrink: 0;
+}
+
+.hamburger__lines,
+.hamburger__lines::before,
+.hamburger__lines::after {
+  position: absolute;
+  left: 50%;
+  width: 24px;
+  height: 2px;
+  background: currentColor;
+  transform: translateX(-50%);
+  transition: transform var(--duration-ui) var(--ease-standard),
+    opacity var(--duration-ui) var(--ease-standard);
+}
+
+.hamburger__lines {
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.hamburger__lines::before,
+.hamburger__lines::after {
+  content: "";
+  left: 0;
+}
+
+.hamburger__lines::before {
+  top: -7px;
+}
+
+.hamburger__lines::after {
+  top: 7px;
+}
+
+.hamburger[aria-expanded="true"] .hamburger__lines {
+  background: transparent;
+}
+
+.hamburger[aria-expanded="true"] .hamburger__lines::before {
+  top: 0;
+  transform: rotate(45deg);
+}
+
+.hamburger[aria-expanded="true"] .hamburger__lines::after {
+  top: 0;
+  transform: rotate(-45deg);
+}
+
+/* Page backdrop behind the off-canvas nav — subtle, not a heavy overlay */
+.nav-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(17, 17, 17, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-ui) var(--ease-standard);
+}
+
+.nav-backdrop[data-state="open"] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.nav-backdrop[hidden] {
+  display: none;
+}
+
+/* Navigation panel — right-anchored off-canvas drawer, hidden by default,
+   toggled via [hidden] + JS. Width stays editorial/restrained rather than
+   a full-screen takeover. */
+.nav-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 95;
+  width: min(420px, 88vw);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: var(--space-md);
+  padding: var(--margin-mobile);
+  background: rgba(17, 17, 17, 0.92);
+  color: var(--color-text-inverse);
+  text-align: right;
+  opacity: 0;
+  transform: translateX(12px);
+  pointer-events: none;
+  transition: opacity var(--duration-ui) var(--ease-out),
+    transform var(--duration-ui) var(--ease-out);
+}
+
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .nav-panel {
+    background: rgba(17, 17, 17, 0.72);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+}
+
+@media (max-width: 480px) {
+  .nav-panel {
+    width: 92vw;
+  }
+}
+
+.nav-panel[data-state="open"] {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+.nav-panel[hidden] {
+  display: none;
+}
+
+.nav-panel__list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-sm);
+}
+
+/* Nudges the link group above true vertical center on mobile/tablet
+   (upper-middle rather than dead-center) — a transform so it doesn't
+   touch .nav-panel's own centering, width, padding, or the list's own
+   gap/alignment. vh-based so the offset scales with actual viewport
+   height instead of feeling disproportionate between a phone and a
+   tablet. Untouched at >=1200px. */
+@media (max-width: 1199px) {
+  .nav-panel__list {
+    transform: translateY(
+      calc(-1 * clamp(var(--space-sm), 8vh, var(--space-lg)))
+    );
+  }
+}
+
+.nav-panel__link {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-size: var(--text-heading-2);
+  text-decoration: none;
+  /* Touch target — DESIGN_SYSTEM.md §17 (44px min). Same expand/cancel
+     technique as .editorial-link; a smaller offset since the large
+     display font already sits close to 44px on its own. */
+  padding-block: 0.25rem;
+  margin-block: -0.25rem;
+}
+
+.nav-panel__link:hover,
+.nav-panel__link:focus-visible {
+  opacity: 0.7;
+}
+
+/* Body scroll lock while the nav panel is open — applied by main.js.
+   position:fixed (not just overflow:hidden) is required for a reliable
+   lock on iOS Safari, which otherwise still scrolls the background
+   behind an open drawer. --scroll-lock-offset and
+   --scroll-lock-scrollbar-width are set by main.js at open time and
+   cleared on close, when the exact prior scroll position is also
+   restored via window.scrollTo. The scrollbar-width padding avoids a
+   horizontal content shift on desktop browsers with a non-overlay
+   scrollbar. */
+body.has-locked-scroll {
+  position: fixed;
+  top: calc(-1 * var(--scroll-lock-offset, 0px));
+  left: 0;
+  right: 0;
+  overflow: hidden;
+  padding-right: var(--scroll-lock-scrollbar-width, 0px);
+  padding-top: var(--header-height, 0px);
+}
+
+/* Minimal editorial link — DESIGN_SYSTEM.md §8 */
+.editorial-link {
+  display: inline-block;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  text-decoration: underline;
+  /* Touch target — DESIGN_SYSTEM.md §17 (44px min). Padding expands the
+     tappable area; the equal negative margin cancels it back out of the
+     surrounding flow, so visible spacing/layout is unchanged. No
+     background/border is added, so it never reads as a button. */
+  padding-block: 0.625rem;
+  margin-block: -0.625rem;
+}

@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ArtesaNFC</title>
+  <meta name="description" content="ArtesaNFC — piezas artesanales únicas, conectadas con su artesano y su historia.">
+  <meta name="robots" content="index, follow">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Manrope:wght@400;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="assets/css/tokens.css">
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/layout.css">
+  <link rel="stylesheet" href="assets/css/components.css">
+  <link rel="stylesheet" href="assets/css/animations.css">
+  <link rel="stylesheet" href="assets/css/pages.css">
+
+  <!-- No-JS fallback: .fade-in (animations.css) starts hidden and is only
+       revealed by main.js's IntersectionObserver. Without JS that reveal
+       never runs, so this makes the same content visible/non-transformed
+       instead. prefers-reduced-motion already forces this in animations.css
+       regardless of JS, so this doesn't change that behavior.
+       ".card.fade-in .card__media-img" (not just ".card__media-img")
+       matches pages.css's ".fade-in .card__media-img" hide-rule weight
+       (0,2,0) with (0,3,0) — both classes already sit on the same <li> —
+       so this wins the cascade without !important. -->
+  <noscript>
+    <style>
+      .fade-in {
+        opacity: 1;
+        transform: none;
+      }
+      .card.fade-in .card__media-img {
+        opacity: 1;
+      }
+    </style>
+  </noscript>
+</head>
+<body>
+
+  <a class="skip-link" href="#main-content">Saltar al contenido principal</a>
+
+  <header class="site-header" data-scrolled="false" data-scroll-dir="up">
+    <a class="logo" href="/">ArtesaNFC</a>
+    <button
+      type="button"
+      class="hamburger"
+      id="menu-toggle"
+      aria-expanded="false"
+      aria-controls="primary-navigation"
+      aria-label="Abrir menú"
+    >
+      <span class="hamburger__lines" aria-hidden="true"></span>
+    </button>
+  </header>
+
+  <div id="nav-backdrop" class="nav-backdrop" data-state="closed" aria-hidden="true" hidden></div>
+
+  <nav id="primary-navigation" class="nav-panel" aria-label="Principal" data-state="closed" hidden>
+    <ul class="nav-panel__list" role="list">
+      <li><a class="nav-panel__link" href="#hero">Home</a></li>
+      <li><a class="nav-panel__link" href="/artesanos">Artesanos</a></li>
+      <li><a class="nav-panel__link" href="/piezas">Piezas</a></li>
+      <li><a class="nav-panel__link" href="#about">Nosotros</a></li>
+      <li><a class="nav-panel__link" href="#contact">Contacto</a></li>
+    </ul>
+  </nav>
+
+  <main id="main-content">
+
+    <section id="hero" class="hero home-section--immersive" aria-labelledby="hero-title">
+      <div class="hero__media" aria-hidden="true">
+        <video
+          class="hero__video"
+          poster="assets/img/hero-poster-placeholder.jpg"
+          muted
+          loop
+          playsinline
+          preload="none"
+        >
+          <!-- Placeholder video source intentionally omitted: no local
+               video encoder (e.g. ffmpeg) was available in this
+               environment (Issue #19). The poster above is a complete,
+               functional fallback; add a <source> here once a real or
+               placeholder video file exists. -->
+        </video>
+      </div>
+      <div class="hero__content">
+        <p class="hero__eyebrow">ArtesaNFC</p>
+        <h1 id="hero-title" class="hero__title">La artesanía, primero.</h1>
+        <p class="hero__subtitle">
+          Cada pieza guarda un origen, un proceso y una persona detrás.
+          La tecnología solo ayuda a contarlo.
+        </p>
+        <a class="editorial-link" href="#manifesto">Descubrir →</a>
+      </div>
+    </section>
+
+    <section id="manifesto" class="home-section container fade-in" aria-labelledby="manifesto-title">
+      <h2 id="manifesto-title" class="section-heading">Quien la hizo, importa</h2>
+      <p class="section-lead">
+        Cada pieza tiene un origen, un proceso y una persona detrás.
+        ArtesaNFC no reemplaza esa historia: la acompaña y la hace
+        accesible desde la propia pieza física.
+      </p>
+      <dl class="manifesto-points">
+        <div class="manifesto-points__item">
+          <dt>Origen</dt>
+          <dd>De dónde viene la pieza y su material.</dd>
+        </div>
+        <div class="manifesto-points__item">
+          <dt>Proceso</dt>
+          <dd>Cómo se hizo: técnica, tiempo y oficio.</dd>
+        </div>
+        <div class="manifesto-points__item">
+          <dt>Autoría</dt>
+          <dd>Quién la creó y su relación con la pieza.</dd>
+        </div>
+      </dl>
+    </section>
+
+    <section id="nfc-experience" class="home-section container fade-in" aria-labelledby="nfc-experience-title">
+      <h2 id="nfc-experience-title" class="section-heading">Tecnología silenciosa</h2>
+      <p class="section-lead">
+        Una etiqueta NFC acompaña la pieza. Al acercar un teléfono
+        compatible, se abre su historia digital sin necesidad de
+        instalar una aplicación.
+      </p>
+      <div class="nfc-flow">
+        <span class="nfc-flow__step">Pieza física</span>
+        <span class="nfc-flow__arrow" aria-hidden="true">→</span>
+        <span class="nfc-flow__step">Acercamiento NFC</span>
+        <span class="nfc-flow__arrow" aria-hidden="true">→</span>
+        <span class="nfc-flow__step">Historia digital</span>
+      </div>
+    </section>
+
+    <section id="featured-pieces" class="home-section container" aria-labelledby="featured-pieces-title">
+      <h2 id="featured-pieces-title" class="section-heading">Piezas destacadas</h2>
+      <p class="section-note">Piezas de muestra — el catálogo completo llega en próximos sprints.</p>
+      <ul class="card-grid" role="list">
+        <li class="card fade-in">
+          <picture class="card__media">
+            <!-- AVIF source pending local encoder support (no avifenc/
+                 ffmpeg available in this environment — Issue #19). Add
+                 <source type="image/avif" srcset="..."> above the WebP
+                 source once an AVIF placeholder or real asset exists. -->
+            <source type="image/webp" srcset="assets/img/card-placeholder.webp">
+            <img
+              class="card__media-img"
+              src="assets/img/card-placeholder.jpg"
+              alt="Marcador de posición — contenido pendiente"
+              width="640"
+              height="800"
+              loading="lazy"
+              decoding="async"
+            >
+          </picture>
+          <p class="card__title">Vasija de barro negro</p>
+          <p class="card__meta">Oaxaca, México</p>
+          <p class="card__descriptor">Barro bruñido y quemado a baja temperatura.</p>
+          <a class="editorial-link card__action" href="/piezas">Explorar pieza →</a>
+        </li>
+        <li class="card fade-in">
+          <picture class="card__media">
+            <!-- AVIF source pending local encoder support (no avifenc/
+                 ffmpeg available in this environment — Issue #19). Add
+                 <source type="image/avif" srcset="..."> above the WebP
+                 source once an AVIF placeholder or real asset exists. -->
+            <source type="image/webp" srcset="assets/img/card-placeholder.webp">
+            <img
+              class="card__media-img"
+              src="assets/img/card-placeholder.jpg"
+              alt="Marcador de posición — contenido pendiente"
+              width="640"
+              height="800"
+              loading="lazy"
+              decoding="async"
+            >
+          </picture>
+          <p class="card__title">Textil de telar de cintura</p>
+          <p class="card__meta">Chiapas, México</p>
+          <p class="card__descriptor">Hilo teñido con tintes naturales.</p>
+          <a class="editorial-link card__action" href="/piezas">Explorar pieza →</a>
+        </li>
+        <li class="card fade-in">
+          <picture class="card__media">
+            <!-- AVIF source pending local encoder support (no avifenc/
+                 ffmpeg available in this environment — Issue #19). Add
+                 <source type="image/avif" srcset="..."> above the WebP
+                 source once an AVIF placeholder or real asset exists. -->
+            <source type="image/webp" srcset="assets/img/card-placeholder.webp">
+            <img
+              class="card__media-img"
+              src="assets/img/card-placeholder.jpg"
+              alt="Marcador de posición — contenido pendiente"
+              width="640"
+              height="800"
+              loading="lazy"
+              decoding="async"
+            >
+          </picture>
+          <p class="card__title">Máscara tallada en madera</p>
+          <p class="card__meta">Michoacán, México</p>
+          <p class="card__descriptor">Talla y pintura tradicional.</p>
+          <a class="editorial-link card__action" href="/piezas">Explorar pieza →</a>
+        </li>
+      </ul>
+    </section>
+
+    <section id="artisans" class="home-section container" aria-labelledby="artisans-title">
+      <h2 id="artisans-title" class="section-heading">Artesanos</h2>
+      <p class="section-note">Perfiles de muestra — el directorio completo llega en próximos sprints.</p>
+      <ul class="card-grid" role="list">
+        <li class="card fade-in">
+          <picture class="card__media">
+            <!-- AVIF source pending local encoder support (no avifenc/
+                 ffmpeg available in this environment — Issue #19). Add
+                 <source type="image/avif" srcset="..."> above the WebP
+                 source once an AVIF placeholder or real asset exists. -->
+            <source type="image/webp" srcset="assets/img/card-placeholder.webp">
+            <img
+              class="card__media-img"
+              src="assets/img/card-placeholder.jpg"
+              alt="Marcador de posición — contenido pendiente"
+              width="640"
+              height="800"
+              loading="lazy"
+              decoding="async"
+            >
+          </picture>
+          <p class="card__title">Alfarera de barro negro</p>
+          <p class="card__meta">Oaxaca, México</p>
+          <p class="card__descriptor">Alfarería tradicional hecha a mano.</p>
+          <a class="editorial-link card__action" href="/artesanos">Conocer al artesano →</a>
+        </li>
+        <li class="card fade-in">
+          <picture class="card__media">
+            <!-- AVIF source pending local encoder support (no avifenc/
+                 ffmpeg available in this environment — Issue #19). Add
+                 <source type="image/avif" srcset="..."> above the WebP
+                 source once an AVIF placeholder or real asset exists. -->
+            <source type="image/webp" srcset="assets/img/card-placeholder.webp">
+            <img
+              class="card__media-img"
+              src="assets/img/card-placeholder.jpg"
+              alt="Marcador de posición — contenido pendiente"
+              width="640"
+              height="800"
+              loading="lazy"
+              decoding="async"
+            >
+          </picture>
+          <p class="card__title">Tejedor de telar de cintura</p>
+          <p class="card__meta">Chiapas, México</p>
+          <p class="card__descriptor">Textil con tintes naturales.</p>
+          <a class="editorial-link card__action" href="/artesanos">Conocer al artesano →</a>
+        </li>
+        <li class="card fade-in">
+          <picture class="card__media">
+            <!-- AVIF source pending local encoder support (no avifenc/
+                 ffmpeg available in this environment — Issue #19). Add
+                 <source type="image/avif" srcset="..."> above the WebP
+                 source once an AVIF placeholder or real asset exists. -->
+            <source type="image/webp" srcset="assets/img/card-placeholder.webp">
+            <img
+              class="card__media-img"
+              src="assets/img/card-placeholder.jpg"
+              alt="Marcador de posición — contenido pendiente"
+              width="640"
+              height="800"
+              loading="lazy"
+              decoding="async"
+            >
+          </picture>
+          <p class="card__title">Tallador de madera</p>
+          <p class="card__meta">Michoacán, México</p>
+          <p class="card__descriptor">Talla y pintado tradicional.</p>
+          <a class="editorial-link card__action" href="/artesanos">Conocer al artesano →</a>
+        </li>
+      </ul>
+    </section>
+
+    <section id="how-it-works" class="home-section container fade-in" aria-labelledby="how-it-works-title">
+      <h2 id="how-it-works-title" class="section-heading">Cómo funciona</h2>
+      <ol class="steps-list" role="list">
+        <li class="steps-list__step">
+          <span class="steps-list__step-number">01</span>
+          <p>Descubre una pieza en la galería.</p>
+        </li>
+        <li class="steps-list__step">
+          <span class="steps-list__step-number">02</span>
+          <p>Conoce al artesano detrás de ella.</p>
+        </li>
+        <li class="steps-list__step">
+          <span class="steps-list__step-number">03</span>
+          <p>Acércate a la pieza física con NFC.</p>
+        </li>
+        <li class="steps-list__step">
+          <span class="steps-list__step-number">04</span>
+          <p>Consulta su identidad digital.</p>
+        </li>
+      </ol>
+    </section>
+
+    <section id="technology" class="home-section home-section--dark fade-in" aria-labelledby="technology-title">
+      <div class="container">
+        <h2 id="technology-title" class="section-heading">Tecnología</h2>
+        <p class="section-lead section-lead--inverse">
+          La tecnología sostiene la historia de cada pieza; no compite
+          con ella.
+        </p>
+        <ul class="tech-terms">
+          <li class="tech-terms__item">Identidad digital</li>
+          <li class="tech-terms__item">NFC</li>
+          <li class="tech-terms__item">Autenticidad</li>
+          <li class="tech-terms__item">Trazabilidad</li>
+          <li class="tech-terms__item">Registro</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="about" class="home-section container fade-in" aria-labelledby="about-title">
+      <h2 id="about-title" class="section-heading">Nosotros</h2>
+      <p class="section-lead">
+        ArtesaNFC conecta cada pieza artesanal con el contexto que la
+        explica: quién la hizo, cómo y dónde. Documentamos ese origen y
+        lo hacemos accesible desde la propia pieza física, cuidando que
+        la tecnología nunca compita con el oficio que representa.
+      </p>
+    </section>
+
+    <section id="contact" class="home-section container fade-in" aria-labelledby="contact-title">
+      <h2 id="contact-title" class="section-heading">Contacto</h2>
+      <p class="section-lead">
+        ¿Eres artesano, coleccionista o simplemente quieres saber más?
+        Muy pronto habilitaremos un canal directo de contacto.
+      </p>
+    </section>
+
+  </main>
+
+  <footer class="site-footer">
+    <p>ArtesaNFC</p>
+    <nav class="site-footer__nav" aria-label="Footer">
+      <a href="#hero">Home</a>
+      <a href="/artesanos">Artesanos</a>
+      <a href="/piezas">Piezas</a>
+      <a href="#about">Nosotros</a>
+      <a href="#contact">Contacto</a>
+    </nav>
+  </footer>
+
+  <script src="assets/js/main.js" defer></script>
+</body>
+</html>
