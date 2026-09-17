@@ -143,6 +143,44 @@
     );
   }
 
+  // Hero media — muted decorative video, gated by prefers-reduced-motion
+  // (DESIGN_SYSTEM.md §7, §18). No <source> may exist yet (Issue #19: a
+  // placeholder video file was deferred, no local encoder available) —
+  // play() is called defensively and any rejection (blocked autoplay or
+  // no playable source) is swallowed, since the poster is always a
+  // complete visual fallback.
+  var heroVideo = document.querySelector(".hero__video");
+
+  if (heroVideo) {
+    var reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+    var syncHeroVideoMotion = function (prefersReduced) {
+      if (prefersReduced) {
+        heroVideo.pause();
+        return;
+      }
+      var playResult = heroVideo.play();
+      if (playResult && typeof playResult.catch === "function") {
+        playResult.catch(function () {
+          // Autoplay blocked or nothing to play yet — poster stays visible.
+        });
+      }
+    };
+
+    syncHeroVideoMotion(reducedMotionQuery.matches);
+
+    if (typeof reducedMotionQuery.addEventListener === "function") {
+      reducedMotionQuery.addEventListener("change", function (event) {
+        syncHeroVideoMotion(event.matches);
+      });
+    } else if (typeof reducedMotionQuery.addListener === "function") {
+      // Safari < 14 fallback — MediaQueryList predates addEventListener.
+      reducedMotionQuery.addListener(function (event) {
+        syncHeroVideoMotion(event.matches);
+      });
+    }
+  }
+
   // Scroll reveal — minimal wiring for the .fade-in class already defined
   // in animations.css (DESIGN_SYSTEM.md §9: fade/reveal on cards).
   // prefers-reduced-motion is handled entirely in CSS; no branching needed
