@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ArtesaNFC — Artesano Demo 03</title>
+  <meta name="description" content="ArtesaNFC — perfil de muestra de artesano, contenido ficticio para validar la estructura de navegación.">
+  <meta name="robots" content="index, follow">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Manrope:wght@400;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../assets/css/tokens.css">
+  <link rel="stylesheet" href="../../assets/css/base.css">
+  <link rel="stylesheet" href="../../assets/css/layout.css">
+  <link rel="stylesheet" href="../../assets/css/components.css">
+  <link rel="stylesheet" href="../../assets/css/animations.css">
+  <link rel="stylesheet" href="../../assets/css/pages.css">
+
+  <!-- No-JS fallback: see frontend/index.html for the full rationale
+       (same .fade-in cascade-weight reasoning applies here unchanged). -->
+  <noscript>
+    <style>
+      .fade-in {
+        opacity: 1;
+        transform: none;
+      }
+      .card.fade-in .card__media-img {
+        opacity: 1;
+      }
+    </style>
+  </noscript>
+</head>
+<body>
+
+  <a class="skip-link" href="#main-content">Saltar al contenido principal</a>
+
+  <header class="site-header" data-scrolled="false" data-scroll-dir="up">
+    <a class="logo" href="/">ArtesaNFC</a>
+    <button
+      type="button"
+      class="hamburger"
+      id="menu-toggle"
+      aria-expanded="false"
+      aria-controls="primary-navigation"
+      aria-label="Abrir menú"
+    >
+      <span class="hamburger__lines" aria-hidden="true"></span>
+    </button>
+  </header>
+
+  <div id="nav-backdrop" class="nav-backdrop" data-state="closed" aria-hidden="true" hidden></div>
+
+  <nav id="primary-navigation" class="nav-panel" aria-label="Principal" data-state="closed" hidden>
+    <ul class="nav-panel__list" role="list">
+      <li><a class="nav-panel__link" href="/">Home</a></li>
+      <li><a class="nav-panel__link" href="/artesanos">Artesanos</a></li>
+      <li><a class="nav-panel__link" href="/piezas">Piezas</a></li>
+      <li><a class="nav-panel__link" href="/#about">Nosotros</a></li>
+      <li><a class="nav-panel__link" href="/#contact">Contacto</a></li>
+    </ul>
+  </nav>
+
+  <main id="main-content">
+
+    <section class="home-section container" aria-labelledby="artisan-title">
+      <h1 id="artisan-title">Artesano Demo 03</h1>
+      <p class="card__meta">Localidad de muestra, Oaxaca — Barro / cerámica</p>
+      <p class="section-note">Contenido de muestra — perfil ficticio utilizado para validar ArtesaNFC.</p>
+
+      <picture class="card__media artisan-portrait">
+        <source type="image/webp" srcset="../../assets/img/card-placeholder.webp">
+        <img
+          class="card__media-img"
+          src="../../assets/img/card-placeholder.jpg"
+          alt="Retrato de muestra — contenido ficticio"
+          width="960"
+          height="540"
+          loading="lazy"
+          decoding="async"
+        >
+      </picture>
+    </section>
+
+    <section class="home-section container" aria-labelledby="historia-title">
+      <h2 id="historia-title">Historia</h2>
+      <p class="section-lead">Este es un perfil de muestra creado únicamente para validar la estructura y la navegación de ArtesaNFC. El texto no describe a una persona real, no corresponde a ninguna comunidad específica y no debe interpretarse como una biografía documentada.</p>
+    </section>
+
+    <section class="home-section container" aria-labelledby="proceso-title">
+      <h2 id="proceso-title">Proceso y técnica</h2>
+      <p class="section-lead">La descripción de proceso mostrada aquí es genérica y de demostración: preparación del barro, modelado a mano y cocción final. Se usa solo para probar el diseño de la sección; no documenta un método real de trabajo.</p>
+    </section>
+
+    <section class="home-section container" aria-labelledby="galeria-title">
+      <h2 id="galeria-title">Galería</h2>
+      <!-- Future 3D/360 viewer mount point may be introduced here in a later
+           sprint (DESIGN_SYSTEM.md §12). No visible 3D control is implemented
+           in this page. -->
+      <ul class="card-grid" role="list">
+        <li>
+          <picture class="card__media">
+            <source type="image/webp" srcset="../../assets/img/card-placeholder.webp">
+            <img
+              class="card__media-img"
+              src="../../assets/img/card-placeholder.jpg"
+              alt="Marcador de posición de galería — contenido ficticio"
+              width="640"
+              height="800"
+              loading="lazy"
+              decoding="async"
+            >
+          </picture>
+        </li>
+        <li>
+          <picture class="card__media">
+            <source type="image/webp" srcset="../../assets/img/card-placeholder.webp">
+            <img
+              class="card__media-img"
+              src="../../assets/img/card-placeholder.jpg"
+              alt="Marcador de posición de galería — contenido ficticio"
+              width="640"
+              height="800"
+              loading="lazy"
+              decoding="async"
+            >
+          </picture>
+        </li>
+      </ul>
+    </section>
+
+    <section class="home-section container" aria-labelledby="piezas-title">
+      <h2 id="piezas-title">Piezas creadas</h2>
+      <ul class="card-grid" role="list">
+        <li class="card fade-in">
+          <picture class="card__media">
+            <source type="image/webp" srcset="../../assets/img/card-placeholder.webp">
+            <img
+              class="card__media-img"
+              src="../../assets/img/card-placeholder.jpg"
+              alt="Marcador de posición — contenido ficticio"
+              width="640"
+              height="800"
+              loading="lazy"
+              decoding="async"
+            >
+          </picture>
+          <p class="card__title">Vasija Demo 01</p>
+          <p class="card__meta">Creado por Artesano Demo 03</p>
+          <p class="card__descriptor">Barro y cerámica, pieza de muestra.</p>
+          <a class="editorial-link card__action" href="/piezas/vasija-demo-01/">Explorar pieza →</a>
+        </li>
+      </ul>
+    </section>
+
+  </main>
+
+  <footer class="site-footer">
+    <p>ArtesaNFC</p>
+    <nav class="site-footer__nav" aria-label="Footer">
+      <a href="/">Home</a>
+      <a href="/artesanos">Artesanos</a>
+      <a href="/piezas">Piezas</a>
+      <a href="/#about">Nosotros</a>
+      <a href="/#contact">Contacto</a>
+    </nav>
+  </footer>
+
+  <script src="../../assets/js/main.js" defer></script>
+</body>
+</html>

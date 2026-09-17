@@ -229,6 +229,14 @@
   opacity: 1;
 }
 
+/* Artisan detail page — single large portrait/work-scene placeholder
+   (DESIGN_SYSTEM.md §10). Reuses .card__media's block/overflow/background
+   and .card__media-img's object-fit:cover rather than duplicating them;
+   only the aspect ratio differs from the 4:5 card thumbnail. */
+.artisan-portrait {
+  aspect-ratio: 16 / 9;
+}
+
 .card__title {
   font-family: var(--font-display);
   font-size: var(--text-heading-1);
