@@ -41,7 +41,12 @@
   flex-direction: column;
   align-items: flex-start;
   gap: var(--space-sm);
-  max-width: 640px;
+  /* Fixed 640px matches current desktop hierarchy up to ~1390px viewport
+     (46vw stays below 640px there, so MIN wins and nothing changes).
+     Past that, --text-display-xl (clamp up to 9rem) keeps growing while
+     a hard 640px cap would force long words past the box edge — this
+     lets the box grow with the viewport instead, up to 900px. */
+  max-width: clamp(640px, 46vw, 900px);
 }
 
 .hero__eyebrow {
@@ -53,6 +58,11 @@
 
 .hero__title {
   max-width: 16ch;
+  /* Safety net: at very large viewports --text-display-xl can still grow
+     faster than .hero__content's widened cap above. Breaking within a
+     word here only ever engages in that edge case — normal desktop
+     wrapping (word boundaries) is unaffected. */
+  overflow-wrap: break-word;
 }
 
 .hero__subtitle {
@@ -110,6 +120,21 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-sm);
+}
+
+/* Below the nav-panel's own small-mobile breakpoint (components.css,
+   max-width: 480px): heading-sized steps no longer fit three-across-wrap
+   without risking an arrow left alone on its own line. Stacking the
+   sequence vertically removes the wrap entirely instead of patching it. */
+@media (max-width: 479px) {
+  .nfc-flow {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .nfc-flow__arrow {
+    transform: rotate(90deg);
+  }
 }
 
 .nfc-flow__step {
@@ -217,7 +242,17 @@
   gap: var(--space-md);
 }
 
-@media (min-width: 768px) {
+/* Bounded (not open-ended min-width) so this rule and the 1200px rule
+   below can never both match the same viewport — the tablet/desktop
+   column counts are mutually exclusive by range, not by relying on
+   which declaration happens to appear later in the cascade. */
+@media (min-width: 768px) and (max-width: 1199px) {
+  .steps-list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1200px) {
   .steps-list {
     grid-template-columns: repeat(4, 1fr);
   }
