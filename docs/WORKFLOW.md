@@ -88,6 +88,7 @@ aprobados. Documentos relevantes:
 - `SECURITY.md`
 - `WORKFLOW.md` (este documento)
 - `SPRINT_0.md`
+- `SPRINT_1.md`
 - `COLLABORATION_PROMPT.md`
 
 Reglas:
