@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ArtesaNFC — Artesanos</title>
+  <meta name="description" content="ArtesaNFC — directorio de artesanos, cada uno detrás de sus piezas.">
+  <meta name="robots" content="index, follow">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Manrope:wght@400;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/base.css">
+  <link rel="stylesheet" href="../assets/css/layout.css">
+  <link rel="stylesheet" href="../assets/css/components.css">
+  <link rel="stylesheet" href="../assets/css/animations.css">
+  <link rel="stylesheet" href="../assets/css/pages.css">
+
+  <!-- No-JS fallback: see frontend/index.html for the full rationale
+       (same .fade-in cascade-weight reasoning applies here unchanged). -->
+  <noscript>
+    <style>
+      .fade-in {
+        opacity: 1;
+        transform: none;
+      }
+      .card.fade-in .card__media-img {
+        opacity: 1;
+      }
+    </style>
+  </noscript>
+</head>
+<body>
+
+  <a class="skip-link" href="#main-content">Saltar al contenido principal</a>
+
+  <header class="site-header" data-scrolled="false" data-scroll-dir="up">
+    <a class="logo" href="/">ArtesaNFC</a>
+    <button
+      type="button"
+      class="hamburger"
+      id="menu-toggle"
+      aria-expanded="false"
+      aria-controls="primary-navigation"
+      aria-label="Abrir menú"
+    >
+      <span class="hamburger__lines" aria-hidden="true"></span>
+    </button>
+  </header>
+
+  <div id="nav-backdrop" class="nav-backdrop" data-state="closed" aria-hidden="true" hidden></div>
+
+  <nav id="primary-navigation" class="nav-panel" aria-label="Principal" data-state="closed" hidden>
+    <ul class="nav-panel__list" role="list">
+      <li><a class="nav-panel__link" href="/">Home</a></li>
+      <li><a class="nav-panel__link" href="/artesanos">Artesanos</a></li>
+      <li><a class="nav-panel__link" href="/piezas">Piezas</a></li>
+      <li><a class="nav-panel__link" href="/#about">Nosotros</a></li>
+      <li><a class="nav-panel__link" href="/#contact">Contacto</a></li>
+    </ul>
+  </nav>
+
+  <main id="main-content">
+
+    <section id="artesanos" class="home-section container" aria-labelledby="artesanos-title">
+      <h1 id="artesanos-title" class="section-heading">Artesanos</h1>
+      <p class="section-note">Contenido de muestra — ficticio, no representa a una persona real.</p>
+      <ul class="card-grid" role="list">
+        <li class="card fade-in">
+          <picture class="card__media">
+            <source type="image/webp" srcset="../assets/img/card-placeholder.webp">
+            <img
+              class="card__media-img"
+              src="../assets/img/card-placeholder.jpg"
+              alt="Retrato de muestra — contenido ficticio"
+              width="640"
+              height="800"
+              loading="lazy"
+              decoding="async"
+            >
+          </picture>
+          <p class="card__title">Artesano Demo 01</p>
+          <p class="card__meta">Localidad de muestra, Oaxaca</p>
+          <p class="card__descriptor">Tallado en madera.</p>
+          <a class="editorial-link card__action" href="/artesanos/artesano-demo-01/">Conocer al artesano →</a>
+        </li>
+        <li class="card fade-in">
+          <picture class="card__media">
+            <source type="image/webp" srcset="../assets/img/card-placeholder.webp">
+            <img
+              class="card__media-img"
+              src="../assets/img/card-placeholder.jpg"
+              alt="Retrato de muestra — contenido ficticio"
+              width="640"
+              height="800"
+              loading="lazy"
+              decoding="async"
+            >
+          </picture>
+          <p class="card__title">Artesana Demo 02</p>
+          <p class="card__meta">Localidad de muestra, Oaxaca</p>
+          <p class="card__descriptor">Textil / telar.</p>
+          <a class="editorial-link card__action" href="/artesanos/artesana-demo-02/">Conocer a la artesana →</a>
+        </li>
+        <li class="card fade-in">
+          <picture class="card__media">
+            <source type="image/webp" srcset="../assets/img/card-placeholder.webp">
+            <img
+              class="card__media-img"
+              src="../assets/img/card-placeholder.jpg"
+              alt="Retrato de muestra — contenido ficticio"
+              width="640"
+              height="800"
+              loading="lazy"
+              decoding="async"
+            >
+          </picture>
+          <p class="card__title">Artesano Demo 03</p>
+          <p class="card__meta">Localidad de muestra, Oaxaca</p>
+          <p class="card__descriptor">Barro / cerámica.</p>
+          <a class="editorial-link card__action" href="/artesanos/artesano-demo-03/">Conocer al artesano →</a>
+        </li>
+      </ul>
+    </section>
+
+  </main>
+
+  <footer class="site-footer">
+    <p>ArtesaNFC</p>
+    <nav class="site-footer__nav" aria-label="Footer">
+      <a href="/">Home</a>
+      <a href="/artesanos">Artesanos</a>
+      <a href="/piezas">Piezas</a>
+      <a href="/#about">Nosotros</a>
+      <a href="/#contact">Contacto</a>
+    </nav>
+  </footer>
+
+  <script src="../assets/js/main.js" defer></script>
+</body>
+</html>
