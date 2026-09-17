@@ -1,0 +1,139 @@
+/* ArtesaNFC — Home page shell
+   Hero shell and section base layouts only. No final art direction. */
+
+/* min-height/display/flex layout for #hero comes from .home-section--immersive
+   (layout.css) — kept as the single source of truth for that behavior. */
+.hero {
+  position: relative;
+  gap: var(--space-sm);
+  padding: var(--margin-mobile);
+  text-align: left;
+}
+
+@media (min-width: 768px) {
+  .hero {
+    padding: var(--margin-tablet);
+  }
+}
+
+@media (min-width: 1200px) {
+  .hero {
+    padding: var(--margin-desktop);
+  }
+}
+
+.hero__eyebrow {
+  font-size: var(--text-small);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.hero__title {
+  max-width: 16ch;
+}
+
+.hero__subtitle {
+  font-size: var(--text-body-l);
+  color: var(--color-text-muted);
+  max-width: 45ch;
+}
+
+/* Placeholder media slot — no production asset yet.
+   A future issue replaces this with the hero video per DESIGN_SYSTEM.md §7. */
+.hero__media-placeholder {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--color-soft-white);
+}
+
+.section-heading {
+  margin-bottom: var(--space-md);
+}
+
+.section-note {
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+}
+
+/* Placeholder cards — structural only, replaced by real data in Sprint 2/3 */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.card__media-placeholder {
+  aspect-ratio: 4 / 5;
+  background: var(--color-surface-dark);
+  opacity: 0.08;
+}
+
+.card__title {
+  font-family: var(--font-display);
+  font-size: var(--text-heading-1);
+}
+
+.card__meta {
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+}
+
+/* Steps list — "how it works" */
+.steps-list {
+  display: grid;
+  gap: var(--space-md);
+}
+
+@media (min-width: 768px) {
+  .steps-list {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.steps-list__step-number {
+  font-family: var(--font-display);
+  font-size: var(--text-heading-1);
+  display: block;
+}
+
+/* Technology section term list */
+.tech-terms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm) var(--space-md);
+}
+
+.tech-terms__item {
+  font-size: var(--text-small);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-inverse);
+  opacity: 0.7;
+}
+
+.site-footer {
+  padding: var(--space-lg) var(--margin-mobile);
+  background: var(--color-surface-dark);
+  color: var(--color-text-inverse);
+}
+
+@media (min-width: 768px) {
+  .site-footer {
+    padding-inline: var(--margin-tablet);
+  }
+}
+
+@media (min-width: 1200px) {
+  .site-footer {
+    padding-inline: var(--margin-desktop);
+  }
+}
+
+.site-footer__nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm) var(--space-md);
+  margin-top: var(--space-sm);
+}

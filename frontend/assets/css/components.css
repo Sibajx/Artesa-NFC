@@ -1,0 +1,199 @@
+/* ArtesaNFC — Reusable components
+   Header, logo, hamburger, nav panel, minimal editorial link/button.
+   No page-specific art direction here. */
+
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--margin-mobile);
+  background: var(--color-bg);
+  color: var(--color-text);
+  transition: background var(--duration-ui) var(--ease-standard),
+    color var(--duration-ui) var(--ease-standard),
+    opacity var(--duration-editorial) var(--ease-standard);
+}
+
+@media (min-width: 768px) {
+  .site-header {
+    padding-inline: var(--margin-tablet);
+  }
+}
+
+@media (min-width: 1200px) {
+  .site-header {
+    padding-inline: var(--margin-desktop);
+  }
+}
+
+/* Logo fade-on-scroll hook — behavior added progressively via main.js */
+.site-header[data-scrolled="true"] .logo {
+  opacity: 0.6;
+}
+
+.logo {
+  font-family: var(--font-display);
+  font-size: var(--text-heading-2);
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  transition: opacity var(--duration-editorial) var(--ease-standard);
+}
+
+/* Hamburger button — min 44x44 touch target, DESIGN_SYSTEM.md §17 */
+.hamburger {
+  position: relative;
+  width: var(--touch-target-min);
+  height: var(--touch-target-min);
+  flex-shrink: 0;
+}
+
+.hamburger__lines,
+.hamburger__lines::before,
+.hamburger__lines::after {
+  position: absolute;
+  left: 50%;
+  width: 24px;
+  height: 2px;
+  background: currentColor;
+  transform: translateX(-50%);
+  transition: transform var(--duration-ui) var(--ease-standard),
+    opacity var(--duration-ui) var(--ease-standard);
+}
+
+.hamburger__lines {
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.hamburger__lines::before,
+.hamburger__lines::after {
+  content: "";
+  left: 0;
+}
+
+.hamburger__lines::before {
+  top: -7px;
+}
+
+.hamburger__lines::after {
+  top: 7px;
+}
+
+.hamburger[aria-expanded="true"] .hamburger__lines {
+  background: transparent;
+}
+
+.hamburger[aria-expanded="true"] .hamburger__lines::before {
+  top: 0;
+  transform: rotate(45deg);
+}
+
+.hamburger[aria-expanded="true"] .hamburger__lines::after {
+  top: 0;
+  transform: rotate(-45deg);
+}
+
+/* Page backdrop behind the off-canvas nav — subtle, not a heavy overlay */
+.nav-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(17, 17, 17, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-ui) var(--ease-standard);
+}
+
+.nav-backdrop[data-state="open"] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.nav-backdrop[hidden] {
+  display: none;
+}
+
+/* Navigation panel — right-anchored off-canvas drawer, hidden by default,
+   toggled via [hidden] + JS. Width stays editorial/restrained rather than
+   a full-screen takeover. */
+.nav-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 95;
+  width: min(420px, 88vw);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: var(--space-md);
+  padding: var(--margin-mobile);
+  background: rgba(17, 17, 17, 0.92);
+  color: var(--color-text-inverse);
+  text-align: right;
+  opacity: 0;
+  transform: translateX(12px);
+  pointer-events: none;
+  transition: opacity var(--duration-ui) var(--ease-out),
+    transform var(--duration-ui) var(--ease-out);
+}
+
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .nav-panel {
+    background: rgba(17, 17, 17, 0.72);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+}
+
+@media (max-width: 480px) {
+  .nav-panel {
+    width: 92vw;
+  }
+}
+
+.nav-panel[data-state="open"] {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+.nav-panel[hidden] {
+  display: none;
+}
+
+.nav-panel__list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-sm);
+}
+
+.nav-panel__link {
+  font-family: var(--font-display);
+  font-size: var(--text-heading-2);
+  text-decoration: none;
+}
+
+.nav-panel__link:hover,
+.nav-panel__link:focus-visible {
+  opacity: 0.7;
+}
+
+/* Body scroll lock while the nav panel is open — applied by main.js */
+body.has-locked-scroll {
+  overflow: hidden;
+}
+
+/* Minimal editorial link — DESIGN_SYSTEM.md §8 */
+.editorial-link {
+  display: inline-block;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  text-decoration: underline;
+}
