@@ -241,10 +241,14 @@ def test_relationships_are_correct():
                 select(Piece).where(Piece.slug.in_(APPROVED_PIECE_SLUGS))
             ).scalars()
         }
+        # PIECES[*]["artisan_key"] is the artisan's stable fixture *key*, not
+        # its public *slug* (they can now differ, e.g. key "artisan-demo-01"
+        # vs. slug "artesano-demo-01") - map through ARTISANS to resolve it.
+        artisans_by_key = {f["key"]: artisans_by_slug[f["slug"]] for f in ARTISANS}
 
         for fixture in PIECES:
             piece = pieces_by_slug[fixture["slug"]]
-            assert piece.artisan_id == artisans_by_slug[fixture["artisan_key"]].id
+            assert piece.artisan_id == artisans_by_key[fixture["artisan_key"]].id
 
         for fixture in ARTISANS:
             portrait = session.get(

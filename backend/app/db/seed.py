@@ -49,7 +49,7 @@ def _fixture_id(key: str) -> uuid.UUID:
 ARTISANS = [
     {
         "key": "artisan-demo-01",
-        "slug": "artisan-demo-01",
+        "slug": "artesano-demo-01",
         "full_name": "Artesano Demo Uno",
         "artistic_name": None,
         "locality": "San Ficticio de las Tallas",
@@ -69,7 +69,7 @@ ARTISANS = [
     },
     {
         "key": "artisan-demo-03",
-        "slug": "artisan-demo-03",
+        "slug": "artesano-demo-03",
         "full_name": "Artesano Demo Tres",
         "artistic_name": None,
         "locality": "Barrio Ficticio del Barro",
