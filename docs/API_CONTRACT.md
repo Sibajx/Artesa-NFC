@@ -270,6 +270,48 @@ artisan/piece, es redundante y expondría UUIDs internos), `status`
 (`active`/`archived` — un asset archivado simplemente no se incluye en
 la respuesta).
 
+### 6.1 Mapeo temporal de `url` en Sprint 3 (aprobado, no definitivo)
+
+**Decisión aceptada por Alexis (Product Owner), cierre de Sprint 3,
+2026-09-17:** mientras no exista una capa real de storage/CDN, el
+backend deriva `url` con el mapeo determinista más simple posible:
+
+```text
+url = f"/media/{storage_path}"
+```
+
+Precisiones sobre esta decisión:
+
+- `storage_path` **sigue sin exponerse como campo JSON**: ninguna
+  respuesta pública contiene una clave `storage_path`. Lo que cambia es
+  que, en Sprint 3, el *valor* de `storage_path` es recuperable a
+  partir del *valor* de `url` (quitando el prefijo `/media/`), porque
+  el mapeo actual es una concatenación directa, no una transformación
+  opaca.
+- Esto significa que, en la práctica, la convención interna de nombrado
+  de rutas de almacenamiento (ej. `demo/artisans/{slug}/portrait.jpg`)
+  es observable a través de `url` durante Sprint 3. Se acepta
+  explícitamente esta exposición porque todo el contenido servido en
+  Sprint 3 es el fixture ficticio de `docs/SPRINT_2.md`/`SPRINT_3.md`
+  (sin datos reales de artesano/pieza todavía, `PROJECT.md` §11), por lo
+  que no hay información sensible ni de producción en juego.
+- Esta decisión **no reabre** la prohibición de la sección 6 de exponer
+  `storage_path` como campo o detalle de infraestructura explícito
+  (nombres de bucket, rutas de sistema de archivos del servidor,
+  identificadores de objeto privados); solo acota, para Sprint 3
+  específicamente, que el valor de `url` no se trata todavía como
+  opaco frente al valor interno que lo originó.
+- **Esto no es la arquitectura de medios final.** Antes de servir
+  contenido real de artesano/pieza (`PROJECT.md` §11), se espera
+  reemplazar este mapeo por una capa real de media/CDN (URLs firmadas,
+  identificador opaco, o dominio de CDN dedicado) que deje de exponer
+  la convención de nombrado interno. Esto puede hacerse sin cambiar el
+  contrato de la columna `storage_path` en `DATA_MODEL.md` §2.5 ni la
+  forma pública de `MEDIA_ASSET` (`type`, `role`, `url`, `alt_text`,
+  `position`, `format` se mantienen) — solo cambia cómo se calcula el
+  valor de `url`, lo cual es un cambio no disruptivo según la sección
+  13.
+
 ## 7. Resolución de certificado
 
 ```text

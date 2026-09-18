@@ -29,9 +29,17 @@ _DEFAULT_CODES: dict[int, str] = {
 def _error_body(status_code: int, detail: object) -> dict:
     if isinstance(detail, dict) and "code" in detail and "message" in detail:
         return {"error": detail}
-    message = detail if isinstance(detail, str) else _DEFAULT_MESSAGES.get(
-        status_code, "An error occurred."
-    )
+    # A plain string `detail` here is always Starlette/FastAPI's own default
+    # phrase (e.g. "Not Found", "Method Not Allowed") for a framework-raised
+    # exception, never an application one — the only HTTPException this app
+    # raises directly (app/api/v1/common.py::not_found) uses a dict detail
+    # and is handled by the branch above. Prefer our canonical public
+    # message for known status codes so the wording is consistent instead of
+    # leaking the framework's default phrase.
+    if status_code in _DEFAULT_MESSAGES:
+        message = _DEFAULT_MESSAGES[status_code]
+    else:
+        message = detail if isinstance(detail, str) else "An error occurred."
     code = _DEFAULT_CODES.get(status_code, "error")
     return {"error": {"code": code, "message": message}}
 
