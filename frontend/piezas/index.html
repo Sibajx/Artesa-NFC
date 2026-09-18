@@ -6,6 +6,7 @@
   <title>ArtesaNFC — Piezas</title>
   <meta name="description" content="ArtesaNFC — catálogo de piezas artesanales, conectadas con su artesano y su historia.">
   <meta name="robots" content="index, follow">
+  <meta name="artesanfc-api-base" content="http://127.0.0.1:8000/api/v1">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -63,6 +64,8 @@
   </nav>
 
   <main id="main-content">
+
+    <p id="hydrate-status" class="sr-only" role="status" aria-live="polite"></p>
 
     <section id="piezas" class="home-section container" aria-labelledby="piezas-title">
       <h1 id="piezas-title" class="section-heading">Piezas</h1>
@@ -157,5 +160,8 @@
   </footer>
 
   <script src="../assets/js/main.js" defer></script>
+  <script src="../assets/js/api-config.js" defer></script>
+  <script src="../assets/js/api.js" defer></script>
+  <script src="../assets/js/hydrate-list.js" defer></script>
 </body>
 </html>
