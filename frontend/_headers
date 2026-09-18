@@ -3,3 +3,15 @@
   Referrer-Policy: strict-origin-when-cross-origin
   X-Frame-Options: DENY
   Permissions-Policy: camera=(), microphone=(), geolocation=()
+
+# Private certificate route (/c/{token}) — Issue #72. The bearer token
+# lives in the path, so this scope gets stricter headers than the global
+# block above: no-referrer (the token must never appear in a Referer
+# header) and no-store (the resolved certificate response must never be
+# cached at the edge or in a browser cache). Defense in depth alongside
+# the page's own <meta name="referrer"/robots"> tags — this also covers
+# the initial static HTML response itself, before any JS runs.
+/c/*
+  Cache-Control: no-store
+  X-Robots-Tag: noindex, nofollow
+  Referrer-Policy: no-referrer

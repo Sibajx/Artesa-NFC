@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ArtesaNFC — Certificado</title>
+  <meta name="description" content="ArtesaNFC — verificación de certificado de autenticidad.">
+
+  <!-- Private route (Issue #72): this page is reached only via a bearer
+       URL, typically from an NFC tag, and must never appear in search
+       results or be linked from public navigation. -->
+  <meta name="robots" content="noindex, nofollow">
+
+  <!-- The bearer token lives in this page's own URL path. no-referrer
+       stops it from leaking into the Referer header of any outbound
+       request this page makes (fonts, the resolve API call, or the
+       public piece/artisan links in the authentic state). -->
+  <meta name="referrer" content="no-referrer">
+
+  <meta name="artesanfc-api-base" content="http://127.0.0.1:8000/api/v1">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Manrope:wght@400;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="/assets/css/tokens.css">
+  <link rel="stylesheet" href="/assets/css/base.css">
+  <link rel="stylesheet" href="/assets/css/layout.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+  <link rel="stylesheet" href="/assets/css/pages.css">
+
+  <!-- No JS: hydrate-certificate.js never runs, so nothing else on this
+       page is ever unhidden. This is the only state a no-JS visitor can
+       see, and it never contains the token. -->
+  <noscript>
+    <style>
+      #cert-nojs {
+        display: block;
+      }
+    </style>
+  </noscript>
+</head>
+<body>
+
+  <a class="skip-link" href="#main-content">Saltar al contenido principal</a>
+
+  <header class="site-header" data-scrolled="false">
+    <a class="logo" href="/">ArtesaNFC</a>
+  </header>
+
+  <main id="main-content">
+    <section class="container certificate-shell" aria-live="polite">
+
+      <p id="cert-nojs" class="certificate-state section-lead" hidden>
+        La verificación de certificados requiere JavaScript habilitado en tu navegador.
+      </p>
+
+      <div id="cert-loading" class="certificate-state" hidden>
+        <p class="certificate-eyebrow">Certificado de autenticidad</p>
+        <p class="section-lead">Verificando certificado…</p>
+      </div>
+
+      <div id="cert-unavailable" class="certificate-state" hidden>
+        <p class="certificate-eyebrow">Certificado de autenticidad</p>
+        <h1 class="certificate-heading">Certificado no disponible</h1>
+        <p class="section-lead">No fue posible verificar este certificado. Si crees que se trata de un error, contacta al artesano o al equipo de ArtesaNFC.</p>
+      </div>
+
+      <div id="cert-error" class="certificate-state" hidden>
+        <p class="certificate-eyebrow">Certificado de autenticidad</p>
+        <h1 class="certificate-heading">Verificación no disponible temporalmente</h1>
+        <p class="section-lead">La verificación de certificados no está disponible en este momento. Intenta de nuevo en unos minutos.</p>
+      </div>
+
+      <article id="cert-authentic" class="certificate-state" hidden aria-labelledby="cert-piece-title">
+        <p class="certificate-badge">Pieza auténtica</p>
+        <p class="section-note">Certificado verificado. Este certificado corresponde a la pieza mostrada a continuación.</p>
+
+        <div class="card__media certificate-media">
+          <img
+            id="cert-piece-image"
+            class="card__media-img"
+            src="/assets/img/card-placeholder.jpg"
+            alt=""
+            width="640"
+            height="800"
+            decoding="async"
+          >
+        </div>
+
+        <h1 id="cert-piece-title" class="certificate-heading"></h1>
+        <p id="cert-piece-meta" class="card__meta"></p>
+        <p id="cert-piece-description" class="section-lead"></p>
+
+        <dl class="certificate-meta-list">
+          <div>
+            <dt>Versión del certificado</dt>
+            <dd id="cert-version"></dd>
+          </div>
+          <div>
+            <dt>Emitido</dt>
+            <dd id="cert-issued-at"></dd>
+          </div>
+        </dl>
+
+        <p id="cert-notes" class="section-lead" hidden></p>
+
+        <section aria-labelledby="cert-artisan-title">
+          <h2 id="cert-artisan-title">Artesano</h2>
+          <p id="cert-artisan-name" class="card__title"></p>
+          <p id="cert-artisan-location" class="card__meta"></p>
+          <a id="cert-artisan-link" class="editorial-link" href="">Ver perfil del artesano →</a>
+        </section>
+
+        <a id="cert-piece-link" class="editorial-link" href="">Ver pieza completa →</a>
+      </article>
+
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>ArtesaNFC</p>
+  </footer>
+
+  <script src="/assets/js/api-config.js" defer></script>
+  <script src="/assets/js/api.js" defer></script>
+  <script src="/assets/js/hydrate-certificate.js" defer></script>
+</body>
+</html>
