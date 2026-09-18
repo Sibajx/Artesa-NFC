@@ -10,13 +10,18 @@ settings = get_settings()
 
 app = FastAPI(title=settings.app_name)
 # Explicit allowlist only (docs/SECURITY.md section 10) - no "*", no origin
-# regex. GET is the only method the public API's browser integration needs;
-# OPTIONS preflight is handled by the middleware itself regardless of
-# allow_methods. No credentials: the public API has no cookie/session auth.
+# regex. GET and POST are the only methods the public API's browser
+# integration needs: GET for the artisan/piece catalog, POST for
+# certificates/resolve (API_CONTRACT.md section 3/7 - the frontend calls it
+# from a browser). OPTIONS preflight is handled by the middleware itself
+# regardless of allow_methods. No credentials: the public API has no
+# cookie/session auth. This is an implementation of the already-approved API
+# contract, not a broadening of CORS policy - the origin allowlist,
+# allow_credentials, and allowed headers are unchanged.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_allowed_origins_list,
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_credentials=False,
 )
 register_exception_handlers(app)

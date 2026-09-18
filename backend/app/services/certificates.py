@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import re
 import secrets
 import uuid
 from dataclasses import dataclass, field
@@ -17,6 +18,11 @@ from app.models.certificate import Certificate, CertificateStatus
 # and not derived from any predictable input (certificate/piece id, NFC
 # UID, timestamp) — ADR-007.
 _TOKEN_BYTES = 32
+
+# ceil(32 bytes * 8 bits / 6 bits per base64 char), unpadded — SECURITY.md
+# section 2.1's "valid issued tokens are 43 characters".
+TOKEN_LENGTH = 43
+_TOKEN_SHAPE_RE = re.compile(rf"^[A-Za-z0-9_-]{{{TOKEN_LENGTH}}}$")
 
 
 class CertificateServiceError(Exception):
@@ -71,6 +77,20 @@ class CertificateRotationResult:
 def generate_certificate_token() -> str:
     """Generate a fresh 256-bit CSPRNG token, Base64 URL-safe, unpadded."""
     return base64.urlsafe_b64encode(secrets.token_bytes(_TOKEN_BYTES)).decode("ascii").rstrip("=")
+
+
+def is_syntactically_plausible_token(token: str) -> bool:
+    """Cheap pre-hash/pre-DB shape check: exact length + Base64 URL-safe
+    alphabet (SECURITY.md section 4.1's "longitud/alfabeto correctos").
+
+    This is an efficiency shortcut only, never a source of a distinguishable
+    public outcome: a token that fails this check and a syntactically
+    plausible-but-unknown token must both resolve to the exact same
+    `unavailable` result (API_CONTRACT.md section 7, SECURITY.md section
+    4.1) — this function only decides whether it is worth spending a hash
+    + indexed DB lookup to find that out.
+    """
+    return bool(_TOKEN_SHAPE_RE.fullmatch(token))
 
 
 def hash_certificate_token(token: str) -> str:

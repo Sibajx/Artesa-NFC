@@ -5,15 +5,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, contains_eager
 
 from app.api.deps import get_db
-from app.api.v1.common import media_order_by, not_found
+from app.api.v1.common import fetch_media_assets, fetch_piece_summaries, not_found, piece_artisan_published_conditions
 from app.models.artisan import Artisan
-from app.models.enums import PublicationStatus
-from app.models.media_asset import MediaAsset, MediaAssetStatus, MediaRole
 from app.models.piece import AvailabilityStatus, Piece
-from app.schemas.artisan import ArtisanPieceSummary, ArtisanSummary
+from app.schemas.artisan import ArtisanPieceSummary
 from app.schemas.common import ListEnvelope, ListMeta
-from app.schemas.media import media_asset_to_public
-from app.schemas.piece import Dimensions, PiecePublic
+from app.schemas.piece import PiecePublic, piece_to_public
 
 router = APIRouter(prefix="/pieces", tags=["pieces"])
 
@@ -25,8 +22,7 @@ def _visible_pieces_query():
     # level, so a published piece under an unpublished artisan simply never
     # matches - no separate post-filter needed.
     return select(Piece).join(Artisan, Piece.artisan_id == Artisan.id).where(
-        Piece.publication_status == PublicationStatus.published,
-        Artisan.publication_status == PublicationStatus.published,
+        *piece_artisan_published_conditions()
     )
 
 
@@ -44,38 +40,7 @@ def list_pieces(
 
     pieces = db.execute(query.order_by(Piece.slug.asc())).scalars().all()
 
-    cover_by_piece_id: dict = {}
-    if pieces:
-        cover_media_rows = (
-            db.execute(
-                select(MediaAsset)
-                .where(
-                    MediaAsset.piece_id.in_([p.id for p in pieces]),
-                    MediaAsset.role == MediaRole.hero,
-                    MediaAsset.status == MediaAssetStatus.active,
-                )
-                .order_by(*media_order_by())
-            )
-            .scalars()
-            .all()
-        )
-        for media in cover_media_rows:
-            cover_by_piece_id.setdefault(media.piece_id, media)
-
-    data = [
-        ArtisanPieceSummary(
-            slug=piece.slug,
-            name=piece.name,
-            public_code=piece.public_code,
-            availability_status=piece.availability_status.value,
-            cover_media=(
-                media_asset_to_public(cover_by_piece_id[piece.id])
-                if piece.id in cover_by_piece_id
-                else None
-            ),
-        )
-        for piece in pieces
-    ]
+    data = fetch_piece_summaries(db, pieces)
     return ListEnvelope(data=data, meta=ListMeta(total=len(data)))
 
 
@@ -90,39 +55,5 @@ def get_piece(slug: str, db: Session = Depends(get_db)) -> PiecePublic:
     if piece is None:
         raise not_found()
 
-    media_rows = (
-        db.execute(
-            select(MediaAsset)
-            .where(
-                MediaAsset.piece_id == piece.id,
-                MediaAsset.status == MediaAssetStatus.active,
-            )
-            .order_by(*media_order_by())
-        )
-        .scalars()
-        .all()
-    )
-
-    dimensions = Dimensions(**piece.dimensions) if piece.dimensions else None
-
-    return PiecePublic(
-        slug=piece.slug,
-        public_code=piece.public_code,
-        name=piece.name,
-        description=piece.description,
-        history=piece.history,
-        materials=piece.materials or [],
-        technique=piece.technique,
-        origin=piece.origin,
-        creation_year=piece.creation_year,
-        creation_date=piece.creation_date,
-        dimensions=dimensions,
-        visual_theme=piece.visual_theme,
-        availability_status=piece.availability_status.value,
-        artisan=ArtisanSummary(
-            slug=piece.artisan.slug,
-            full_name=piece.artisan.full_name,
-            artistic_name=piece.artisan.artistic_name,
-        ),
-        media=[media_asset_to_public(media) for media in media_rows],
-    )
+    media = fetch_media_assets(db, piece_id=piece.id)
+    return piece_to_public(piece, media)
