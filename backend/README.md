@@ -85,6 +85,17 @@ Python environment, not from inside the Docker image — see
    Tests run against the same `DATABASE_URL` as the app (see
    `app/core/config.py`), so PostgreSQL must be up and migrated first.
 
+## Local frontend / CORS
+
+Port `5500` is the project convention for the local static frontend
+(e.g. VS Code Live Server) — the default `CORS_ALLOWED_ORIGINS` in
+`.env.example` allows both `http://127.0.0.1:5500` and
+`http://localhost:5500` out of the box. If the frontend is intentionally
+served from a different origin, override `CORS_ALLOWED_ORIGINS` (comma
+separated) in `.env`. Production must explicitly set it to
+`https://artesanfc.com`; nothing is allowed by default in that
+environment.
+
 ## Docker scope for Sprint 3
 
 `docker-compose.yml` currently starts two services: `db` (PostgreSQL)

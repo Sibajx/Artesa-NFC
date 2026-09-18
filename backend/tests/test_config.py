@@ -42,3 +42,36 @@ def test_settings_ignores_docker_compose_only_postgres_keys(tmp_path, monkeypatc
     settings = Settings(_env_file=env_file)
 
     assert settings.database_url == "postgresql://example:example@localhost:5432/example"
+
+
+# --- CORS allowlist parsing (app/main.py::CORSMiddleware consumes this) ---
+
+
+def test_cors_allowed_origins_default_is_local_dev_only(monkeypatch):
+    monkeypatch.delenv("CORS_ALLOWED_ORIGINS", raising=False)
+    settings = Settings(_env_file=None)
+    assert settings.cors_allowed_origins_list == [
+        "http://127.0.0.1:5500",
+        "http://localhost:5500",
+    ]
+
+
+def test_cors_allowed_origins_parses_comma_separated_env_value(monkeypatch):
+    monkeypatch.setenv("CORS_ALLOWED_ORIGINS", "https://one.example, https://two.example")
+    settings = Settings(_env_file=None)
+    assert settings.cors_allowed_origins_list == [
+        "https://one.example",
+        "https://two.example",
+    ]
+
+
+def test_cors_allowed_origins_supports_production_domain(monkeypatch):
+    monkeypatch.setenv("CORS_ALLOWED_ORIGINS", "https://artesanfc.com")
+    settings = Settings(_env_file=None)
+    assert settings.cors_allowed_origins_list == ["https://artesanfc.com"]
+
+
+def test_cors_allowed_origins_empty_value_yields_empty_list(monkeypatch):
+    monkeypatch.setenv("CORS_ALLOWED_ORIGINS", "")
+    settings = Settings(_env_file=None)
+    assert settings.cors_allowed_origins_list == []
