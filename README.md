@@ -1,54 +1,74 @@
-# Artesa NFC
+# ArtesaNFC
 
-Plataforma de certificación digital con chips NFC para artesanías, prendas y
-piezas de arte cultural del estado de Oaxaca. Cada pieza se registra con un
-ID único; al escanear su chip NFC, el comprador es dirigido a un certificado
-de autenticidad generado dinámicamente con los datos reales de esa pieza.
+Plataforma digital para presentar, documentar y autenticar piezas
+artesanales únicas de Oaxaca, conectando cada pieza física con su
+experiencia digital mediante tecnología NFC.
 
-**Dominio:** artesanfc.com (Cloudflare)
+**Dominio:** `artesanfc.com`
 
-## Arquitectura
+**Fuente de verdad:** este README es solo una introducción rápida. La
+arquitectura, el modelo de datos, el contrato de API y las decisiones de
+seguridad viven en [`docs/`](docs/) — en particular
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md),
+[`docs/DATA_MODEL.md`](docs/DATA_MODEL.md),
+[`docs/API_CONTRACT.md`](docs/API_CONTRACT.md) y
+[`docs/SECURITY.md`](docs/SECURITY.md). Ante cualquier discrepancia entre
+este README y `docs/`, `docs/` es la referencia correcta.
 
-| Componente | Tecnología | Función |
+## Arquitectura actual
+
+El proyecto está en migración incremental (`docs/ARCHITECTURE.md` §15)
+desde un prototipo estático hacia un backend propio:
+
+| Capa | Tecnología | Estado |
 |---|---|---|
-| Sitio | Cloudflare Pages | Hospeda el sitio estático (`/public`), se despliega automáticamente en cada `push` a `main` |
-| Base de datos | Cloudflare D1 (SQLite) | Almacena artesanas y piezas registradas |
-| API / certificados | Cloudflare Pages Functions | Registra piezas nuevas y genera cada certificado dinámicamente en `/cert/[id]` |
-| Chips | NFC (NTAG213/215/216) | Cada chip guarda la URL única de su certificado |
+| Frontend | Cloudflare Pages, sitio estático (`frontend/`) | Home + páginas públicas de artesano/pieza de Sprint 2, con contenido fixture/demo (`docs/SPRINT_2.md`) |
+| Backend | FastAPI + PostgreSQL (`backend/`) | API pública de Sprint 3 (`docs/SPRINT_3.md`) |
+| ORM / migraciones | SQLAlchemy + Alembic | Modelos `Artisan`, `Piece`, `MediaAsset` |
+
+El frontend de Sprint 2 **todavía no consume** esta API — sigue usando
+contenido fixture estático. Conectar el frontend a la API es un trabajo
+de seguimiento explícitamente diferido (`docs/SPRINT_3.md` §12), no
+parte de este cierre de sprint.
+
+## API pública actual
+
+Definida en detalle en [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md):
+
+```text
+GET /api/v1/artisans
+GET /api/v1/artisans/{slug}
+GET /api/v1/pieces
+GET /api/v1/pieces/{slug}
+```
+
+Certificados, NFC y ownership (`POST /api/v1/certificates/resolve` y
+todo lo relacionado) son alcance de **Sprint 4** (`docs/WORKFLOW.md`
+§14) y no existen todavía en este repositorio.
 
 ## Estructura del repositorio
 
+```text
+artesa-nfc/
+├── frontend/       Sitio estático (Sprint 2), sin integración con la API todavía
+├── backend/        FastAPI + PostgreSQL (Sprint 3) — ver backend/README.md
+├── docs/           Fuente de verdad: producto, arquitectura, datos, API, seguridad
+├── public/, src/, db/, wrangler.toml
+│                   Legado del prototipo original en Cloudflare Pages/D1/Workers,
+│                   conservado únicamente como estado de migración
+│                   (docs/ARCHITECTURE.md §1, §15); no es la implementación activa
+└── README.md
 ```
-artesanfc/
-├── public/                  Sitio estático servido por Cloudflare Pages
-│   └── index.html
-├── db/
-│   └── schema.sql            Esquema de la base de datos D1
-├── docs/
-│   └── diccionario-datos.md  Documentación de cada campo y convención de IDs
-├── wrangler.toml              Configuración de Cloudflare Pages/D1
-└── .gitignore
-```
+
+## Empezar a trabajar en el backend
+
+Ver [`backend/README.md`](backend/README.md) para el flujo local de
+desarrollo (base de datos, migraciones, seed, servidor, pruebas).
 
 ## Estado del proyecto
 
-- [x] Fase 1 — Diseño del esquema de datos (`db/schema.sql`, `docs/diccionario-datos.md`)
-- [x] Fase 2 — Estructura del repositorio lista para conectar a Cloudflare Pages
-- [ ] Fase 3 — Crear y vincular la base de datos D1
-- [ ] Fase 4 — Endpoint de registro de piezas
-- [ ] Fase 5 — Generador dinámico de certificados (`/cert/[id]`)
-- [ ] Fase 6 — Adaptación de la plantilla visual del certificado
-- [ ] Fase 7 — Programación y prueba de chips NFC
-- [ ] Fase 8 — Prueba de extremo a extremo y lanzamiento
-
-## Cómo desplegar (Fase 2)
-
-1. Crea un repositorio nuevo en GitHub y sube el contenido de esta carpeta.
-2. En el panel de Cloudflare: **Workers & Pages → Crear proyecto → Conectar a Git**.
-3. Selecciona el repositorio. En la configuración de build:
-   - **Framework preset:** None
-   - **Build command:** (vacío — es un sitio estático, no requiere build)
-   - **Build output directory:** `public`
-4. Despliega. Cloudflare te dará una URL temporal (`*.pages.dev`) para verificar que el sitio cargó bien.
-5. En **Custom domains**, agrega `artesanfc.com` (y, cuando llegue la Fase 5, el subdominio `cert.artesanfc.com`).
-6. A partir de aquí, cada `git push` a `main` vuelve a desplegar el sitio automáticamente.
+Ver el cierre de cada sprint en `docs/`:
+[`SPRINT_0.md`](docs/SPRINT_0.md),
+[`SPRINT_1.md`](docs/SPRINT_1.md),
+[`SPRINT_2.md`](docs/SPRINT_2.md),
+[`SPRINT_3.md`](docs/SPRINT_3.md).
