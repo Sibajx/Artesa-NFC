@@ -975,23 +975,41 @@ Declaración explícita para evitar promesas implícitas:
 
 ## 20. Resumen de `CROSS-DOCUMENT CHANGE REQUIRED`
 
-**Queda un único punto** (ya no hay uno relacionado con pepper, porque
-el MVP no usa pepper — sección 3.1):
+**Resuelto (actualizado en el cierre de Sprint 3, 2026-09-17).** Ya no
+queda ningún punto abierto (tampoco había uno relacionado con pepper,
+porque el MVP no usa pepper — sección 3.1):
 
-1. **Reemisión de certificado preservando historial** (sección 14.1):
-   `DATA_MODEL.md` §6 define `certificate.piece_id` como unique de
-   forma global (0..1 certificado **en total** por pieza), lo cual
-   impide preservar un certificado `revoked` histórico y emitir uno
-   `active` nuevo para la misma pieza sin destruir el anterior. La
-   seguridad requiere poder revocar un token comprometido y emitir un
-   reemplazo con un token completamente nuevo **sin perder el
-   historial** del certificado revocado. El cambio futuro necesario
-   (no realizado en esta tarea): permitir múltiples registros
-   históricos de `CERTIFICATE` por pieza, con una restricción de
-   unicidad **parcial** que garantice como máximo un `active` a la vez
-   por pieza — análogo al patrón ya aprobado para `NFC_TAG`
-   (`DATA_MODEL.md` §4, restricción B). Esto se resuelve en una
-   revisión futura de `DATA_MODEL.md`, no aquí.
+1. **Reemisión de certificado preservando historial** (sección 14.1) —
+   **resuelto por `DATA_MODEL.md` §14.** El problema original: `DATA_MODEL.md`
+   §6 definía `certificate.piece_id` como unique de forma global (0..1
+   certificado **en total** por pieza), lo cual impedía preservar un
+   certificado `revoked` histórico y emitir uno `active` nuevo para la
+   misma pieza sin destruir el anterior, cuando la seguridad requiere
+   poder revocar un token comprometido y emitir un reemplazo con un
+   token completamente nuevo **sin perder el historial** del
+   certificado revocado.
+
+   `DATA_MODEL.md` §14 (2026-09-16, rama `docs/certificate-history`)
+   resuelve esto: `certificate.piece_id` deja de ser unique global y
+   pasa a tener un **unique index parcial** sobre `piece_id` donde
+   `status = 'active'` (`DATA_MODEL.md` §2.3/§4 restricción C', §6),
+   conceptualmente equivalente a `UNIQUE(piece_id) WHERE status =
+   'active'`. Esto garantiza como máximo **un** certificado `active`
+   por pieza en cualquier momento, mientras permite múltiples filas
+   históricas (`revoked`, y cualquier `draft` histórico) para la misma
+   pieza — el mismo patrón ya aprobado para `NFC_TAG`
+   (`DATA_MODEL.md` §4, restricción B). Un certificado `revoked` nunca
+   se borra ni se sobrescribe, y un reemplazo recibe un `token_hash`
+   derivado de un token completamente nuevo e independiente
+   (`DATA_MODEL.md` §2.3). Esta revisión no cambió el comportamiento
+   observable de `API_CONTRACT.md` §7 (`authentic`/`unavailable` sin
+   cambios).
+
+   Nota de alcance: esta resolución es a nivel de modelo de datos
+   (`DATA_MODEL.md` §14); la implementación de las tablas
+   `certificate`/`nfc_tag`/`audit_event` en sí permanece fuera de
+   Sprint 3 y se realiza en Sprint 4 (`WORKFLOW.md` §14), sin cambios a
+   este documento.
 
 Ningún otro requisito de este documento requiere modificar
 `DATA_MODEL.md` o `API_CONTRACT.md`.
