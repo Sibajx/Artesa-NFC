@@ -61,3 +61,4 @@ class Piece(Base):
 
     artisan: Mapped["Artisan"] = relationship(back_populates="pieces")
     media_assets: Mapped[list["MediaAsset"]] = relationship(back_populates="piece")
+    certificates: Mapped[list["Certificate"]] = relationship(back_populates="piece")
