@@ -236,7 +236,7 @@ def test_get_piece_detail_artisan_embed_is_correct():
     response = client.get("/api/v1/pieces/mascara-demo-01")
     body = response.json()
     assert set(body["artisan"].keys()) == {"slug", "full_name", "artistic_name"}
-    assert body["artisan"]["slug"] == "artisan-demo-01"
+    assert body["artisan"]["slug"] == "artesano-demo-01"
     assert body["artisan"]["full_name"] == "Artesano Demo Uno"
 
 
@@ -283,7 +283,7 @@ def test_unpublished_piece_excluded_from_list_and_matches_unknown_404(db_session
     app.dependency_overrides[get_db] = _override_get_db(db_session)
     try:
         artisan = db_session.execute(
-            select(Artisan).where(Artisan.slug == "artisan-demo-01")
+            select(Artisan).where(Artisan.slug == "artesano-demo-01")
         ).scalar_one()
         db_session.add(
             Piece(
@@ -314,7 +314,7 @@ def test_piece_under_unpublished_artisan_excluded_from_list_and_matches_unknown_
     app.dependency_overrides[get_db] = _override_get_db(db_session)
     try:
         artisan = db_session.execute(
-            select(Artisan).where(Artisan.slug == "artisan-demo-01")
+            select(Artisan).where(Artisan.slug == "artesano-demo-01")
         ).scalar_one()
         artisan.publication_status = PublicationStatus.draft
         db_session.flush()
