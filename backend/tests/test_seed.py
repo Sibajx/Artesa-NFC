@@ -278,14 +278,15 @@ def test_all_image_media_have_alt_text():
         assert asset.alt_text.strip() != ""
 
 
-def test_no_certificate_nfc_tag_audit_event_data_or_models_introduced():
+def test_no_nfc_tag_audit_event_data_or_models_introduced():
+    # certificate is now in scope as of Sprint 4 issue #62; nfc_tag and
+    # audit_event remain deferred to later Sprint 4 issues (#61 boundary).
     _run_seed()
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
-    assert not ({"certificate", "nfc_tag", "audit_event"} & tables)
+    assert not ({"nfc_tag", "audit_event"} & tables)
 
     import app.models as models_module
 
-    assert not hasattr(models_module, "Certificate")
     assert not hasattr(models_module, "NfcTag")
     assert not hasattr(models_module, "AuditEvent")
