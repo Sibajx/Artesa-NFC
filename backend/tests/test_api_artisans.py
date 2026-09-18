@@ -91,12 +91,12 @@ def test_list_artisans_no_internal_fields_leak():
 
 
 def test_get_artisan_detail_returns_200():
-    response = client.get("/api/v1/artisans/artisan-demo-01")
+    response = client.get("/api/v1/artisans/artesano-demo-01")
     assert response.status_code == 200
 
 
 def test_get_artisan_detail_matches_documented_shape():
-    response = client.get("/api/v1/artisans/artisan-demo-01")
+    response = client.get("/api/v1/artisans/artesano-demo-01")
     body = response.json()
     assert set(body.keys()) == {
         "slug",
@@ -112,12 +112,12 @@ def test_get_artisan_detail_matches_documented_shape():
         "pieces",
     }
     assert set(body["location"].keys()) == {"locality", "municipality", "state", "country"}
-    assert body["slug"] == "artisan-demo-01"
+    assert body["slug"] == "artesano-demo-01"
     assert body["languages"] == []
 
 
 def test_get_artisan_detail_includes_correct_public_media():
-    response = client.get("/api/v1/artisans/artisan-demo-01")
+    response = client.get("/api/v1/artisans/artesano-demo-01")
     body = response.json()
     assert len(body["media"]) == 1
     media = body["media"][0]
@@ -129,7 +129,7 @@ def test_get_artisan_detail_includes_correct_public_media():
 
 
 def test_get_artisan_detail_includes_piece_summaries_with_cover_media():
-    response = client.get("/api/v1/artisans/artisan-demo-01")
+    response = client.get("/api/v1/artisans/artesano-demo-01")
     body = response.json()
     piece_slugs = [p["slug"] for p in body["pieces"]]
     assert piece_slugs == sorted(piece_slugs)
@@ -147,7 +147,7 @@ def test_get_artisan_detail_includes_piece_summaries_with_cover_media():
 
 
 def test_get_artisan_detail_no_internal_fields_leak():
-    response = client.get("/api/v1/artisans/artisan-demo-01")
+    response = client.get("/api/v1/artisans/artesano-demo-01")
     raw = response.text
     for forbidden in ("publication_status", "storage_path", "created_at", "updated_at", '"id"'):
         assert forbidden not in raw
@@ -193,7 +193,7 @@ def test_archived_media_excluded_from_detail(db_session):
     app.dependency_overrides[get_db] = _override_get_db(db_session)
     try:
         artisan = db_session.execute(
-            select(Artisan).where(Artisan.slug == "artisan-demo-01")
+            select(Artisan).where(Artisan.slug == "artesano-demo-01")
         ).scalar_one()
         db_session.add(
             MediaAsset(
@@ -207,7 +207,7 @@ def test_archived_media_excluded_from_detail(db_session):
         )
         db_session.flush()
 
-        response = client.get("/api/v1/artisans/artisan-demo-01")
+        response = client.get("/api/v1/artisans/artesano-demo-01")
         body = response.json()
         assert len(body["media"]) == 1
         assert all(
