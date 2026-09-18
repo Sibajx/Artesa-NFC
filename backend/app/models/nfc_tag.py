@@ -28,10 +28,13 @@ class NfcTag(Base):
             "status NOT IN ('programmed', 'locked') OR piece_id IS NOT NULL",
             name="ck_nfc_tag_assignment_requires_piece",
         ),
-        # DATA_MODEL.md section 2.4: locked_at is only set once the tag
-        # actually reached the locked status.
+        # DATA_MODEL.md section 2.4 (amended, issue #70): locked_at is set
+        # once the tag reaches locked, and preserved as historical metadata
+        # if it later moves to replaced/retired — it must not be cleared
+        # when a locked tag is superseded or decommissioned. available and
+        # programmed tags must still have locked_at = NULL.
         CheckConstraint(
-            "locked_at IS NULL OR status = 'locked'",
+            "locked_at IS NULL OR status IN ('locked', 'replaced', 'retired')",
             name="ck_nfc_tag_locked_at_matches_status",
         ),
         # DATA_MODEL.md section 4 restriction B / section 6: at most one

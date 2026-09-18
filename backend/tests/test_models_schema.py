@@ -457,6 +457,52 @@ def test_nfc_tag_locked_with_locked_at_succeeds(db_session):
     assert tag.locked_at is not None
 
 
+def test_nfc_tag_available_with_locked_at_rejected(db_session):
+    db_session.add(
+        NfcTag(
+            chip_model="NTAG213",
+            status=NfcTagStatus.available,
+            locked_at=datetime.now(timezone.utc),
+        )
+    )
+    with pytest.raises(IntegrityError):
+        db_session.flush()
+
+
+def test_nfc_tag_replaced_preserves_locked_at(db_session):
+    """Issue #70: locked_at is historical metadata that must survive a
+    locked tag moving to replaced, not just a marker of the current state.
+    """
+    piece = _make_piece(db_session, "piece-nfc-replaced-preserves-locked-at")
+    tag = NfcTag(
+        piece_id=piece.id,
+        chip_model="NTAG213",
+        status=NfcTagStatus.replaced,
+        locked_at=datetime.now(timezone.utc),
+    )
+    db_session.add(tag)
+    db_session.flush()
+
+    assert tag.status == NfcTagStatus.replaced
+    assert tag.locked_at is not None
+
+
+def test_nfc_tag_retired_preserves_locked_at(db_session):
+    """Issue #70: same as replaced above, for retirement."""
+    piece = _make_piece(db_session, "piece-nfc-retired-preserves-locked-at")
+    tag = NfcTag(
+        piece_id=piece.id,
+        chip_model="NTAG213",
+        status=NfcTagStatus.retired,
+        locked_at=datetime.now(timezone.utc),
+    )
+    db_session.add(tag)
+    db_session.flush()
+
+    assert tag.status == NfcTagStatus.retired
+    assert tag.locked_at is not None
+
+
 def test_nfc_tag_one_active_per_piece_enforced(db_session):
     piece = _make_piece(db_session, "piece-nfc-one-active")
     db_session.add(NfcTag(piece_id=piece.id, chip_model="NTAG213", status=NfcTagStatus.programmed))
