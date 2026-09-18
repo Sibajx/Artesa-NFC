@@ -6,6 +6,7 @@
   <title>ArtesaNFC — Vasija Demo 01</title>
   <meta name="description" content="ArtesaNFC — página de muestra de pieza, contenido ficticio para validar la estructura de navegación.">
   <meta name="robots" content="index, follow">
+  <meta name="artesanfc-api-base" content="http://127.0.0.1:8000/api/v1">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -32,7 +33,7 @@
     </style>
   </noscript>
 </head>
-<body>
+<body data-piece-slug="vasija-demo-01">
 
   <a class="skip-link" href="#main-content">Saltar al contenido principal</a>
 
@@ -63,6 +64,8 @@
   </nav>
 
   <main id="main-content">
+
+    <p id="hydrate-status" class="sr-only" role="status" aria-live="polite"></p>
 
     <section class="home-section container" aria-labelledby="piece-title">
       <h1 id="piece-title">Vasija Demo 01</h1>
@@ -214,5 +217,8 @@
   </footer>
 
   <script src="../../assets/js/main.js" defer></script>
+  <script src="../../assets/js/api-config.js" defer></script>
+  <script src="../../assets/js/api.js" defer></script>
+  <script src="../../assets/js/hydrate-detail.js" defer></script>
 </body>
 </html>
