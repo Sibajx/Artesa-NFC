@@ -5,12 +5,13 @@ from sqlalchemy import inspect, select
 from sqlalchemy.exc import IntegrityError
 
 from app.db.base import engine
-from app.models import Artisan, Certificate, MediaAsset, Piece
+from app.models import Artisan, Certificate, MediaAsset, NfcTag, Piece
 from app.models.certificate import CertificateStatus
 from app.models.media_asset import MediaRole, MediaType
+from app.models.nfc_tag import NfcTagStatus
 
-EXPECTED_TABLES = {"artisan", "piece", "media_asset", "certificate", "alembic_version"}
-DEFERRED_TABLES = {"nfc_tag", "audit_event"}
+EXPECTED_TABLES = {"artisan", "piece", "media_asset", "certificate", "nfc_tag", "alembic_version"}
+DEFERRED_TABLES = {"audit_event"}
 
 
 def test_migration_head_creates_only_expected_tables():
@@ -319,3 +320,208 @@ def test_public_schemas_expose_no_certificate_or_nfc_fields():
     for schema in (ArtisanPublic, PiecePublic):
         field_names = set(schema.model_fields.keys())
         assert not any("certificate" in name or "nfc" in name for name in field_names)
+
+
+# --- NfcTag (Sprint 4, issue #68) -----------------------------------------
+
+
+def test_nfc_tag_status_enum_values_are_exactly_approved_set():
+    assert {status.value for status in NfcTagStatus} == {
+        "available",
+        "programmed",
+        "locked",
+        "replaced",
+        "retired",
+    }
+
+
+def test_nfc_tag_has_expected_columns_only():
+    columns = set(NfcTag.__table__.columns.keys())
+    assert columns == {
+        "id",
+        "piece_id",
+        "chip_model",
+        "frequency",
+        "protocol",
+        "physical_uid",
+        "programmed_at",
+        "locked_at",
+        "status",
+        "notes",
+        "created_at",
+        "updated_at",
+    }
+
+
+def test_nfc_tag_has_no_artisan_or_certificate_reference():
+    columns = set(NfcTag.__table__.columns.keys())
+    assert "artisan_id" not in columns
+    assert "certificate_id" not in columns
+    assert not hasattr(NfcTag, "artisan")
+    assert not hasattr(NfcTag, "certificate")
+
+
+def test_nfc_tag_belongs_to_optional_piece(db_session):
+    piece = _make_piece(db_session, "piece-nfc-belongs")
+    tag = NfcTag(piece_id=piece.id, chip_model="NTAG213", status=NfcTagStatus.available)
+    db_session.add(tag)
+    db_session.flush()
+
+    assert tag.piece_id == piece.id
+    assert tag.piece.id == piece.id
+    assert list(piece.nfc_tags) == [tag]
+
+
+def test_nfc_tag_can_be_unassigned_from_any_piece(db_session):
+    tag = NfcTag(chip_model="NTAG213", status=NfcTagStatus.available)
+    db_session.add(tag)
+    db_session.flush()
+
+    assert tag.piece_id is None
+    assert tag.piece is None
+
+
+def test_nfc_tag_physical_uid_is_optional(db_session):
+    tag = NfcTag(chip_model="NTAG213", status=NfcTagStatus.available, physical_uid=None)
+    db_session.add(tag)
+    db_session.flush()
+
+    assert tag.physical_uid is None
+
+
+def test_nfc_tag_physical_uid_unique_when_present(db_session):
+    db_session.add(NfcTag(chip_model="NTAG213", status=NfcTagStatus.available, physical_uid="dup-uid"))
+    db_session.flush()
+
+    db_session.add(NfcTag(chip_model="NTAG213", status=NfcTagStatus.available, physical_uid="dup-uid"))
+    with pytest.raises(IntegrityError):
+        db_session.flush()
+
+
+def test_nfc_tag_multiple_null_physical_uids_allowed(db_session):
+    db_session.add_all(
+        [
+            NfcTag(chip_model="NTAG213", status=NfcTagStatus.available, physical_uid=None),
+            NfcTag(chip_model="NTAG213", status=NfcTagStatus.available, physical_uid=None),
+        ]
+    )
+    db_session.flush()  # must not raise: NULL != NULL for a nullable-safe unique constraint
+
+
+def test_nfc_tag_programmed_or_locked_requires_piece(db_session):
+    db_session.add(NfcTag(chip_model="NTAG213", status=NfcTagStatus.programmed, piece_id=None))
+    with pytest.raises(IntegrityError):
+        db_session.flush()
+
+
+def test_nfc_tag_locked_requires_piece(db_session):
+    db_session.add(NfcTag(chip_model="NTAG213", status=NfcTagStatus.locked, piece_id=None))
+    with pytest.raises(IntegrityError):
+        db_session.flush()
+
+
+def test_nfc_tag_available_status_permits_no_piece(db_session):
+    tag = NfcTag(chip_model="NTAG213", status=NfcTagStatus.available, piece_id=None)
+    db_session.add(tag)
+    db_session.flush()
+
+    assert tag.status == NfcTagStatus.available
+
+
+def test_nfc_tag_locked_at_requires_locked_status(db_session):
+    piece = _make_piece(db_session, "piece-nfc-locked-at-mismatch")
+    db_session.add(
+        NfcTag(
+            piece_id=piece.id,
+            chip_model="NTAG213",
+            status=NfcTagStatus.programmed,
+            locked_at=datetime.now(timezone.utc),
+        )
+    )
+    with pytest.raises(IntegrityError):
+        db_session.flush()
+
+
+def test_nfc_tag_locked_with_locked_at_succeeds(db_session):
+    piece = _make_piece(db_session, "piece-nfc-locked-ok")
+    tag = NfcTag(
+        piece_id=piece.id,
+        chip_model="NTAG213",
+        status=NfcTagStatus.locked,
+        locked_at=datetime.now(timezone.utc),
+    )
+    db_session.add(tag)
+    db_session.flush()
+
+    assert tag.status == NfcTagStatus.locked
+    assert tag.locked_at is not None
+
+
+def test_nfc_tag_one_active_per_piece_enforced(db_session):
+    piece = _make_piece(db_session, "piece-nfc-one-active")
+    db_session.add(NfcTag(piece_id=piece.id, chip_model="NTAG213", status=NfcTagStatus.programmed))
+    db_session.flush()
+
+    db_session.add(NfcTag(piece_id=piece.id, chip_model="NTAG213", status=NfcTagStatus.locked))
+    with pytest.raises(IntegrityError):
+        db_session.flush()
+
+
+def test_nfc_tag_history_allows_multiple_replaced_or_retired_plus_one_active(db_session):
+    piece = _make_piece(db_session, "piece-nfc-history")
+    db_session.add_all(
+        [
+            NfcTag(piece_id=piece.id, chip_model="NTAG213", status=NfcTagStatus.retired),
+            NfcTag(piece_id=piece.id, chip_model="NTAG213", status=NfcTagStatus.replaced),
+            NfcTag(piece_id=piece.id, chip_model="NTAG213", status=NfcTagStatus.locked),
+        ]
+    )
+    db_session.flush()
+
+    rows = db_session.execute(select(NfcTag).where(NfcTag.piece_id == piece.id)).scalars().all()
+    assert len(rows) == 3
+    assert sum(1 for r in rows if r.status == NfcTagStatus.locked) == 1
+    assert sum(1 for r in rows if r.status in (NfcTagStatus.retired, NfcTagStatus.replaced)) == 2
+
+
+def test_nfc_tag_active_tags_for_different_pieces_allowed(db_session):
+    piece_a = _make_piece(db_session, "piece-nfc-multi-a")
+    piece_b = _make_piece(db_session, "piece-nfc-multi-b")
+    db_session.add_all(
+        [
+            NfcTag(piece_id=piece_a.id, chip_model="NTAG213", status=NfcTagStatus.programmed),
+            NfcTag(piece_id=piece_b.id, chip_model="NTAG213", status=NfcTagStatus.programmed),
+        ]
+    )
+    db_session.flush()
+
+    active_tags = db_session.execute(
+        select(NfcTag).where(NfcTag.status.in_([NfcTagStatus.programmed, NfcTagStatus.locked]))
+    ).scalars().all()
+    assert {t.piece_id for t in active_tags} >= {piece_a.id, piece_b.id}
+
+
+def test_nfc_tag_piece_fk_restricts_piece_delete(db_session):
+    piece = _make_piece(db_session, "piece-nfc-fk-restrict")
+    db_session.add(NfcTag(piece_id=piece.id, chip_model="NTAG213", status=NfcTagStatus.retired))
+    db_session.flush()
+
+    db_session.delete(piece)
+    with pytest.raises(IntegrityError):
+        db_session.flush()
+
+
+def test_public_schemas_expose_no_physical_uid_field():
+    from app.schemas.artisan import ArtisanPublic
+    from app.schemas.piece import PiecePublic
+
+    for schema in (ArtisanPublic, PiecePublic):
+        assert "physical_uid" not in schema.model_fields
+
+
+def test_certificate_resolve_schemas_expose_no_nfc_fields():
+    from app.schemas.certificate import CertificateResolveAuthentic, CertificateResolveUnavailable
+
+    for schema in (CertificateResolveAuthentic, CertificateResolveUnavailable):
+        field_names = set(schema.model_fields.keys())
+        assert not any("nfc" in name or "physical_uid" in name for name in field_names)
