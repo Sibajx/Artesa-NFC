@@ -768,6 +768,17 @@ personal cuya retención/anonimización se define aquí:
   resolverse client-side): se recomienda configurar el logging de
   acceso para excluir o enmascarar el segmento de path que contiene el
   token.
+- **Errores de la base de datos en el ciclo de vida.** El `DETAIL` de
+  PostgreSQL incluye valores de la fila (para `certificate`, el
+  `token_hash`). Los servicios de ciclo de vida traducen los fallos de
+  restricción a errores de dominio (`LifecycleError` y derivados) que
+  contienen como máximo el nombre de la restricción y el SQLSTATE, sin
+  `DETAIL`, sin valores de fila y **sin encadenar** la excepción original
+  (`__cause__`/`__context__` son `None`). **Limitación conocida:** esto
+  cubre solo los errores originados en esos servicios; un error de base
+  de datos no controlado en cualquier otra ruta (por ejemplo el `commit`
+  del llamador) aún llega al log del proceso vía el 500 global, y su
+  saneamiento queda como tarea aparte.
 - **Evitar información personal innecesaria** en logs de aplicación más
   allá de lo estrictamente necesario para seguridad/depuración (sección
   12.3 sobre IPs).

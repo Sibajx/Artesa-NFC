@@ -354,6 +354,29 @@ desvinculado temporalmente no rompe la cadena de autenticidad.
 - `nfc_tag.physical_uid` (unique cuando no es `NULL`)
 - `nfc_tag.piece_id` parcial para tags activos (restricción B, sección 4)
 
+### Concurrencia del ciclo de vida (servicios de certificado y NFC)
+
+Garantías de los servicios (`app/services/certificates.py`,
+`nfc_tags.py`, `lifecycle.py`); el índice único parcial sigue siendo el
+árbitro final de "un solo activo por pieza".
+
+- **Estado persistido, no el del objeto ORM.** Cada transición bloquea la
+  fila (`SELECT … FOR UPDATE`) y recarga sus columnas de ciclo de vida
+  antes de validar. Un objeto desactualizado no puede sobrescribir un
+  estado más nuevo ni sacar un estado terminal (`retired`, `replaced`,
+  `revoked`) de su estado: falla con `LifecycleConflict`. Si el objeto
+  estaba al día y la transición es inválida, el error sigue siendo el
+  específico (`Invalid…Transition`).
+- **Perdedor determinista de una carrera.** Dos activaciones/programaciones
+  concurrentes en una pieza → el perdedor recibe `ActiveCertificateAlreadyExists` /
+  `ActiveNfcTagAlreadyExists`; dos rotaciones/reemplazos → `LifecycleConflict`
+  (no `…NotFound`, que queda para la ausencia real de un registro activo).
+  Interbloqueo (`40P01`) y `lock_not_available` (`55P03`) también se
+  reportan como `LifecycleConflict`. No se configura `lock_timeout`.
+- **Transacción.** Cada transición corre en un SAVEPOINT: el conflicto se
+  revierte y la sesión externa sigue usable. Los servicios nunca hacen
+  `commit`; lo hace quien llama.
+
 ## 7. Índices recomendados
 
 - Todas las FKs (`piece.artisan_id`, `certificate.piece_id`,
