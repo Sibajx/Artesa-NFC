@@ -12,7 +12,11 @@ Data:
                 metadata key that must never reach any response);
   * REVOKED     certificate on `vasija-demo-01`, activated then revoked;
   * UNPUBLISHED active certificate on a draft piece of a published artisan;
-  * INVALID     a well-formed random token that was never issued.
+  * INVALID     a well-formed random token that was never issued;
+  * F-08 public-visibility fixtures WITHOUT certificates (HIDDEN_ENTITIES):
+    a draft piece, an archived piece, a draft artisan, an archived artisan,
+    a PUBLISHED piece under the draft artisan, and a published artisan whose
+    only piece is a draft. None of them may ever appear on a public page.
 """
 from __future__ import annotations
 
@@ -24,6 +28,24 @@ from private_route.common import SECRETS, Report
 VALID_PIECE_SLUG = "mascara-demo-01"
 REVOKED_PIECE_SLUG = "vasija-demo-01"
 UNPUBLISHED_PIECE_SLUG = "qa-unpublished-piece"
+ARCHIVED_PIECE_SLUG = "qa-archived-piece"
+UNPUBLISHED_ARTISAN_SLUG = "qa-unpublished-artisan"
+ARCHIVED_ARTISAN_SLUG = "qa-archived-artisan"
+PIECE_UNDER_UNPUBLISHED_ARTISAN_SLUG = "qa-piece-under-unpublished-artisan"
+ARTISAN_WITHOUT_PUBLISHED_PIECES_SLUG = "qa-artisan-without-published-pieces"
+DRAFT_PIECE_OF_THAT_ARTISAN_SLUG = "qa-draft-piece-of-artisan-without-pieces"
+
+# (kind, slug, name): never visible on any public page or in any public API
+# response, whatever state the page is in. The names are unique sentinels.
+HIDDEN_ENTITIES = [
+    ("piece", UNPUBLISHED_PIECE_SLUG, "Pieza QA sin publicar"),
+    ("piece", ARCHIVED_PIECE_SLUG, "Pieza QA archivada"),
+    ("artisan", UNPUBLISHED_ARTISAN_SLUG, "Artesano QA sin publicar"),
+    ("artisan", ARCHIVED_ARTISAN_SLUG, "Artesano QA archivado"),
+    ("piece", PIECE_UNDER_UNPUBLISHED_ARTISAN_SLUG, "Pieza QA bajo artesano sin publicar"),
+    ("piece", DRAFT_PIECE_OF_THAT_ARTISAN_SLUG, "Pieza QA borrador de artesano sin piezas"),
+]
+ARTISAN_WITHOUT_PUBLISHED_PIECES_NAME = "Artesano QA sin piezas publicadas"
 NOTES = "Nota QA de certificación"
 LOOPBACK_DB_HOSTS = {"127.0.0.1", "localhost"}
 
@@ -107,6 +129,35 @@ def build() -> Fixtures:
         )
         db.add(unpublished_piece)
         db.flush()
+
+        # F-08 visibility fixtures (no certificates): every non-public shape.
+        def add_artisan(slug: str, name: str, status: PublicationStatus) -> Artisan:
+            row = Artisan(slug=slug, full_name=name, locality="Localidad QA", techniques=["QA"], publication_status=status)
+            db.add(row)
+            db.flush()
+            return row
+
+        def add_piece(slug: str, code: str, name: str, owner: Artisan, status: PublicationStatus) -> None:
+            db.add(Piece(slug=slug, public_code=code, artisan_id=owner.id, name=name, publication_status=status))
+            db.flush()
+
+        names = {slug: name for _, slug, name in HIDDEN_ENTITIES}
+        draft_artisan = add_artisan(UNPUBLISHED_ARTISAN_SLUG, names[UNPUBLISHED_ARTISAN_SLUG], PublicationStatus.draft)
+        add_artisan(ARCHIVED_ARTISAN_SLUG, names[ARCHIVED_ARTISAN_SLUG], PublicationStatus.archived)
+        add_piece(ARCHIVED_PIECE_SLUG, "QA-ARCHIVED-01", names[ARCHIVED_PIECE_SLUG], artisan, PublicationStatus.archived)
+        # published piece, unpublished owner: must be invisible (API_CONTRACT.md section 9)
+        add_piece(
+            PIECE_UNDER_UNPUBLISHED_ARTISAN_SLUG, "QA-UNDER-DRAFT-01", names[PIECE_UNDER_UNPUBLISHED_ARTISAN_SLUG],
+            draft_artisan, PublicationStatus.published,
+        )
+        # published artisan whose only piece is a draft: its page must list no piece at all
+        lonely = add_artisan(
+            ARTISAN_WITHOUT_PUBLISHED_PIECES_SLUG, ARTISAN_WITHOUT_PUBLISHED_PIECES_NAME, PublicationStatus.published
+        )
+        add_piece(
+            DRAFT_PIECE_OF_THAT_ARTISAN_SLUG, "QA-DRAFT-LONELY-01", names[DRAFT_PIECE_OF_THAT_ARTISAN_SLUG],
+            lonely, PublicationStatus.draft,
+        )
 
         issue(db, valid_piece, "valid", {"notes": NOTES, "internal": canary})
         revoked_certificate = issue(db, revoked_piece, "revoked")

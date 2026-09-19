@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pieza — ArtesaNFC</title>
+  <meta name="description" content="ArtesaNFC — información de una pieza artesanal, su artesano y su historia.">
+
+  <!-- F-08 neutral shell. This file carries NO entity content (no name, no
+       text, no image, no slug): what a visitor sees comes only from the public
+       API, which is the sole authority on publication. The slug is read from
+       location.pathname by hydrate-detail.js. Every path below is absolute
+       because this one file answers many URLs (see frontend/_redirects).
+       No robots meta on purpose: hydrate-detail.js adds `noindex` for every
+       state except a valid 200. -->
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Manrope:wght@400;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="/assets/css/tokens.css">
+  <link rel="stylesheet" href="/assets/css/base.css">
+  <link rel="stylesheet" href="/assets/css/layout.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+  <link rel="stylesheet" href="/assets/css/animations.css">
+  <link rel="stylesheet" href="/assets/css/pages.css">
+
+  <!-- No JS: hydrate-detail.js never runs, so the only thing shown is the
+       neutral notice below. The state containers stay hidden. -->
+  <noscript>
+    <style>
+      #entity-nojs {
+        display: block;
+      }
+    </style>
+  </noscript>
+</head>
+<body data-entity="piece">
+
+  <a class="skip-link" href="#main-content">Saltar al contenido principal</a>
+
+  <header class="site-header" data-scrolled="false" data-scroll-dir="up">
+    <a class="logo" href="/">ArtesaNFC</a>
+    <button
+      type="button"
+      class="hamburger"
+      id="menu-toggle"
+      aria-expanded="false"
+      aria-controls="primary-navigation"
+      aria-label="Abrir menú"
+    >
+      <span class="hamburger__lines" aria-hidden="true"></span>
+    </button>
+  </header>
+
+  <div id="nav-backdrop" class="nav-backdrop" data-state="closed" aria-hidden="true" hidden></div>
+
+  <nav id="primary-navigation" class="nav-panel" aria-label="Principal" data-state="closed" hidden>
+    <ul class="nav-panel__list" role="list">
+      <li><a class="nav-panel__link" href="/">Home</a></li>
+      <li><a class="nav-panel__link" href="/artesanos">Artesanos</a></li>
+      <li><a class="nav-panel__link" href="/piezas">Piezas</a></li>
+      <li><a class="nav-panel__link" href="/#about">Nosotros</a></li>
+      <li><a class="nav-panel__link" href="/#contact">Contacto</a></li>
+    </ul>
+  </nav>
+
+  <main id="main-content" aria-busy="true">
+
+    <p id="hydrate-status" class="sr-only" role="status" aria-live="polite"></p>
+
+    <section id="entity-nojs" class="home-section container entity-state" hidden>
+      <h1 class="section-heading">Pieza</h1>
+      <p class="section-lead">Esta página necesita JavaScript habilitado para mostrar la información de la pieza.</p>
+      <a class="editorial-link" href="/piezas/">Ver todas las piezas →</a>
+    </section>
+
+    <section id="entity-loading" class="home-section container entity-state" hidden>
+      <p class="section-lead">Cargando pieza…</p>
+    </section>
+
+    <section id="entity-not-found" class="home-section container entity-state" hidden>
+      <h1 class="section-heading">Pieza no disponible</h1>
+      <p class="section-lead">Esta pieza no está disponible.</p>
+      <a class="editorial-link" href="/piezas/">Ver todas las piezas →</a>
+    </section>
+
+    <section id="entity-unavailable" class="home-section container entity-state" hidden>
+      <h1 class="section-heading">No pudimos cargar la pieza</h1>
+      <p class="section-lead">Hubo un problema temporal al consultar la información. Inténtalo de nuevo en unos momentos.</p>
+      <button type="button" id="entity-retry" class="editorial-link">Reintentar</button>
+    </section>
+
+    <div id="entity-content" hidden>
+      <section class="home-section container" aria-labelledby="piece-title">
+        <h1 id="piece-title"></h1>
+        <p id="piece-meta" class="card__meta" hidden></p>
+        <p id="piece-description" class="section-lead" hidden></p>
+        <div id="piece-hero"></div>
+      </section>
+
+      <section id="piece-gallery" class="home-section container" aria-labelledby="galeria-title" hidden>
+        <h2 id="galeria-title">Galería</h2>
+        <ul class="card-grid" role="list"></ul>
+      </section>
+
+      <section id="piece-history" class="home-section container" aria-labelledby="historia-title" hidden>
+        <h2 id="historia-title">Historia</h2>
+        <p class="section-lead"></p>
+      </section>
+
+      <section id="piece-materials" class="home-section container" aria-labelledby="materiales-title" hidden>
+        <h2 id="materiales-title">Materiales</h2>
+        <ul role="list"></ul>
+      </section>
+
+      <section id="piece-artisan" class="home-section container" aria-labelledby="artesano-title" hidden>
+        <h2 id="artesano-title">Artesano</h2>
+        <p class="section-lead"></p>
+        <a class="editorial-link" href="/artesanos"></a>
+      </section>
+    </div>
+
+  </main>
+
+  <footer class="site-footer">
+    <p>ArtesaNFC</p>
+    <nav class="site-footer__nav" aria-label="Footer">
+      <a href="/">Home</a>
+      <a href="/artesanos">Artesanos</a>
+      <a href="/piezas">Piezas</a>
+      <a href="/#about">Nosotros</a>
+      <a href="/#contact">Contacto</a>
+    </nav>
+  </footer>
+
+  <script src="/assets/js/main.js" defer></script>
+  <script src="/assets/js/api-config.js" defer></script>
+  <script src="/assets/js/api.js" defer></script>
+  <script src="/assets/js/hydrate-detail.js" defer></script>
+</body>
+</html>

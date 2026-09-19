@@ -169,7 +169,7 @@ Todo contra PostgreSQL 16 y FastAPI reales; navegador Chromium
 | API pública | 4 endpoints `GET` correctos, sin campos de certificado/NFC/privados; 404 canónico; no existen endpoints de certificado/NFC/admin. |
 | Nginx | `nginx -t` OK (1.30.5) sobre el archivo sin modificar. En una copia solo con `listen` cambiado: 6 POST pasan y el 7.º → 429 (JSON, `Retry-After: 2`, `no-store`) incluso con `X-Forwarded-For` aleatorio; GET público: 21 pasan, luego 429; body >1k → 413 (HTML por defecto); `X-Forwarded-For` recibido por el upstream = IP del peer. |
 | Navegador (`/c/…`) | Primera pasada: `/c/{token}` servía Home (B1). **Tras la corrección**, contra el `frontend/` real del repo: **97/97** verificaciones en escritorio y móvil (dos corridas), más 24/24 rutas públicas (12 × 2 viewports). Ver secciones 10 y 12. |
-| Frontend público | `/`, `/artesanos/`, `/artesanos/{slug}`, `/piezas/`, `/piezas/{slug}`: 200, sin overflow, sin errores, contenido hidratado desde la API, ningún enlace a `/c/`. Con API caída, el fallback estático sigue mostrando contenido. |
+| Frontend público | `/`, `/artesanos/`, `/artesanos/{slug}`, `/piezas/`, `/piezas/{slug}`: 200, sin overflow, sin errores, contenido hidratado desde la API, ningún enlace a `/c/`. Con API caída, el fallback estático sigue mostrando contenido *(comportamiento retirado por F-08, ver §17)*. |
 
 ### Privacidad del token y cabeceras (navegador real)
 
@@ -347,3 +347,30 @@ no se persiste. Descripción, requisitos, garantías y límites en
 `docs/QA_PRIVATE_ROUTE.md`. No es una repetición 1:1 de la verificación de este
 sprint (ver §8 de ese documento) y no reemplaza la verificación posterior al
 despliegue de la sección 13.
+
+## 17. Nota posterior al Sprint 4 — publicación en las rutas públicas (hallazgo F-08)
+
+Las secciones 9 y 12 (y la fila "Frontend público" de la tabla de la §9: "con API
+caída, el fallback estático sigue mostrando contenido") se conservan como
+registro histórico. Ese comportamiento era el defecto: una pieza o artesano no
+publicado seguía visible mientras existiera su página HTML pre-renderizada,
+porque el 404 del API no se distinguía de una caída y el HTML estático era el
+contenido por defecto. Corrección posterior (rama
+`fix/public-routes-publication-authority`), decisiones aprobadas por Alexis:
+
+- **La API pública es la única autoridad de publicación.** Se revierte la
+  decisión de "fallback estático" para entidades públicas.
+- Se eliminan las 7 carpetas por slug y las tarjetas estáticas de las listas.
+  `/piezas/{slug}` y `/artesanos/{slug}` se sirven con un shell neutro por tipo
+  en `/_shell/`; `api.js` devuelve `ok` / `not_found` (solo 404) /
+  `unavailable`; el contenido aparece solo tras un `200` válido. Detalle y
+  reglas en `ARCHITECTURE.md` §5.
+- Las páginas de Sprint 2 (`SPRINT_2.md` §5) eran fixtures; las mismas entidades
+  demo viven en el seed del backend y llegan por la API.
+- `www` y `*.pages.dev` siguen sin base de API (no se amplió `api-config.js` ni
+  CORS): muestran el estado "no disponible". Previews funcionales, si se
+  quieren, serán un issue aparte.
+- El QA (`docs/QA_PRIVATE_ROUTE.md`) cubre ahora estas rutas y corrigió su modelo
+  de precedencia de `_redirects` (un rewrite `200` gana incluso sobre un archivo
+  existente en Wrangler 4.135.0).
+- Sin cambios de backend ni de `/c/{token}`.

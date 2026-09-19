@@ -3,15 +3,19 @@
 It reads the REAL frontend/_redirects and frontend/_headers and applies only
 the Cloudflare Pages subset this QA needs (see pages_rules.py):
 
-  * `_redirects`: 200 rewrites (only when no static asset exists at the path)
-    and 3xx redirects, first match wins. Rules Pages silently ignores (splat
-    rule to /index[.html], blocker B1) are dropped, as Pages drops them.
+  * `_redirects`: 200 rewrites and 3xx redirects, first match wins, with `*`
+    splats and `:name` placeholders. A 200 rewrite applies EVEN WHEN a static
+    asset exists at the requested path (observed on Wrangler 4.135.0; the
+    earlier "rewrite only if no asset exists" model was wrong, F-08). Rules
+    Pages silently ignores (splat rule to /index[.html], blocker B1) are
+    dropped, as Pages drops them.
   * `_headers`: every matching block applies; repeated headers are joined.
   * Pages HTML handling: `/dir` -> 308 `/dir/`; `/dir/` -> dir/index.html;
     unknown path -> root index.html with 200 (SPA fallback, no 404.html).
 
-It refuses to start if the private-route rewrite is absent or malformed, so it
-can never quietly serve a working /c/{token} when the real rules are broken.
+It refuses to start if the private-route rewrite or the public entity-shell
+rewrites (F-08) are absent or malformed, so it can never quietly serve a
+working /c/{token} or a working /piezas/{slug} when the real rules are broken.
 Request paths (which carry the bearer token) are never logged.
 
 It is NOT a Cloudflare emulator. QA_SERVER=wrangler is the higher-fidelity
@@ -47,10 +51,16 @@ RESERVED = {"_headers", "_redirects"}  # Pages never serves these
 
 
 class Site:
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, lint: bool = True) -> None:
+        """`lint=False` exists only so the harness self-tests can model rule
+        sets the linter (rightly) rejects, e.g. the old capturing splat."""
         self.root = root.resolve()
         redirects, self.header_blocks = pr.load(self.root)
-        problems = pr.lint_redirects(redirects) + pr.lint_headers(self.header_blocks)
+        problems = (
+            pr.lint_redirects(redirects) + pr.lint_public_redirects(redirects) + pr.lint_headers(self.header_blocks)
+            if lint
+            else []
+        )
         if problems:
             raise SystemExit("static_server: refusing to start, routing rules are invalid:\n  - " + "\n  - ".join(problems))
         self.rules, dropped = pr.effective_redirects(redirects)
@@ -68,19 +78,17 @@ class Site:
         return candidate
 
     def resolve(self, url_path: str, query: str) -> tuple[str, object]:
-        """-> ('redirect', (status, location)) | ('file', Path)."""
+        """-> ('redirect', (status, location)) | ('file', Path).
+
+        Precedence as observed on Wrangler 4.135.0: the first matching rule
+        decides, whatever exists on disk. The rewrite destination is served
+        as-is (rules are not applied again to it)."""
         served_path = url_path
-        for rule in self.rules:
-            if not rule.matches(url_path):
-                continue
-            if rule.status == 200:
-                asset = self._file_for(url_path)
-                if asset is not None and asset.is_file():
-                    break  # an existing asset wins over a rewrite
-                served_path = rule.destination
-            else:
+        rule = next((r for r in self.rules if r.matches(url_path)), None)
+        if rule is not None:
+            if rule.status != 200:
                 return "redirect", (rule.status, rule.destination)
-            break
+            served_path = rule.destination
 
         target = self._file_for(served_path)
         if target is not None and target.is_dir():

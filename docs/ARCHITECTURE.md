@@ -143,6 +143,39 @@ GET /piezas/{slug}
 
 La pieza pública enlaza al artesano y el perfil del artesano muestra sus piezas.
 
+### Publicación en las rutas públicas (hallazgo F-08)
+
+La API pública es la **única autoridad de publicación**. El frontend no
+contiene ninguna página por entidad:
+
+- `/piezas/{slug}` y `/artesanos/{slug}` se sirven con **un shell neutro por
+  tipo** (`frontend/_shell/pieza/`, `frontend/_shell/artesano/`) mediante las
+  reglas de `frontend/_redirects`
+  (`/piezas/:slug  /_shell/pieza/  200`, con y sin `/` final, y las dos
+  equivalentes para `/artesanos`). El shell no contiene nombre, texto, imagen ni
+  slug; `hydrate-detail.js` lee el slug de `location.pathname` y muestra la
+  entidad **solo** tras un `200` válido.
+- `404` (slug desconocido, borrador, archivado, pieza bajo artesano no
+  publicado: el API no los distingue y la página tampoco) → una única página
+  "no disponible" con `noindex`. `5xx`, `429`, timeout, red, respuesta
+  malformada, host sin base de API o URL que no sea exactamente un slug →
+  "no disponible ahora", reintentable, con `noindex`. Sin JavaScript: solo un
+  aviso neutro.
+- `/piezas/` y `/artesanos/` no traen tarjetas: se llenan desde el API. Un `200`
+  con `data: []` muestra un estado vacío, no conserva nada anterior.
+- Las listas y las rutas anidadas (`/piezas/a/b/`) no tienen rewrite; estas
+  últimas conservan su comportamiento anterior (fallback SPA a Home).
+- Reglas de `_redirects`: se usa el placeholder `:slug` y **no** `*`. Con
+  Wrangler 4.135.0 la primera regla que coincide gana y un rewrite `200` se
+  aplica incluso sobre un archivo existente; `/piezas/*` también coincide con
+  `/piezas/` y taparía la lista (`docs/QA_PRIVATE_ROUTE.md` §5).
+- Los shells viven en `/_shell/`, fuera de `/piezas/` y `/artesanos/`, para que
+  ningún slug pueda chocar con ellos.
+- SEO: los metadatos (`<title>`, description, canonical) los pone el JS solo con
+  un `200` válido. Costo asumido y documentado: sin metadatos por entidad en el
+  HTML servido. Una evolución posible es pre-renderizar solo lo publicado en un
+  build, con verificación en runtime (fuera de F-08: hoy no hay build).
+
 ## 6. Certificado privado
 
 Flujo conceptual:
@@ -367,9 +400,10 @@ página (sin comodines ni configuración por HTML):
 | `artesanfc.com` | `https://api.artesanfc.com/api/v1` |
 | cualquier otro (`www`, `*.pages.dev`, `file://`, `[::1]`, …) | sin resolver (`null`) |
 
-- Con la base sin resolver, `api.js` no hace ninguna petición de red: las
-  páginas públicas conservan su contenido estático y `/c/{token}` muestra su
-  estado de error de servicio. Un host no-local nunca puede resolver a
+- Con la base sin resolver, `api.js` no hace ninguna petición de red
+  (resultado `unavailable`): las páginas públicas de detalle y las listas
+  muestran su estado neutro "no disponible" (F-08: ya no hay contenido estático
+  de reserva) y `/c/{token}` muestra su estado de error de servicio. Un host no-local nunca puede resolver a
   loopback (guardia en `api-config.js`).
 - Ninguna página HTML ni otro script debe declarar o duplicar la URL de la
   API (ya no existe el `<meta name="artesanfc-api-base">`).

@@ -83,9 +83,32 @@ def check_public_api(report: Report, fx: Fixtures, api_origin: str) -> None:
 
 def public_html_files(frontend: Path) -> list[Path]:
     files = [frontend / "index.html"]
-    for section in ("artesanos", "piezas"):
+    for section in ("artesanos", "piezas", "_shell"):
         files += sorted((frontend / section).rglob("*.html"))
     return [f for f in files if f.is_file()]
+
+
+def entity_content_problems(frontend: Path) -> list[str]:
+    """F-08: the public API is the only source of entity content. The tree may
+    hold exactly the two list pages and the two neutral shells: no per-slug
+    page, and no entity name, card or slug attribute in any of the four."""
+    from private_route.public_checks import entity_strings
+
+    problems: list[str] = []
+    for section in ("piezas", "artesanos"):
+        extra = sorted(str(p.relative_to(frontend)) for p in (frontend / section).rglob("*") if p.is_file() and p != frontend / section / "index.html")
+        problems += [f"{e}: a per-slug page must not exist (the API decides what is published)" for e in extra]
+    expected = {"piezas/index.html", "artesanos/index.html", "_shell/pieza/index.html", "_shell/artesano/index.html"}
+    for rel in sorted(expected):
+        path = frontend / rel
+        if not path.is_file():
+            problems.append(f"{rel} is missing")
+            continue
+        html = path.read_text(encoding="utf-8")
+        problems += [f"{rel} contains {name!r}" for name in entity_strings() if name in html]
+        if re.search(r"data-(piece|artisan)-slug|card__title|Demo|muestra|ficticio", html, re.I):
+            problems.append(f"{rel} contains entity/fixture content (slug attribute, card, or demo text)")
+    return problems
 
 
 def check_static_frontend(report: Report, fx: Fixtures, frontend: Path) -> None:
@@ -95,7 +118,8 @@ def check_static_frontend(report: Report, fx: Fixtures, frontend: Path) -> None:
 
     pages = public_html_files(frontend)
     scripts = sorted((frontend / "assets" / "js").glob("*.js"))
-    report.check(len(pages) >= 5, f"found {len(pages)} public HTML pages to inspect")
+    report.check(len(pages) == 5, f"found {len(pages)} public HTML pages to inspect (Home, two lists, two shells)")
+    report.group("no per-slug page and no entity content in the list pages and shells (the API is the only source)", entity_content_problems(frontend))
 
     problems: list[str] = []
     for page in pages:
