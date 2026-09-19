@@ -1,8 +1,9 @@
 # ArtesaNFC API - Nginx reverse proxy + rate limiting (EXAMPLE, MVP).
 #
 # Install as /etc/nginx/conf.d/artesanfc-api.conf (or similar). It is an
-# http-context fragment: `limit_req_zone`, `log_format` and `limit_req_status`
-# are only valid inside `http {}`, which is where conf.d/*.conf is included
+# http-context fragment: `limit_req_zone`, `map`, `log_format` and
+# `limit_req_status` are only valid inside `http {}`, which is where
+# conf.d/*.conf is included
 # by the stock nginx.conf. Adjust server_name, certificate paths and the
 # upstream address to the real deployment.
 #
@@ -46,12 +47,28 @@ limit_req_status 429;
 # Access log: client IP, timestamp, method, path, status. Deliberately no
 # $request_body and no query string ($uri is the path only) - the resolve
 # token travels in the POST body and must never reach any log
-# (docs/SECURITY.md sections 12.2 and 13). Rate-limit rejections also show up
-# in the Nginx error log ("limiting requests ... client: <ip>") without the
-# body; together these are the MVP evidence of abuse. Persistent AUDIT_EVENT
-# records are future work. Keep/rotate these logs for at most 30 days
-# (docs/SECURITY.md section 12.3).
-log_format artesanfc_api '$remote_addr [$time_local] "$request_method $uri" $status';
+# (docs/SECURITY.md sections 12.2 and 13). Never log $request or
+# $request_uri here: both carry the query string, and $request the full
+# request line. Rate-limit rejections also show up in the Nginx error log
+# ("limiting requests ... client: <ip>") without the body; together these are
+# the MVP evidence of abuse. Persistent AUDIT_EVENT records are future work.
+# Keep/rotate these logs for at most 30 days (docs/SECURITY.md section 12.3).
+#
+# The private certificate route /c/{token} (docs/SECURITY.md section 7) is
+# served by the frontend host, never by this API host. Its token is a bearer
+# secret in the URL path, so a literal /c/{token} request that reaches this
+# host is rejected locally (see "private-certificate-route" in both servers
+# below) and never logged. The map is the second layer: whatever still gets
+# logged, a path in the /c namespace (any case, decoded and normalized by
+# Nginx, so //c/, /./c/, /%63/ and /c%2F all collapse to it) is written as a
+# fixed placeholder instead of the raw path. It covers a request that is
+# logged before any location is selected or a future routing change.
+map $uri $artesanfc_log_path {
+    ~*^/c(?:/|$)  "/c/[redacted]";
+    default       $uri;
+}
+
+log_format artesanfc_api '$remote_addr [$time_local] "$request_method $artesanfc_log_path" $status';
 
 # --- Client IP --------------------------------------------------------------
 # DEFAULT (safe, used above): the TCP peer address ($remote_addr). Nginx does
@@ -87,6 +104,22 @@ log_format artesanfc_api '$remote_addr [$time_local] "$request_method $uri" $sta
 server {
     listen 80;
     server_name api.artesanfc.com;
+
+    # Explicit, not inherited: the stock http-level `main` format logs the
+    # whole request line (path and query string), and malformed requests are
+    # logged by the default server before any location is chosen.
+    access_log /var/log/nginx/artesanfc-api.access.log artesanfc_api;
+
+    # Private certificate route: a local 404, NOT the redirect below. Nothing
+    # is logged and nothing is sent onwards, so the token is not bounced to
+    # another URL. Matches /c, /c/... in any case, on the normalized path
+    # (e.g. /C/x, //c/x, /%63/x); it does not match /cat, /c.js or /api/v1/*.
+    # BEGIN private-certificate-route
+    location ~* ^/c(?:/|$) {
+        access_log off;
+        return 404;
+    }
+    # END private-certificate-route
 
     # HTTPS is mandatory (docs/SECURITY.md section 7). If certbot uses the
     # webroot/nginx plugin for renewals, add its ACME challenge location here.
@@ -176,6 +209,20 @@ server {
         proxy_pass http://artesanfc_api;
     }
 
+    # Private certificate route (docs/SECURITY.md sections 7 and 13). The
+    # frontend serves /c/{token}; on this API host it is not a route, and its
+    # bearer token must not reach any log or Uvicorn. Local generic 404: no
+    # access-log entry, no proxying, no redirect. Matches /c and /c/... in any
+    # case, on the normalized path (e.g. /C/x, //c/x, /./c/x, /%63/x, /c%2Fx).
+    # It does not match /cat, /c.js or /api/v1/*, and it beats the `/`
+    # fallthrough below wherever it sits in the file (verified, both orders).
+    # BEGIN private-certificate-route
+    location ~* ^/c(?:/|$) {
+        access_log off;
+        return 404;
+    }
+    # END private-certificate-route
+
     # Anything else (including /health, /docs, /openapi.json) is not exposed
     # publicly. Health checks should hit 127.0.0.1:8000 directly.
     location / {
@@ -189,7 +236,10 @@ server {
 #      429 with the JSON envelope, Retry-After and Cache-Control: no-store.
 #   2. The access log shows the real client IP (not a Cloudflare/proxy
 #      address) - decide on the Cloudflare block above based on this.
-#   3. The access/error logs contain no token, query string or body.
+#   3. The access/error logs contain no token, query string or body. A literal
+#      /c/<canary> (any case, http and https) returns 404, is not logged and
+#      does not reach Uvicorn. backend/nginx/validate-log-privacy.sh checks
+#      this against a real Nginx + Uvicorn (Docker, manual).
 #   4. A body over 1k to the resolve path returns 413.
 #   5. Limits are per Nginx node: with several independent nodes, each
 #      enforces its own counters.
