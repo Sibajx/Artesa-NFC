@@ -310,9 +310,8 @@ sobre-ingeniería.
 
 ### 5.1 `POST /api/v1/certificates/resolve`
 
-**Valores por defecto aprobados para el MVP** (a implementar en Nginx
-y/o FastAPI, según `ARCHITECTURE.md` §3, sin fijar aquí la capa
-exacta):
+**Valores por defecto aprobados para el MVP** (enforcement en Nginx,
+ver sección 5.5):
 
 - **30 solicitudes por minuto por IP.**
 - Se permite un **burst pequeño** (unas pocas solicitudes casi
@@ -320,7 +319,9 @@ exacta):
   recargas accidentales de página ni escaneos NFC repetidos legítimos.
 - El abuso repetido (superar el límite de forma sostenida) puede
   activar un **enfriamiento (cooldown) temporal** adicional para ese
-  origen, más allá del `429` puntual.
+  origen, más allá del `429` puntual. **No implementado en el MVP**
+  (Sprint 4): queda como endurecimiento futuro; por ahora solo aplica
+  el `429` puntual.
 - Al superar el límite, se responde `429` (ya definido en
   `API_CONTRACT.md` §10).
 - **No se introduce CAPTCHA** en el MVP: no está justificado para un
@@ -367,6 +368,44 @@ no una decisión abierta.
 - Registrar estos intentos repetidos está permitido y es deseable
   (IP, timestamp, conteo) **sin registrar nunca el token en texto
   plano** de los intentos individuales (sección 3.2, sección 12.2).
+- **Estado en el MVP (Sprint 4):** `AUDIT_EVENT` sigue diferido (no hay
+  modelo, servicio ni API). La evidencia de abuso proviene por ahora de
+  los logs operativos de Nginx (IP, timestamp, método, path, status y
+  las líneas `limiting requests` del error log, con la retención de
+  la sección 12.3). El registro persistente de abuso en `AUDIT_EVENT`
+  es trabajo futuro.
+
+### 5.5 Capa de enforcement e IP real del cliente
+
+- **Nginx es la capa de enforcement del rate limiting en el MVP**; la
+  configuración de ejemplo está en
+  `backend/nginx/artesanfc-api.conf.example`. FastAPI no implementa un
+  limitador propio: un contador en memoria no sería correcto con varios
+  workers/instancias, y `request.client` puede ser el proxy y no el
+  cliente.
+- `certificates/resolve`: `30r/m` por IP con `burst` pequeño;
+  endpoints públicos `GET`: `120r/m` por IP (zona separada). Ambos
+  responden `429` con el envelope `rate_limited` y `Retry-After`, sin
+  revelar nada sobre el token. Las respuestas `429` generadas por Nginx
+  no llevan cabeceras CORS: el navegador las ve como fallo de
+  red/servicio, y el frontend actual las trata como un fallo temporal
+  (aceptable en el MVP).
+- El ejemplo limita el cuerpo de `certificates/resolve` a `1k`
+  (`client_max_body_size`) y añade `Cache-Control: no-store`
+  (sección 7), que la API también envía por sí misma.
+- **IP real del cliente:** por defecto se usa la dirección del peer TCP
+  (`$remote_addr`); nunca se confía en un `X-Forwarded-For` arbitrario.
+  La recuperación de IP real vía Cloudflare (`CF-Connecting-IP` +
+  `set_real_ip_from`) está en el ejemplo como sección opcional
+  **desactivada**, porque la topología de producción (Cloudflare
+  proxied o DNS-only) aún no está confirmada. Solo debe activarse si el
+  origen está realmente protegido detrás de Cloudflare (acepta solo sus
+  rangos), con los rangos oficiales de Cloudflare mantenidos al día;
+  de lo contrario un cliente podría falsificar la cabecera.
+- Los límites son **por nodo Nginx**: con varios nodos independientes
+  habría que centralizarlos o moverlos al edge (fuera del alcance del
+  piloto, sección 5.1). Que la configuración exista no prueba su
+  enforcement: debe verificarse en el despliegue real.
 
 ## 6. Seguridad NFC
 
@@ -463,6 +502,9 @@ Requisitos:
   seguridad a nivel de transporte/implementación, no un cambio a la
   forma del cuerpo JSON del contrato (`API_CONTRACT.md` §16 ya delega a
   este documento la semántica de transporte de `certificates/resolve`).
+  **Implementación (MVP):** la API lo añade a todas las respuestas de
+  esa ruta (200, 422, 405) mediante un middleware acotado a ese path —
+  no a los `GET` públicos — y el ejemplo de Nginx lo repite.
 
 `CROSS-DOCUMENT CHANGE REQUIRED`: ninguno identificado — estos
 requisitos son compatibles con `API_CONTRACT.md` tal como está (el
