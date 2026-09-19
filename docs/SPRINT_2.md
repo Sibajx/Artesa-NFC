@@ -85,6 +85,12 @@ Todas las rutas son consistentes con `PROJECT.md` §7 y `ARCHITECTURE.md`
 contenido documentado, sin relación con las entidades demo de este
 sprint).
 
+> **Nota posterior (F-08):** las 3 páginas de artesano y las 4 de pieza de esta
+> sección se **eliminaron** del repositorio. `/artesanos/{slug}` y
+> `/piezas/{slug}` se sirven ahora con un shell neutro y el contenido llega solo
+> de la API (`ARCHITECTURE.md` §5, `SPRINT_4.md` §17). Lo que sigue se conserva
+> como registro histórico de Sprint 2.
+
 ## 5. Política de contenido fixture
 
 El contenido de Sprint 2 es explícitamente ficticio/de muestra:

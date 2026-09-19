@@ -1,6 +1,6 @@
 # ArtesaNFC — QA reproducible de la ruta privada `/c/{token}`
 
-**Estado:** vigente desde el hallazgo F-06 (post-Sprint 4).
+**Estado:** vigente desde el hallazgo F-06 (post-Sprint 4); ampliado por F-08 (rutas públicas de detalle y listas, ver §4 y §5).
 **Comando principal:** `./qa/validate-private-route.sh`
 
 ## 1. Para qué sirve
@@ -84,13 +84,14 @@ API real (`uvicorn`, `127.0.0.1:8000`, `APP_ENV=test`), el árbol real de
 
 | Grupo | Comprobaciones |
 |---|---|
-| **Reglas estáticas** (sin servicios) | La regla real es exactamente `/c/*  /c/  200`. Se **rechaza** la forma rota de B1 (`/c/*  /c/index.html  200`, que Pages ignora), cualquier regla splat hacia `/index[.html]`, una regla ausente, duplicada, con otro estado o precedida por otra que capture `/c/{token}`. `_headers` de `/c/*`: `no-store`, `noindex`, `no-referrer` efectivo. Con autopruebas del propio linter (controles negativos). |
-| **Enrutamiento HTTP** | `GET /c/{token}`, `/c/`, `/c/foo/bar`, `/c/x?x=1` → **200** con el shell del certificado (no Home, sin redirección) y cabeceras privadas; `/c` → redirección a `/c/`; las páginas públicas y los assets no son capturados por la regla. |
+| **Reglas estáticas** (sin servicios) | Reglas públicas de F-08: exactamente las cuatro `/piezas/:slug`, `/piezas/:slug/`, `/artesanos/:slug`, `/artesanos/:slug/` hacia `/_shell/pieza/` y `/_shell/artesano/` (200); ninguna captura las listas (`/piezas/`, `/artesanos/`, ni `/piezas`) ni rutas anidadas; se **rechazan** las formas con `*`, una sin barra final, el destino dentro de `/piezas/`, duplicadas o con otro estado. La regla real es exactamente `/c/*  /c/  200`. Se **rechaza** la forma rota de B1 (`/c/*  /c/index.html  200`, que Pages ignora), cualquier regla splat hacia `/index[.html]`, una regla ausente, duplicada, con otro estado o precedida por otra que capture `/c/{token}`. `_headers` de `/c/*`: `no-store`, `noindex`, `no-referrer` efectivo. Con autopruebas del propio linter (controles negativos). |
+| **Enrutamiento HTTP** | `GET /c/{token}`, `/c/`, `/c/foo/bar`, `/c/x?x=1` → **200** con el shell del certificado (no Home, sin redirección) y cabeceras privadas; `/c` → redirección a `/c/`; las páginas públicas y los assets no son capturados por la regla. **Matriz de rutas (F-08, 30 rutas):** una única tabla (`routing_checks.ROUTE_MATRIX`) de resultados esperados (archivo servido o redirección) que se comprueba contra el modelo del servidor integrado **y** contra el servidor en ejecución: con `QA_SERVER=wrangler` es una comparación explícita modelo-frente-a-Wrangler real sobre el `frontend/` real, cuerpo servido byte a byte. |
 | **Navegador** (Chromium, escritorio 1280×800 y móvil 390×844) | Ver la tabla de casos abajo. |
-| **Aislamiento público** | Con certificados activos existentes: `GET /artisans`, `/artisans/{slug}`, `/pieces`, `/pieces/{slug}` sin token, `token_hash`, UUID de certificado, canario de metadatos internos ni campos de certificado/NFC; la pieza no publicada es 404 y no aparece en el listado. Archivos estáticos de páginas públicas: sin datasets JSON, sin enlaces a `/c/`, sin internos. |
+| **Navegador: páginas públicas (F-08)** | Detalle de pieza y de artesano, escritorio y móvil, contra la API real: ver la tabla al final de esta sección. |
+| **Aislamiento público** | Con certificados activos existentes: `GET /artisans`, `/artisans/{slug}`, `/pieces`, `/pieces/{slug}` sin token, `token_hash`, UUID de certificado, canario de metadatos internos ni campos de certificado/NFC; la pieza no publicada es 404 y no aparece en el listado. Archivos estáticos de páginas públicas: sin datasets JSON, sin enlaces a `/c/`, sin internos; **F-08:** el árbol tiene exactamente las dos listas y los dos shells (ninguna página por slug) y ninguno contiene nombres de entidades, tarjetas, atributos de slug ni texto demo. |
 | **Persistencia del token** | En la BD el token crudo no aparece y el `token_hash` esperado sí (control positivo); ningún token ni hash en ningún archivo de la corrida (logs de API y servidor incluidos) ni en el perfil de Chromium; el perfil desaparece al cerrar. |
 
-Casos del navegador (cada uno en ambos viewports):
+Casos del navegador de `/c/{token}` (cada uno en ambos viewports):
 
 | Caso | Resultado esperado |
 |---|---|
@@ -112,17 +113,63 @@ sin token se exige **cero** peticiones a la API: así una redirección que
 rompa la extracción del token (el falso positivo que encontró la auditoría)
 no puede hacerse pasar por un "unavailable" correcto.
 
+Casos del navegador de las páginas públicas (F-08, `public_checks.py`; cada uno
+en ambos viewports, contra la API real con el seed demo más fixtures no
+públicos: borrador, archivado, artesano en borrador, pieza publicada bajo
+artesano en borrador y artesano publicado cuya única pieza es un borrador):
+
+| Caso | Resultado esperado |
+|---|---|
+| El HTML servido de shells y listas | Sin ningún nombre de entidad ni atributo de slug (antes de cualquier script) |
+| Pieza / artesano publicado | 1 GET al API; solo `entity-content` visible; título, meta, descripción, técnica, enlace al artesano, canonical y ausencia de `robots` salen del payload; sin secciones vacías; el artesano lista **exactamente** las piezas publicadas que devuelve el API |
+| Artesano publicado sin piezas publicadas | La sección de piezas no se muestra y ningún nombre del borrador aparece |
+| 404: desconocido · borrador · archivado · pieza bajo artesano no publicado (y sus equivalentes de artesano) | Una única página "no disponible", **idéntica** entre causas, `noindex`, título neutro, ningún nombre de entidad en el DOM |
+| No disponible: 500 · 429 · petición abortada · 200 con JSON de forma incorrecta · 200 no JSON · respuesta que nunca llega (timeout de 5 s) · host sin base de API | Página distinta del 404, con reintento y `noindex`; ningún nombre en el DOM; con host sin base, 0 peticiones |
+| Slug malformado (`%2F`, 300 caracteres, `%` inválido) o shell abierto directamente | "No disponible" **sin** preguntar al API (0 peticiones) |
+| Respuesta pendiente | Solo `entity-loading` (`aria-busy`), título neutro y ningún dato hasta que llega el 200 |
+| Reintento tras fallo | Falla (500) → "no disponible"; reintento → entidad; `noindex` retirado |
+| Sin JavaScript | Solo el aviso neutro, 0 peticiones, sin contenido de entidad |
+| Listas | Exactamente lo que devuelve el API (sin las no públicas); `data: []` → estado vacío sin tarjetas; 500 · 429 · aborto · forma incorrecta · lista no vacía sin elementos usables · host sin base → estado no disponible sin tarjetas; sin JavaScript → aviso; reintento |
+
+Controles negativos de F-08 (copias de `frontend/`, nunca el árbol de trabajo):
+contenido de entidad en el HTML del shell, un 404 tratado como caída y una tarjeta
+estática que sobrevive a `data: []` hacen fallar, cada uno, los checks
+correspondientes (67 fallos en la corrida de control); la regla splat
+`/piezas/*` es rechazada por el linter y su efecto (la lista pasa a servir el
+shell) queda demostrado en las autopruebas.
+
 ## 5. Estrategia de enrutamiento local
 
 El servidor integrado (`qa/private_route/static_server.py`, solo biblioteca
 estándar) **lee los archivos reales** `frontend/_redirects` y
-`frontend/_headers` y **se niega a arrancar** si la regla privada falta o está
+`frontend/_headers` y **se niega a arrancar** si la regla privada o las reglas públicas de F-08 faltan o están
 mal formada, y descarta —como Pages— las reglas que Pages ignora. Implementa
-únicamente el subconjunto de Pages que se necesita: reescrituras 200 (solo si
-no existe un asset en esa ruta) y redirecciones 3xx con `*`; cabeceras
+únicamente el subconjunto de Pages que se necesita: reescrituras 200 y
+redirecciones 3xx, con `*` y con placeholders `:nombre` en el origen; cabeceras
 combinadas (`, `) de todos los bloques que coinciden; `/dir` → 308 `/dir/`;
 ruta desconocida → `index.html` (fallback SPA). **No es un emulador general de
 Cloudflare Pages.**
+
+**Precedencia observada en Wrangler 4.135.0 (F-08).** La primera regla que
+coincide gana, y un rewrite `200` se aplica **aunque exista un archivo estático
+en esa ruta**. El modelo anterior de este servidor ("el rewrite solo se aplica si
+no existe un asset") era incorrecto y se eliminó. Consecuencias documentadas por
+el spike previo a F-08:
+
+- `/piezas/*  /x/  200` también captura `/piezas/` (el `*` coincide con la
+  cadena vacía) y reemplaza la lista y cualquier página existente bajo
+  `/piezas/`; por eso las rutas públicas usan `:slug`.
+- `:slug` es exactamente un segmento no vacío (`[^/]+`): no coincide con
+  `/piezas/`, ni con `/piezas/a/b`, distingue mayúsculas y cuenta `%2F` como parte
+  del segmento.
+- La regla sin barra final no coincide con la ruta con barra final, ni al
+  revés: hacen falta las dos formas. `/piezas/index.html` (archivo real) queda
+  capturado por `/piezas/:slug`.
+- Los destinos de un rewrite no se vuelven a evaluar contra las reglas.
+
+La matriz de rutas (§4) fija estos comportamientos y se ejecuta contra el
+modelo y contra Wrangler. **No se ha verificado contra un despliegue real de
+Cloudflare Pages desde este QA**; ver `docs/SPRINT_4.md` §17.
 
 ## 6. Garantías sobre el token
 
