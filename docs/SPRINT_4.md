@@ -318,3 +318,15 @@ verificados en navegador real; el bloqueador B1 (sección 12) fue corregido con
 un cambio de una línea y reverificado contra el repo corregido. Las
 limitaciones de la sección 11 y los puntos de la sección 13 son conocidos y no
 bloqueantes para este release; no se afirma enforcement en producción.
+
+## 15. Nota posterior al Sprint 4 — base de la API (hallazgo F-01)
+
+Las secciones 11 y 13 se conservan como el hallazgo original. Corrección
+posterior (rama `fix/production-api-base`): la base de la API ya no se declara
+por página. `frontend/assets/js/api-config.js` la elige por hostname exacto
+(`localhost`/`127.0.0.1` → API local; `artesanfc.com` →
+`https://api.artesanfc.com/api/v1`; cualquier otro host → sin resolver, sin
+peticiones de red) y se eliminaron los 10 `<meta name="artesanfc-api-base">`.
+Regla vigente en `ARCHITECTURE.md` §11. Sigue pendiente, como tarea de
+despliegue, que el backend de producción permita `https://artesanfc.com` en
+`CORS_ALLOWED_ORIGINS`.

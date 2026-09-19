@@ -329,6 +329,30 @@ artesanfc.com
 api.artesanfc.com
 ```
 
+### Base de la API en el frontend
+
+La base de la API tiene una sola fuente de verdad:
+`frontend/assets/js/api-config.js`. La elige por **hostname exacto** de la
+página (sin comodines ni configuración por HTML):
+
+| Hostname de la página | Base de la API |
+|---|---|
+| `localhost`, `127.0.0.1` | `http://127.0.0.1:8000/api/v1` |
+| `artesanfc.com` | `https://api.artesanfc.com/api/v1` |
+| cualquier otro (`www`, `*.pages.dev`, `file://`, `[::1]`, …) | sin resolver (`null`) |
+
+- Con la base sin resolver, `api.js` no hace ninguna petición de red: las
+  páginas públicas conservan su contenido estático y `/c/{token}` muestra su
+  estado de error de servicio. Un host no-local nunca puede resolver a
+  loopback (guardia en `api-config.js`).
+- Ninguna página HTML ni otro script debe declarar o duplicar la URL de la
+  API (ya no existe el `<meta name="artesanfc-api-base">`).
+- Soportar un host nuevo (`www`, un preview o un staging) implica añadirlo
+  explícitamente a `api-config.js` **y** a `CORS_ALLOWED_ORIGINS` del backend.
+- El backend de producción debe permitir el origen `https://artesanfc.com` en
+  `CORS_ALLOWED_ORIGINS` (`SECURITY.md` §10). Es configuración de despliegue,
+  fuera del código del frontend.
+
 ## 12. Secretos
 
 Nunca versionar:
