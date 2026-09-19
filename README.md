@@ -65,6 +65,13 @@ artesa-nfc/
 Ver [`backend/README.md`](backend/README.md) para el flujo local de
 desarrollo (base de datos, migraciones, seed, servidor, pruebas).
 
+## QA de la ruta privada de certificados
+
+`./qa/validate-private-route.sh` levanta una base PostgreSQL desechable, la API
+y el frontend, y verifica con un navegador real `/c/{token}` (rutas, tokens
+válidos/inválidos/revocados, aislamiento público y privacidad del token). Ver
+[`docs/QA_PRIVATE_ROUTE.md`](docs/QA_PRIVATE_ROUTE.md).
+
 ## Estado del proyecto
 
 Ver el cierre de cada sprint en `docs/`:

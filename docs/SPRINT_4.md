@@ -330,3 +330,20 @@ peticiones de red) y se eliminaron los 10 `<meta name="artesanfc-api-base">`.
 Regla vigente en `ARCHITECTURE.md` §11. Sigue pendiente, como tarea de
 despliegue, que el backend de producción permita `https://artesanfc.com` en
 `CORS_ALLOWED_ORIGINS`.
+
+## 16. Nota posterior al Sprint 4 — QA reproducible de la ruta privada (hallazgo F-06)
+
+Las secciones 9, 10 y 12 se conservan como el registro histórico: sus
+resultados (97/97, 47/47, 24/24) se obtuvieron con scripts que no se guardaron
+en el repositorio y **no se pueden regenerar desde él**. Corrección posterior
+(rama `test/private-certificate-route-qa`): la verificación con navegador de
+`/c/{token}` pasó a ser un flujo del repositorio, con un único comando
+(`./qa/validate-private-route.sh`), que crea sus propios datos sintéticos con
+los servicios reales del ciclo de vida, aplica la regla real de
+`frontend/_redirects` (y rechaza la forma rota de B1), prueba token válido,
+inválido, revocado, no publicado, ausente, malformado y fallo de transporte en
+escritorio y móvil, y comprueba que el token solo viaja en el cuerpo del POST y
+no se persiste. Descripción, requisitos, garantías y límites en
+`docs/QA_PRIVATE_ROUTE.md`. No es una repetición 1:1 de la verificación de este
+sprint (ver §8 de ese documento) y no reemplaza la verificación posterior al
+despliegue de la sección 13.
