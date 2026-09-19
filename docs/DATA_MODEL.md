@@ -24,14 +24,17 @@ deciden aquí):
   convención de nombres a nivel de base de datos/modelo interno
   (`snake_case`); no congela cómo se expone en la API.
 - **Migración de datos legado**: la estrategia completa de migración desde
-  `docs/diccionario-datos.md`/`db/schema.sql` hacia este modelo es una
-  tarea/documento futuro, no se define aquí (ver sección 0.1).
+  `docs/diccionario-datos.md` (el esquema D1 legado, `db/schema.sql`, ya fue
+  eliminado; ver sección 0.1) hacia este modelo es una tarea/documento
+  futuro, no se define aquí.
 
 ### 0.1 Nota sobre el esquema legado
 
-`docs/diccionario-datos.md` documenta el esquema actual de Cloudflare D1,
-donde el `id` público de `piezas` funciona a la vez como identificador de
-certificado con formato `REGION-AÑO-TIPO-CONSECUTIVO` (secuencial y
+`docs/diccionario-datos.md` documenta el esquema legado de Cloudflare D1. El
+archivo `db/schema.sql` fue eliminado del repositorio (hallazgo F-07) y sigue
+recuperable en el historial de git, en el commit `d3c5f4a`. En ese esquema, el
+`id` público de `piezas` funciona a la vez como identificador de certificado
+con formato `REGION-AÑO-TIPO-CONSECUTIVO` (secuencial y
 predecible). Este modelo nuevo **no hereda ese diseño**: ese identificador
 secuencial nunca debe convertirse en el secreto del certificado privado
 (contradice ADR-007 y ADR-008). Un `public_code` legible y no secreto
