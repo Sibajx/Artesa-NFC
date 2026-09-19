@@ -1,0 +1,70 @@
+name: Backend CI
+
+# Validation only: no deployment, no secrets. Runs the backend against a
+# disposable PostgreSQL service (audit finding F-04).
+on:
+  pull_request:
+    branches:
+      - develop
+  push:
+    branches:
+      - develop
+
+permissions:
+  contents: read
+
+jobs:
+  backend-tests:
+    name: backend-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: backend
+
+    env:
+      # The pytest guard (backend/tests/conftest.py, app/core/db_safety.py)
+      # requires APP_ENV=test AND a test-marked database name.
+      APP_ENV: test
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/artesanfc_test
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: artesanfc_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d artesanfc_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Apply migrations
+        run: alembic upgrade head
+
+      - name: Check models match migrations
+        run: alembic check
+
+      - name: Run tests
+        run: pytest -q

@@ -6,9 +6,9 @@
 
 ## 1. Estado actual del repositorio
 
-El repositorio existente nació con una arquitectura basada en sitio estático, Cloudflare Pages, Cloudflare D1 y lógica de certificados en Cloudflare. La estructura actual incluye `public/`, `src/`, `db/`, `docs/` y `wrangler.toml`.
+El repositorio nació con un prototipo basado en sitio estático, Cloudflare Worker, Cloudflare D1 y lógica de certificados en Cloudflare (`public/`, `src/`, `db/`, `wrangler.toml`). Ese árbol legado **fue eliminado del repositorio** bajo el hallazgo F-07 (ver §15 F); sigue recuperable en el historial de git. La estructura actual es `frontend/`, `backend/`, `qa/`, `docs/` y `.github/`.
 
-La migración debe ser incremental. No se elimina el sistema anterior hasta que exista reemplazo funcional.
+La migración fue incremental: el sistema anterior no se eliminó hasta que existió reemplazo funcional.
 
 ## 2. Arquitectura objetivo
 
@@ -318,6 +318,7 @@ No todas las piezas necesitan 3D.
 
 ```text
 local
+test
 staging
 production
 ```
@@ -328,6 +329,50 @@ Producción prevista:
 artesanfc.com
 api.artesanfc.com
 ```
+
+### Entorno del backend (`APP_ENV`)
+
+`APP_ENV` es **obligatorio y sin valor por defecto** en el backend: si falta,
+la API, Alembic y el seed se niegan a arrancar. Valores aceptados (sin
+alias; `dev`, `development` y `prod` se rechazan): `local`, `test`, `staging`,
+`production`.
+
+- `production` y `staging` rechazan la `DATABASE_URL` de desarrollo o con
+  contraseña vacía/placeholder; `production` además exige
+  `https://artesanfc.com` en `CORS_ALLOWED_ORIGINS` y `DEBUG=false`.
+- Las pruebas (`pytest`) solo arrancan con `APP_ENV=test` **y** una base de
+  datos cuyo nombre tenga el token `test` (`artesanfc_test`).
+- El seed solo corre con `APP_ENV=local` (host local) o `test` (base de
+  datos de prueba); nunca en `staging` ni `production`.
+- `.env` se lee siempre de `backend/.env` (no depende del directorio de
+  trabajo) y es opcional; las variables de entorno tienen prioridad.
+
+Implementación y detalles: `backend/app/core/db_safety.py` y
+`backend/README.md` ("Environment safety").
+
+### Base de la API en el frontend
+
+La base de la API tiene una sola fuente de verdad:
+`frontend/assets/js/api-config.js`. La elige por **hostname exacto** de la
+página (sin comodines ni configuración por HTML):
+
+| Hostname de la página | Base de la API |
+|---|---|
+| `localhost`, `127.0.0.1` | `http://127.0.0.1:8000/api/v1` |
+| `artesanfc.com` | `https://api.artesanfc.com/api/v1` |
+| cualquier otro (`www`, `*.pages.dev`, `file://`, `[::1]`, …) | sin resolver (`null`) |
+
+- Con la base sin resolver, `api.js` no hace ninguna petición de red: las
+  páginas públicas conservan su contenido estático y `/c/{token}` muestra su
+  estado de error de servicio. Un host no-local nunca puede resolver a
+  loopback (guardia en `api-config.js`).
+- Ninguna página HTML ni otro script debe declarar o duplicar la URL de la
+  API (ya no existe el `<meta name="artesanfc-api-base">`).
+- Soportar un host nuevo (`www`, un preview o un staging) implica añadirlo
+  explícitamente a `api-config.js` **y** a `CORS_ALLOWED_ORIGINS` del backend.
+- El backend de producción debe permitir el origen `https://artesanfc.com` en
+  `CORS_ALLOWED_ORIGINS` (`SECURITY.md` §10). Es configuración de despliegue,
+  fuera del código del frontend.
 
 ## 12. Secretos
 
@@ -392,6 +437,16 @@ Mover el flujo privado al backend nuevo.
 
 ### F — Retirar legado
 Solo después de pruebas, migración de datos y plan de rollback.
+
+**Estado (hallazgo F-07): completado para el repositorio.** Se eliminaron
+`public/`, `src/`, `db/` y `wrangler.toml`. La base D1 solo contenía datos de
+ejemplo (sin certificados ni registros de producción) y ninguna etiqueta NFC
+física apuntaba a rutas `/cert/<ID>`; el rollback es un `git revert`.
+
+**Pendiente, seguimiento operativo separado:** la limpieza de los recursos del
+dashboard de Cloudflare (aplicación Worker `artesa-nfc` conectada a Git, base D1
+`artesanfc-db`, asociación del dominio) no forma parte del repositorio y no se
+considera completada aquí.
 
 ## 16. Regla de dependencias
 

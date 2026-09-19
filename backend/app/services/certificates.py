@@ -5,13 +5,23 @@ import hashlib
 import re
 import secrets
 import uuid
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from typing import TypeVar
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.certificate import Certificate, CertificateStatus
+from app.services.lifecycle import (
+    LifecycleConflict,
+    LifecycleError,
+    LifecycleIntegrityError,
+    lock_and_reload,
+    run_in_savepoint,
+    snapshot_and_expire,
+)
 
 # SECURITY.md section 2.1 (approved MVP standard): 256 bits of CSPRNG
 # randomness, Base64 URL-safe, padding stripped. Deliberately not a UUID
@@ -19,13 +29,24 @@ from app.models.certificate import Certificate, CertificateStatus
 # UID, timestamp) — ADR-007.
 _TOKEN_BYTES = 32
 
+T = TypeVar("T")
+
 # ceil(32 bytes * 8 bits / 6 bits per base64 char), unpadded — SECURITY.md
 # section 2.1's "valid issued tokens are 43 characters".
 TOKEN_LENGTH = 43
 _TOKEN_SHAPE_RE = re.compile(rf"^[A-Za-z0-9_-]{{{TOKEN_LENGTH}}}$")
 
 
-class CertificateServiceError(Exception):
+# Constraint identities the service maps deliberately (DATA_MODEL.md section
+# 6). Any other constraint failure becomes CertificateLifecycleIntegrityError.
+_UQ_ONE_ACTIVE_PER_PIECE = "uq_certificate_one_active_per_piece"
+
+# The lifecycle columns a transition decides on and rewrites. Reloaded under
+# lock before every transition (services/lifecycle.py).
+_LIFECYCLE_FIELDS = ("status", "token_hash", "issued_at", "revoked_at")
+
+
+class CertificateServiceError(LifecycleError):
     """Base class for certificate lifecycle service errors."""
 
 
@@ -39,6 +60,16 @@ class ActiveCertificateAlreadyExists(CertificateServiceError):
 
 class ActiveCertificateNotFound(CertificateServiceError):
     """Raised when an operation requires an active certificate that does not exist."""
+
+
+class CertificateLifecycleConflict(CertificateServiceError, LifecycleConflict):
+    """A concurrent transaction changed this piece's certificate lifecycle, or
+    the caller's certificate object was stale. Reload and decide again."""
+
+
+class CertificateLifecycleIntegrityError(CertificateServiceError, LifecycleIntegrityError):
+    """An unexpected constraint failure (including a token_hash collision).
+    Never carries database detail, a token or a token hash."""
 
 
 @dataclass(frozen=True)
@@ -106,56 +137,118 @@ def hash_certificate_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
+def _active_certificate_for_piece(
+    db: Session, piece_id: uuid.UUID, *, for_update: bool = False
+) -> Certificate | None:
+    """Canonical lookup for "the active certificate of a piece" (DATA_MODEL.md
+    section 2.3: `status = 'active'`), shared by activation and rotation.
+    `for_update` locks the row and overwrites any stale copy already in the
+    session's identity map with the persisted state.
+    """
+    stmt = select(Certificate).where(
+        Certificate.piece_id == piece_id, Certificate.status == CertificateStatus.active
+    )
+    if for_update:
+        stmt = stmt.with_for_update().execution_options(populate_existing=True)
+    return db.execute(stmt).scalar_one_or_none()
+
+
+def _run(
+    db: Session,
+    work: Callable[[], T],
+    *,
+    known: Mapping[str, Callable[[], LifecycleError]] | None = None,
+) -> T:
+    return run_in_savepoint(
+        db,
+        work,
+        conflict=CertificateLifecycleConflict,
+        integrity=CertificateLifecycleIntegrityError,
+        known=known,
+    )
+
+
+def _lock(db: Session, certificate: Certificate, believed: dict) -> bool:
+    return lock_and_reload(
+        db, certificate, Certificate, _LIFECYCLE_FIELDS, believed, conflict=CertificateLifecycleConflict
+    )
+
+
+def _reject_state(stale: bool, certificate: Certificate, action: str, required: str) -> None:
+    """Invalid transition, or - when the caller's copy was behind the
+    database - a stale-state conflict. Messages carry ids and statuses only."""
+    status = certificate.status.value
+    if stale:
+        raise CertificateLifecycleConflict(
+            f"Certificate {certificate.id} changed state concurrently (now '{status}'); "
+            f"cannot {action}. Reload and retry."
+        )
+    raise InvalidCertificateTransition(
+        f"Certificate {certificate.id} cannot be {action}d from status '{status}'; "
+        f"only '{required}' certificates can be {action}d."
+    )
+
+
 def activate_certificate(db: Session, certificate: Certificate) -> CertificateActivationResult:
     """Activate a draft certificate, issuing its one and only raw token.
 
-    Preconditions (DATA_MODEL.md section 2.3): `certificate.status` must be
-    `draft` (and therefore `token_hash` is already NULL), and the
-    certificate's piece must not already have another active certificate.
+    Preconditions (DATA_MODEL.md section 2.3): the *persisted* status must be
+    `draft` (and therefore `token_hash` is NULL), and the certificate's piece
+    must not already have another active certificate. The row is locked and
+    reloaded first, so a stale object can never overwrite a newer state: it
+    raises `CertificateLifecycleConflict` (stale handle) or
+    `InvalidCertificateTransition` (current handle, wrong state).
+
     The partial unique index on `certificate.piece_id` remains the final,
-    authoritative guard against a concurrent/racing activation for the same
-    piece; this application-level check only produces a clearer error in
-    the common, non-racing case.
+    authoritative guard for two *different* drafts of one piece racing: the
+    loser's constraint failure is rolled back with its SAVEPOINT and raised as
+    `ActiveCertificateAlreadyExists` - what a serial run after the winner
+    would have produced. The caller owns the commit.
     """
-    if certificate.status != CertificateStatus.draft:
-        raise InvalidCertificateTransition(
-            f"Certificate {certificate.id} cannot be activated from status "
-            f"'{certificate.status.value}'; only 'draft' certificates can be activated."
-        )
+    believed = snapshot_and_expire(db, certificate, _LIFECYCLE_FIELDS)
+    piece_id = certificate.piece_id
 
-    existing_active = db.execute(
-        select(Certificate.id).where(
-            Certificate.piece_id == certificate.piece_id,
-            Certificate.status == CertificateStatus.active,
-        )
-    ).first()
-    if existing_active is not None:
-        raise ActiveCertificateAlreadyExists(
-            f"Piece {certificate.piece_id} already has an active certificate."
-        )
+    def _already_active() -> ActiveCertificateAlreadyExists:
+        return ActiveCertificateAlreadyExists(f"Piece {piece_id} already has an active certificate.")
 
-    raw_token = generate_certificate_token()
-    certificate.token_hash = hash_certificate_token(raw_token)
-    certificate.status = CertificateStatus.active
-    certificate.issued_at = datetime.now(timezone.utc)
-    db.flush()
+    def work() -> CertificateActivationResult:
+        stale = _lock(db, certificate, believed)
+        if certificate.status != CertificateStatus.draft:
+            _reject_state(stale, certificate, "activate", "draft")
 
-    return CertificateActivationResult(certificate=certificate, raw_token=raw_token)
+        if _active_certificate_for_piece(db, piece_id) is not None:
+            raise _already_active()
+
+        raw_token = generate_certificate_token()
+        certificate.token_hash = hash_certificate_token(raw_token)
+        certificate.status = CertificateStatus.active
+        certificate.issued_at = datetime.now(timezone.utc)
+        db.flush()
+        return CertificateActivationResult(certificate=certificate, raw_token=raw_token)
+
+    return _run(db, work, known={_UQ_ONE_ACTIVE_PER_PIECE: _already_active})
 
 
 def revoke_certificate(db: Session, certificate: Certificate) -> Certificate:
-    """Revoke an active certificate, preserving its token_hash/issued_at history."""
-    if certificate.status != CertificateStatus.active:
-        raise InvalidCertificateTransition(
-            f"Certificate {certificate.id} cannot be revoked from status "
-            f"'{certificate.status.value}'; only 'active' certificates can be revoked."
-        )
+    """Revoke an active certificate, preserving its token_hash/issued_at history.
 
-    certificate.status = CertificateStatus.revoked
-    certificate.revoked_at = datetime.now(timezone.utc)
-    db.flush()
+    Decided on the locked, reloaded persisted state: a stale handle (e.g. the
+    certificate was already revoked by a rotation) raises
+    `CertificateLifecycleConflict` and leaves `revoked_at` untouched.
+    """
+    believed = snapshot_and_expire(db, certificate, _LIFECYCLE_FIELDS)
 
-    return certificate
+    def work() -> Certificate:
+        stale = _lock(db, certificate, believed)
+        if certificate.status != CertificateStatus.active:
+            _reject_state(stale, certificate, "revoke", "active")
+
+        certificate.status = CertificateStatus.revoked
+        certificate.revoked_at = datetime.now(timezone.utc)
+        db.flush()
+        return certificate
+
+    return _run(db, work)
 
 
 def rotate_certificate(db: Session, piece_id: uuid.UUID) -> CertificateRotationResult:
@@ -165,35 +258,25 @@ def rotate_certificate(db: Session, piece_id: uuid.UUID) -> CertificateRotationR
     step fails, everything since the start of rotation is rolled back,
     regardless of what the caller's outer transaction does afterwards.
 
-    The existing active certificate is located with `SELECT ... FOR UPDATE`.
-    This is the one piece of row-level locking used in this issue, and it is
-    needed for a real correctness reason, not defensively: two concurrent
-    `rotate_certificate` calls for the *same* piece would otherwise both read
-    the same active certificate before either commits, and both would then
-    try to revoke it and issue their own replacement. The partial unique
-    index still guarantees at most one row ends up `active`, but the loser
-    would revoke a certificate that was no longer the "current" one from its
-    own point of view, and the operation's own preconditions (must find an
-    active certificate) would not have caught that at read time. Locking the
-    row serializes rotations for a given piece: the second caller blocks
-    until the first's transaction ends, then re-reads and correctly sees
-    either no active certificate (if the first succeeded) or the same one
-    (if the first rolled back).
+    The active certificate is located with `SELECT ... FOR UPDATE`, which
+    serializes rotations of one piece: the second caller blocks until the
+    first's transaction ends. Under READ COMMITTED it then finds no active
+    row *in that statement's snapshot* even though the winner just issued a
+    new one, so on an empty result the lookup is repeated with a fresh
+    snapshot: an active certificate now exists -> `CertificateLifecycleConflict`
+    (a competitor changed the lifecycle; the loser deliberately does not
+    rotate the winner's brand-new token away); none -> the genuine
+    `ActiveCertificateNotFound`.
     """
-    with db.begin_nested():
-        active_certificate = db.execute(
-            select(Certificate)
-            .where(
-                Certificate.piece_id == piece_id,
-                Certificate.status == CertificateStatus.active,
-            )
-            .with_for_update()
-        ).scalar_one_or_none()
 
+    def work() -> CertificateRotationResult:
+        active_certificate = _active_certificate_for_piece(db, piece_id, for_update=True)
         if active_certificate is None:
-            raise ActiveCertificateNotFound(
-                f"Piece {piece_id} has no active certificate to rotate."
-            )
+            if _active_certificate_for_piece(db, piece_id) is not None:
+                raise CertificateLifecycleConflict(
+                    f"Piece {piece_id} changed certificate state concurrently; reload and retry."
+                )
+            raise ActiveCertificateNotFound(f"Piece {piece_id} has no active certificate to rotate.")
 
         revoke_certificate(db, active_certificate)
 
@@ -203,8 +286,12 @@ def rotate_certificate(db: Session, piece_id: uuid.UUID) -> CertificateRotationR
 
         activation = activate_certificate(db, new_certificate)
 
-    return CertificateRotationResult(
-        certificate=activation.certificate,
-        raw_token=activation.raw_token,
-        revoked_certificate=active_certificate,
-    )
+        return CertificateRotationResult(
+            certificate=activation.certificate,
+            raw_token=activation.raw_token,
+            revoked_certificate=active_certificate,
+        )
+
+    # No `known` mapping: the replacement's activation translates its own
+    # unique-index failure, and nothing else in this unit can trip one.
+    return _run(db, work)

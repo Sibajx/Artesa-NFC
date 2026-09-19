@@ -9,8 +9,18 @@
 
   var TIMEOUT_MS = 5000;
 
+  // The base comes only from api-config.js. null means "unresolved" (host
+  // not on its allowlist): callers must skip the network entirely.
   function getApiBase() {
-    return (global.ArtesaNFC && global.ArtesaNFC.apiConfig && global.ArtesaNFC.apiConfig.apiBase) || "/api/v1";
+    return (global.ArtesaNFC && global.ArtesaNFC.apiConfig && global.ArtesaNFC.apiConfig.apiBase) || null;
+  }
+
+  var warnedUnresolved = false;
+  function warnUnresolved() {
+    if (!warnedUnresolved) {
+      warnedUnresolved = true;
+      console.warn("[ArtesaNFC] API base is not configured for this host; skipping API requests.");
+    }
   }
 
   function isPlainObject(value) {
@@ -46,13 +56,19 @@
   }
 
   function fetchJSON(path, validate) {
+    var base = getApiBase();
+    if (!base) {
+      warnUnresolved();
+      return Promise.resolve(null);
+    }
+
     var controller = "AbortController" in global ? new AbortController() : null;
     var timeoutId = controller
       ? global.setTimeout(function () {
           controller.abort();
         }, TIMEOUT_MS)
       : null;
-    var url = getApiBase() + path;
+    var url = base + path;
 
     return global
       .fetch(url, {
@@ -134,6 +150,12 @@
   // instead: { ok: true, status, payload } for a clean 200, or { ok: false }
   // for anything else. Never logs the token or any request detail.
   function resolveCertificate(token) {
+    var base = getApiBase();
+    if (!base) {
+      warnUnresolved();
+      return Promise.resolve({ ok: false });
+    }
+
     var controller = "AbortController" in global ? new AbortController() : null;
     var timeoutId = controller
       ? global.setTimeout(function () {
@@ -148,7 +170,7 @@
     }
 
     return global
-      .fetch(getApiBase() + "/certificates/resolve", {
+      .fetch(base + "/certificates/resolve", {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ token: token }),

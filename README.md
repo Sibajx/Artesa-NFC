@@ -53,17 +53,27 @@ artesa-nfc/
 ├── frontend/       Sitio estático (Sprint 2), sin integración con la API todavía
 ├── backend/        FastAPI + PostgreSQL (Sprint 3) — ver backend/README.md
 ├── docs/           Fuente de verdad: producto, arquitectura, datos, API, seguridad
-├── public/, src/, db/, wrangler.toml
-│                   Legado del prototipo original en Cloudflare Pages/D1/Workers,
-│                   conservado únicamente como estado de migración
-│                   (docs/ARCHITECTURE.md §1, §15); no es la implementación activa
+├── qa/             QA reproducible de la ruta privada de certificados
 └── README.md
 ```
+
+El prototipo original en Cloudflare Worker/D1 (`public/`, `src/`, `db/`,
+`wrangler.toml`) fue **eliminado del repositorio** bajo el hallazgo F-07
+(`docs/ARCHITECTURE.md` §1, §15). Sigue recuperable en el historial de git.
+La arquitectura vigente es Cloudflare Pages (`frontend/`) + FastAPI/PostgreSQL
+(`backend/`).
 
 ## Empezar a trabajar en el backend
 
 Ver [`backend/README.md`](backend/README.md) para el flujo local de
 desarrollo (base de datos, migraciones, seed, servidor, pruebas).
+
+## QA de la ruta privada de certificados
+
+`./qa/validate-private-route.sh` levanta una base PostgreSQL desechable, la API
+y el frontend, y verifica con un navegador real `/c/{token}` (rutas, tokens
+válidos/inválidos/revocados, aislamiento público y privacidad del token). Ver
+[`docs/QA_PRIVATE_ROUTE.md`](docs/QA_PRIVATE_ROUTE.md).
 
 ## Estado del proyecto
 

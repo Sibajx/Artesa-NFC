@@ -5,6 +5,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.core.db_errors import DATABASE_EXCEPTION_TYPES, database_exception_handler
+
 # API_CONTRACT.md section 10: standard public error envelope
 # {"error": {"code": ..., "message": ...}}. Never leaks stack traces or
 # database error text.
@@ -78,4 +80,10 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
+    # Database failures get their own class-specific handlers so Starlette runs
+    # them in ExceptionMiddleware, which consumes the exception. The catch-all
+    # below runs in ServerErrorMiddleware, which re-raises after responding, so
+    # the server would print the raw database error (app/core/db_errors.py).
+    for database_exception_type in DATABASE_EXCEPTION_TYPES:
+        app.add_exception_handler(database_exception_type, database_exception_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)

@@ -24,14 +24,17 @@ deciden aquí):
   convención de nombres a nivel de base de datos/modelo interno
   (`snake_case`); no congela cómo se expone en la API.
 - **Migración de datos legado**: la estrategia completa de migración desde
-  `docs/diccionario-datos.md`/`db/schema.sql` hacia este modelo es una
-  tarea/documento futuro, no se define aquí (ver sección 0.1).
+  `docs/diccionario-datos.md` (el esquema D1 legado, `db/schema.sql`, ya fue
+  eliminado; ver sección 0.1) hacia este modelo es una tarea/documento
+  futuro, no se define aquí.
 
 ### 0.1 Nota sobre el esquema legado
 
-`docs/diccionario-datos.md` documenta el esquema actual de Cloudflare D1,
-donde el `id` público de `piezas` funciona a la vez como identificador de
-certificado con formato `REGION-AÑO-TIPO-CONSECUTIVO` (secuencial y
+`docs/diccionario-datos.md` documenta el esquema legado de Cloudflare D1. El
+archivo `db/schema.sql` fue eliminado del repositorio (hallazgo F-07) y sigue
+recuperable en el historial de git, en el commit `d3c5f4a`. En ese esquema, el
+`id` público de `piezas` funciona a la vez como identificador de certificado
+con formato `REGION-AÑO-TIPO-CONSECUTIVO` (secuencial y
 predecible). Este modelo nuevo **no hereda ese diseño**: ese identificador
 secuencial nunca debe convertirse en el secreto del certificado privado
 (contradice ADR-007 y ADR-008). Un `public_code` legible y no secreto
@@ -353,6 +356,29 @@ desvinculado temporalmente no rompe la cadena de autenticidad.
   misma pieza. Mismo patrón que `nfc_tag.piece_id` abajo.
 - `nfc_tag.physical_uid` (unique cuando no es `NULL`)
 - `nfc_tag.piece_id` parcial para tags activos (restricción B, sección 4)
+
+### Concurrencia del ciclo de vida (servicios de certificado y NFC)
+
+Garantías de los servicios (`app/services/certificates.py`,
+`nfc_tags.py`, `lifecycle.py`); el índice único parcial sigue siendo el
+árbitro final de "un solo activo por pieza".
+
+- **Estado persistido, no el del objeto ORM.** Cada transición bloquea la
+  fila (`SELECT … FOR UPDATE`) y recarga sus columnas de ciclo de vida
+  antes de validar. Un objeto desactualizado no puede sobrescribir un
+  estado más nuevo ni sacar un estado terminal (`retired`, `replaced`,
+  `revoked`) de su estado: falla con `LifecycleConflict`. Si el objeto
+  estaba al día y la transición es inválida, el error sigue siendo el
+  específico (`Invalid…Transition`).
+- **Perdedor determinista de una carrera.** Dos activaciones/programaciones
+  concurrentes en una pieza → el perdedor recibe `ActiveCertificateAlreadyExists` /
+  `ActiveNfcTagAlreadyExists`; dos rotaciones/reemplazos → `LifecycleConflict`
+  (no `…NotFound`, que queda para la ausencia real de un registro activo).
+  Interbloqueo (`40P01`) y `lock_not_available` (`55P03`) también se
+  reportan como `LifecycleConflict`. No se configura `lock_timeout`.
+- **Transacción.** Cada transición corre en un SAVEPOINT: el conflicto se
+  revierte y la sesión externa sigue usable. Los servicios nunca hacen
+  `commit`; lo hace quien llama.
 
 ## 7. Índices recomendados
 
