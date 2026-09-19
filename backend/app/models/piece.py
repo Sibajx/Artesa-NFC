@@ -61,3 +61,9 @@ class Piece(Base):
 
     artisan: Mapped["Artisan"] = relationship(back_populates="pieces")
     media_assets: Mapped[list["MediaAsset"]] = relationship(back_populates="piece")
+    certificates: Mapped[list["Certificate"]] = relationship(back_populates="piece")
+    # passive_deletes=True (unlike certificates/media_assets above): piece_id
+    # here is nullable, so without this the ORM would silently UPDATE
+    # nfc_tag.piece_id to NULL on parent delete instead of letting the DB's
+    # ON DELETE RESTRICT (DATA_MODEL.md section 5) reject the delete.
+    nfc_tags: Mapped[list["NfcTag"]] = relationship(back_populates="piece", passive_deletes=True)

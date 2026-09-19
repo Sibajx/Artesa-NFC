@@ -325,3 +325,67 @@
   gap: var(--space-sm) var(--space-md);
   margin-top: var(--space-sm);
 }
+
+/* Private certificate route (/c/{token}) — Issue #72. Restrained
+   verification shell, not dashboard-like. State containers
+   (#cert-loading/#cert-unavailable/#cert-error/#cert-authentic) are
+   toggled purely via the [hidden] attribute by hydrate-certificate.js —
+   deliberately no `display` override on .certificate-state itself, so
+   the UA [hidden] rule is never fought by an author-stylesheet rule of
+   equal specificity. */
+.certificate-shell {
+  max-width: 640px;
+  padding-block: var(--space-xl) var(--space-lg);
+}
+
+.certificate-eyebrow {
+  font-size: var(--text-small);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-xs);
+}
+
+.certificate-badge {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: var(--text-small);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-xs);
+}
+
+.certificate-heading {
+  font-size: var(--text-heading-1);
+  margin-bottom: var(--space-sm);
+}
+
+/* Narrower than the 4:5 card thumbnail's normal width — reuses
+   .card__media's aspect-ratio/overflow/background, only the max-width
+   and rhythm differ in this single-piece context. */
+.certificate-media {
+  max-width: 360px;
+  margin-block: var(--space-md);
+}
+
+.certificate-meta-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-sm) var(--space-md);
+  margin-block: var(--space-md);
+  max-width: 32rem;
+}
+
+.certificate-meta-list dt {
+  font-size: var(--text-micro);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.certificate-meta-list dd {
+  margin-top: var(--space-xs);
+  font-family: var(--font-display);
+  font-size: var(--text-heading-2);
+}

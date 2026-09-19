@@ -1,0 +1,198 @@
+# ArtesaNFC API - Nginx reverse proxy + rate limiting (EXAMPLE, MVP).
+#
+# Install as /etc/nginx/conf.d/artesanfc-api.conf (or similar). It is an
+# http-context fragment: `limit_req_zone`, `log_format` and `limit_req_status`
+# are only valid inside `http {}`, which is where conf.d/*.conf is included
+# by the stock nginx.conf. Adjust server_name, certificate paths and the
+# upstream address to the real deployment.
+#
+# Policy source: docs/SECURITY.md section 5 (rate limiting) and section 7
+# (Cache-Control: no-store). Nginx is the MVP enforcement layer; FastAPI has
+# no rate limiter of its own on purpose (no per-process state, no Redis).
+#
+#   POST /api/v1/certificates/resolve   30 req/min/IP + small burst
+#   public GET endpoints (/api/v1/*)   120 req/min/IP
+#
+# Enforcement here is per Nginx node. It only becomes a shared limit if
+# there is a single Nginx in front of the API, or if limits are later moved
+# to a shared/edge layer.
+#
+# STATUS: this file is a documented example. Verify on the real deployment
+# that the limits actually trigger (see the checklist at the bottom).
+
+# --- Upstream ---------------------------------------------------------------
+# docker-compose.yml publishes the API on 127.0.0.1:8000 only, so Nginx must
+# run on the same host (or be pointed at wherever the API is reachable
+# privately). FastAPI must never be exposed to the internet directly.
+upstream artesanfc_api {
+    server 127.0.0.1:8000;
+    keepalive 16;
+}
+
+# --- Rate limit zones -------------------------------------------------------
+# Keyed on $binary_remote_addr = the address of the connecting peer, which is
+# the real client only when no other proxy sits in front of this Nginx. See
+# "Client IP" below before putting anything in front of it.
+#
+# 30r/m = one token every 2s; 120r/m = one token every 500ms.
+limit_req_zone $binary_remote_addr zone=artesanfc_resolve:10m    rate=30r/m;
+limit_req_zone $binary_remote_addr zone=artesanfc_public_get:10m rate=120r/m;
+
+# Conventional 429 (default is 503). API_CONTRACT.md section 10 already
+# defines the 429 / rate_limited envelope; the named locations below emit it.
+limit_req_status 429;
+
+# --- Logging ----------------------------------------------------------------
+# Access log: client IP, timestamp, method, path, status. Deliberately no
+# $request_body and no query string ($uri is the path only) - the resolve
+# token travels in the POST body and must never reach any log
+# (docs/SECURITY.md sections 12.2 and 13). Rate-limit rejections also show up
+# in the Nginx error log ("limiting requests ... client: <ip>") without the
+# body; together these are the MVP evidence of abuse. Persistent AUDIT_EVENT
+# records are future work. Keep/rotate these logs for at most 30 days
+# (docs/SECURITY.md section 12.3).
+log_format artesanfc_api '$remote_addr [$time_local] "$request_method $uri" $status';
+
+# --- Client IP --------------------------------------------------------------
+# DEFAULT (safe, used above): the TCP peer address ($remote_addr). Nginx does
+# NOT read X-Forwarded-For from clients, and the proxy blocks below overwrite
+# X-Forwarded-For with $remote_addr rather than appending to whatever the
+# client sent. Never trust an arbitrary X-Forwarded-For.
+#
+# OPTIONAL - Cloudflare. The production topology (Cloudflare-proxied vs
+# DNS-only) is NOT yet confirmed, so this stays disabled. If the API hostname
+# is proxied through Cloudflare, every request arrives from a Cloudflare
+# address and the rate limits above would throttle all users together as one
+# client; in that case, and only then, enable real-IP recovery:
+#
+#   real_ip_header CF-Connecting-IP;
+#   set_real_ip_from <CLOUDFLARE_RANGE>;   # one line per official range
+#   ...
+#
+# Requirements before uncommenting:
+#   * Take the ranges from Cloudflare's official lists,
+#     https://www.cloudflare.com/ips-v4 and https://www.cloudflare.com/ips-v6.
+#     They are intentionally not copied into this repo: hardcoded ranges go
+#     stale.
+#   * Keep them updated (Cloudflare changes them occasionally).
+#   * The origin must only accept traffic from those ranges (firewall /
+#     authenticated origin pulls). Otherwise anyone can reach the origin
+#     directly and forge CF-Connecting-IP, which defeats the rate limit.
+#   * Do not enable it when DNS-only: the header would then be client-forged.
+#
+# Placed at http or server level, it applies to $remote_addr and therefore
+# to the zones above.
+
+# --- HTTP -> HTTPS ----------------------------------------------------------
+server {
+    listen 80;
+    server_name api.artesanfc.com;
+
+    # HTTPS is mandatory (docs/SECURITY.md section 7). If certbot uses the
+    # webroot/nginx plugin for renewals, add its ACME challenge location here.
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# --- API --------------------------------------------------------------------
+server {
+    listen 443 ssl;
+    server_name api.artesanfc.com;
+
+    ssl_certificate     /etc/letsencrypt/live/api.artesanfc.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/api.artesanfc.com/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+
+    access_log /var/log/nginx/artesanfc-api.access.log artesanfc_api;
+
+    # Headers shared by every proxied location.
+    # X-Forwarded-For is overwritten, not appended: see "Client IP".
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    # Nginx-generated 429s. Same envelope as the FastAPI rate_limited error;
+    # the body says nothing about the token or its validity. Retry-After is
+    # the bucket refill time of each zone, rounded up to whole seconds.
+    #
+    # CORS: these responses are produced by Nginx, not by the API, so they
+    # carry no Access-Control-Allow-Origin. A browser therefore reports the
+    # blocked request as a network/CORS failure, and the current frontend
+    # shows its temporary service/network-failure state. Accepted for the MVP.
+    location @resolve_rate_limited {
+        default_type application/json;
+        add_header Cache-Control "no-store" always;
+        add_header Retry-After 2 always;
+        return 429 '{"error":{"code":"rate_limited","message":"Too many requests."}}';
+    }
+
+    location @public_rate_limited {
+        default_type application/json;
+        add_header Retry-After 1 always;
+        return 429 '{"error":{"code":"rate_limited","message":"Too many requests."}}';
+    }
+
+    # POST /api/v1/certificates/resolve (also matches the trailing-slash
+    # form, which the API redirects). Regex locations win over the /api/v1/
+    # prefix below.
+    #
+    # burst=5 nodelay: a few near-simultaneous requests (page reload, repeated
+    # NFC scan) pass immediately; beyond that, requests are rejected until the
+    # bucket refills at 30/min. Note that a cross-origin browser POST is
+    # preceded by an OPTIONS preflight that counts against the same limit, but
+    # browsers cache it (Access-Control-Max-Age, 600s in Starlette's default).
+    #
+    # A cooldown for sustained abuse is NOT implemented in the MVP; it is
+    # future hardening (docs/SECURITY.md section 5.1).
+    location ~ ^/api/v1/certificates/resolve/?$ {
+        limit_req zone=artesanfc_resolve burst=5 nodelay;
+        error_page 429 = @resolve_rate_limited;
+
+        # The only body is {"token": "<43 chars>"} (~60 bytes; ~270 bytes even
+        # at the schema's 256-char max_length). 1k leaves headroom for
+        # formatting and rejects anything larger with 413 before it reaches
+        # the application.
+        client_max_body_size 1k;
+
+        # Cache-Control: no-store (docs/SECURITY.md section 7). The API sets it
+        # too; hiding the upstream copy keeps the header single-valued while
+        # still guaranteeing it if the API ever stops sending it.
+        proxy_hide_header Cache-Control;
+        add_header Cache-Control "no-store" always;
+
+        proxy_pass http://artesanfc_api;
+    }
+
+    # Public catalog reads (artisans, pieces): 120 req/min/IP. burst=20 lets a
+    # page fetch several catalog resources at once. No Cache-Control changes
+    # here: catalog responses keep whatever the API sends.
+    location /api/v1/ {
+        limit_req zone=artesanfc_public_get burst=20 nodelay;
+        error_page 429 = @public_rate_limited;
+
+        proxy_pass http://artesanfc_api;
+    }
+
+    # Anything else (including /health, /docs, /openapi.json) is not exposed
+    # publicly. Health checks should hit 127.0.0.1:8000 directly.
+    location / {
+        return 404;
+    }
+}
+
+# --- Deployment verification checklist --------------------------------------
+# `nginx -t` only proves the syntax. On the real deployment, also confirm:
+#   1. Bursting > 6 POSTs to /api/v1/certificates/resolve from one IP returns
+#      429 with the JSON envelope, Retry-After and Cache-Control: no-store.
+#   2. The access log shows the real client IP (not a Cloudflare/proxy
+#      address) - decide on the Cloudflare block above based on this.
+#   3. The access/error logs contain no token, query string or body.
+#   4. A body over 1k to the resolve path returns 413.
+#   5. Limits are per Nginx node: with several independent nodes, each
+#      enforces its own counters.
+#   6. IPv6: the zone key is the full client address, so a client holding a
+#      whole /64 can rotate addresses to evade the per-IP limit. Acceptable
+#      for the pilot; revisit if abuse is observed.

@@ -203,8 +203,8 @@ Reglas de integridad conceptuales:
 
 - **Asignación:** `CHECK (status NOT IN ('programmed', 'locked') OR piece_id IS NOT NULL)`.
   Un tag no puede estar `programmed` ni `locked` sin estar asignado a una pieza.
-- **Bloqueo:** `CHECK (locked_at IS NULL OR status = 'locked')`.
-  `locked_at` solo se establece cuando el tag efectivamente alcanzó el estado `locked` (evita registrar una fecha de bloqueo sin que el estado lo refleje).
+- **Bloqueo (actualizado, issue #70):** `CHECK (locked_at IS NULL OR status IN ('locked', 'replaced', 'retired'))`.
+  `locked_at` solo se establece cuando el tag efectivamente alcanzó el estado `locked`, pero se preserva como metadato histórico si ese tag luego pasa a `replaced` o `retired` — no se borra al salir de `locked` (evita perder cuándo se bloqueó un tag que después fue reemplazado o dado de baja). `available` y `programmed` siguen exigiendo `locked_at IS NULL`.
 
 El historial de NFC se preserva (aprobado): una pieza puede tener varios
 registros históricos de `NFC_TAG` (por ejemplo, tags marcados como

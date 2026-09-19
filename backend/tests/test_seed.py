@@ -11,7 +11,7 @@ from app.db.seed import (
     _fixture_id,
     seed,
 )
-from app.models import Artisan, MediaAsset, Piece
+from app.models import Artisan, MediaAsset, NfcTag, Piece
 
 APPROVED_ARTISAN_SLUGS = [f["slug"] for f in ARTISANS]
 APPROVED_PIECE_SLUGS = [f["slug"] for f in PIECES]
@@ -278,14 +278,20 @@ def test_all_image_media_have_alt_text():
         assert asset.alt_text.strip() != ""
 
 
-def test_no_certificate_nfc_tag_audit_event_data_or_models_introduced():
+def test_no_nfc_tag_seed_data_introduced():
+    # nfc_tag entered scope as of Sprint 4 issue #68 (persistence foundation
+    # only): the model/table/migration exist, but no seed fixture rows are
+    # added for it. audit_event remains deferred to a later Sprint 4 issue
+    # (#61 boundary).
     _run_seed()
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
-    assert not ({"certificate", "nfc_tag", "audit_event"} & tables)
+    assert "nfc_tag" in tables
+    assert "audit_event" not in tables
+
+    with SessionLocal() as session:
+        assert session.query(NfcTag).count() == 0
 
     import app.models as models_module
 
-    assert not hasattr(models_module, "Certificate")
-    assert not hasattr(models_module, "NfcTag")
     assert not hasattr(models_module, "AuditEvent")

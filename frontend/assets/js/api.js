@@ -102,11 +102,83 @@
     return fetchJSON("/pieces/" + encodeURIComponent(slug), isPiecePublic);
   }
 
+  // AuthenticityPublic shape (API_CONTRACT.md §7) — "authentic" carries
+  // certificate_version/issued_at, "unavailable" carries nothing else.
+  function isResolvePayload(payload) {
+    if (!isPlainObject(payload) || !isPlainObject(payload.authenticity)) {
+      return false;
+    }
+    var status = payload.authenticity.status;
+    if (status === "unavailable") {
+      return true;
+    }
+    if (status === "authentic") {
+      return (
+        typeof payload.authenticity.certificate_version === "number" &&
+        typeof payload.authenticity.issued_at === "string" &&
+        isPlainObject(payload.piece) &&
+        isPlainObject(payload.artisan) &&
+        isPlainObject(payload.authenticity_metadata)
+      );
+    }
+    return false;
+  }
+
+  // POST /certificates/resolve (API_CONTRACT.md §7). Deliberately does NOT
+  // reuse fetchJSON: that helper collapses every failure mode (network
+  // error, timeout, non-2xx, malformed JSON) into the same `null` result,
+  // which here would wrongly merge a transport/server failure into the
+  // backend's canonical `{ authenticity: { status: "unavailable" } }`
+  // convergence response (SECURITY.md §4 / API_CONTRACT.md §7). Callers
+  // must be able to tell those apart, so this resolves to a tagged result
+  // instead: { ok: true, status, payload } for a clean 200, or { ok: false }
+  // for anything else. Never logs the token or any request detail.
+  function resolveCertificate(token) {
+    var controller = "AbortController" in global ? new AbortController() : null;
+    var timeoutId = controller
+      ? global.setTimeout(function () {
+          controller.abort();
+        }, TIMEOUT_MS)
+      : null;
+
+    function clearTimer() {
+      if (timeoutId !== null) {
+        global.clearTimeout(timeoutId);
+      }
+    }
+
+    return global
+      .fetch(getApiBase() + "/certificates/resolve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ token: token }),
+        signal: controller ? controller.signal : undefined
+      })
+      .then(function (response) {
+        if (!response.ok) {
+          throw new Error("resolve request failed");
+        }
+        return response.json();
+      })
+      .then(function (data) {
+        if (!isResolvePayload(data)) {
+          throw new Error("resolve response malformed");
+        }
+        clearTimer();
+        return { ok: true, status: data.authenticity.status, payload: data };
+      })
+      .catch(function () {
+        clearTimer();
+        return { ok: false };
+      });
+  }
+
   global.ArtesaNFC = global.ArtesaNFC || {};
   global.ArtesaNFC.api = {
     getArtisans: getArtisans,
     getArtisan: getArtisan,
     getPieces: getPieces,
-    getPiece: getPiece
+    getPiece: getPiece,
+    resolveCertificate: resolveCertificate
   };
 })(window);
