@@ -20,8 +20,9 @@ Python environment, not from inside the Docker image — see
    ```
 
    Adjust values if needed (`.env` is git-ignored; `.env.example` has no
-   real secrets). `APP_ENV` is **required** — keep `APP_ENV=local` from the
-   example for local development; the app refuses to start without it
+   real secrets). `APP_ENV` and `DATABASE_URL` are **required** — keep
+   `APP_ENV=local` from the example for local development; the app refuses
+   to start without either of them, and there is no default database
    (see [Environment safety](#environment-safety)). The file is always
    read from `backend/.env`, wherever you start `uvicorn`/`alembic` from,
    and a real environment variable (e.g. `export APP_ENV=local`) always
@@ -123,10 +124,19 @@ clear error so a typo cannot bypass the guards):
 
 | Value | Meaning |
 |---|---|
-| `local` | Local development. Development defaults are allowed. |
+| `local` | Local development. Development defaults (e.g. CORS) are allowed; `DATABASE_URL` is still required. |
 | `test` | The pytest suite. |
 | `staging` | Refuses the development default `DATABASE_URL` / placeholder password. |
 | `production` | Everything `staging` checks, plus the rules below. |
+
+**`DATABASE_URL`** is required and has no default database, in every
+environment. If it is unset, empty or whitespace-only, startup (API,
+`alembic`, seed and `pytest`) fails with `DATABASE_URL is not set` — after
+`APP_ENV` is validated and before the staging/production checks — and the
+error never contains the URL, credentials or any other environment value. An
+explicit local URL (such as the one in `.env.example`) keeps working.
+`docker-compose.yml` has no fallback for it either: the `api` container takes
+it only from `.env`.
 
 **Production guard.** With `APP_ENV=production` startup (API, `alembic`,
 seed) fails fast, without printing the database URL, if:
@@ -161,7 +171,7 @@ from the working directory. It is optional; exported environment variables
 take priority over it.
 
 **Not covered here:** `alembic upgrade` runs against whatever
-`DATABASE_URL` is configured (it is not seed/test guarded), and an extra
+`DATABASE_URL` is explicitly configured (it is not seed/test guarded), and an extra
 localhost origin next to `https://artesanfc.com` in production CORS is not
 rejected.
 
@@ -172,6 +182,14 @@ and `api` (this backend, built from `Dockerfile`). The `api` image runs
 `uvicorn` directly — **it does not run Alembic migrations or the seed
 automatically**, and the image does not currently include the
 `alembic/` directory or `alembic.ini`.
+
+The `api` service takes `DATABASE_URL` and `APP_ENV` only from `.env` (there
+is no `environment:` fallback). Without `DATABASE_URL` the container exits
+with `DATABASE_URL is not set` instead of starting against an implicit
+database (with `restart: unless-stopped` it keeps restarting until `.env` is
+fixed). To check the compose file: `docker compose config -q` (needs a
+`.env`, e.g. `cp .env.example .env`); `docker compose up -d db` does not need
+`DATABASE_URL`.
 
 This is intentional for Sprint 3 local development, not an oversight:
 migrations and seeding are run from the host environment (steps 4–5

@@ -22,7 +22,8 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy.engine import make_url
 
-from app.core.config import BACKEND_DIR, get_settings
+from app.core.config import BACKEND_DIR, Settings, get_settings
+from app.core.db_safety import UnsafeConfigurationError
 from app.db.base import normalize_database_url
 
 # (id, DATABASE_URL as written in .env, expected decoded user, expected decoded password)
@@ -145,3 +146,30 @@ def test_unescaped_percent_would_fail_and_leak_the_url(alembic_cfg):
     alembic_cfg.set_main_option("sqlalchemy.url", raw.replace("%", "%%"))
     assert alembic_cfg.get_main_option("sqlalchemy.url") == raw
     assert make_url(raw).password == "canary@pw"
+
+
+@pytest.mark.parametrize("mode", ["online", "offline"])
+@pytest.mark.parametrize("blank", [None, "", "   "])
+def test_env_fails_closed_without_a_database_url(monkeypatch, alembic_cfg, capfd, mode, blank):
+    """No implicit database (issue #101): without DATABASE_URL, Alembic stops
+    while loading settings, before any engine, connection or SQL is created,
+    and prints nothing that echoes a value."""
+    if blank is None:
+        monkeypatch.delenv("DATABASE_URL", raising=False)
+        # No developer backend/.env may fill the value in.
+        monkeypatch.setitem(Settings.model_config, "env_file", None)
+    else:
+        monkeypatch.setenv("DATABASE_URL", blank)
+    get_settings.cache_clear()
+
+    engines = []
+    monkeypatch.setattr(sqlalchemy, "engine_from_config", lambda *a, **k: engines.append(1))
+    alembic_cfg.output_buffer = io.StringIO()
+
+    with pytest.raises(UnsafeConfigurationError, match="DATABASE_URL is not set"):
+        command.upgrade(alembic_cfg, "head", sql=(mode == "offline"))
+
+    assert engines == []
+    assert alembic_cfg.output_buffer.getvalue() == ""
+    captured = capfd.readouterr()
+    assert "postgresql" not in captured.out + captured.err

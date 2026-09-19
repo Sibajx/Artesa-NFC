@@ -31,8 +31,11 @@ VALID_ENVS = (ENV_LOCAL, ENV_TEST, ENV_STAGING, ENV_PRODUCTION)
 # The seed writes fictional demo data and may only ever run in these.
 SEED_ALLOWED_ENVS = (ENV_LOCAL, ENV_TEST)
 
-# Development default of Settings.database_url (kept here so the
-# "is this still the dev default?" rule lives next to the helper using it).
+# The well-known development database URL. Settings.database_url has NO
+# default any more (DATABASE_URL must be configured explicitly; see
+# assert_database_url_configured), so this is not applied anywhere at runtime.
+# It stays only as a reference for the staging/production guard, which refuses
+# it if someone configures it explicitly.
 DEFAULT_DATABASE_URL = "postgresql://artesanfc:artesanfc@localhost:5432/artesanfc"
 
 # Credentials that only ever appear in the dev default, .env.example and
@@ -123,6 +126,18 @@ def is_test_database_name(name: str | None) -> bool:
 def _is_local_host(host: str) -> bool:
     # A leading "/" is a unix-socket directory (libpq `host=/var/run/...`).
     return host.lower() in LOCAL_DB_HOSTS or host.startswith("/")
+
+
+def assert_database_url_configured(url: str | None) -> None:
+    """Fail closed when DATABASE_URL is unset, empty or whitespace-only: there
+    is no implicit default database. Only presence is checked (format and
+    target rules live in the other guards) and the value is never modified.
+    The message is static, so it cannot leak anything."""
+    if url is None or not url.strip():
+        raise UnsafeConfigurationError(
+            "DATABASE_URL is not set. Set it explicitly (environment variable "
+            "or backend/.env); there is no default database."
+        )
 
 
 def assert_production_grade_database(url: str, app_env: str) -> None:
