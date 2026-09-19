@@ -4,4 +4,4 @@
 # and /artesanos/* are. This rewrite serves the single certificate shell
 # for any /c/* request; the shell extracts the token from the URL path
 # client-side (hydrate-certificate.js) and validates route shape there.
-/c/*  /c/index.html  200
+/c/*  /c/  200
