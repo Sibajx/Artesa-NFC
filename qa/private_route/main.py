@@ -13,7 +13,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from private_route import browser_checks, fixtures, isolation_checks, ram_state, routing_checks
+from private_route import browser_checks, fixtures, isolation_checks, public_checks, ram_state, routing_checks
 from private_route.common import Report, format_exception, install_excepthook, scan_tree
 
 
@@ -45,8 +45,9 @@ def main() -> int:
             "issued through activate/revoke_certificate: valid, revoked, unpublished-piece; plus a never-issued token"
         )
         fixtures.check_token_persistence(report, fx)
-        routing_checks.run(report, fx, args.frontend_url, args.server_kind)
+        routing_checks.run(report, fx, args.frontend_url, args.frontend_dir, args.server_kind)
         browser_checks.run(report, fx, args.frontend_url, args.api_origin, str(args.tmp_dir))
+        public_checks.run(report, fx, args.frontend_url, args.api_origin)
         isolation_checks.run(report, fx, args.api_origin, args.frontend_dir)
 
         report.section("Token persistence (files written during this run)")
