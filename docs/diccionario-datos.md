@@ -1,8 +1,15 @@
 # Diccionario de datos — Artesa NFC
 
-Este documento explica qué significa cada campo del esquema (`db/schema.sql`) y
-la convención para generar los IDs de certificado. Sirve como referencia para
-cualquier persona que registre piezas o dé mantenimiento al sistema.
+> **LEGADO / REFERENCIA HISTÓRICA.** Este documento describe el modelo de datos
+> legado de Cloudflare D1 (SQLite) del prototipo original. Está **superseded por
+> la arquitectura FastAPI/PostgreSQL**; el modelo vigente es
+> [`DATA_MODEL.md`](DATA_MODEL.md). El esquema fuente (`db/schema.sql`) fue
+> eliminado del repositorio (hallazgo F-07) y sigue recuperable en el historial
+> de git, en el commit `d3c5f4a`. Se conserva solo como insumo de la futura
+> migración de datos. Las rutas `/cert/<ID>` que menciona ya no existen.
+
+Este documento explica qué significa cada campo del esquema D1 legado y la
+convención que se usaba para generar los IDs de certificado.
 
 ## Convención de ID de certificado
 

@@ -6,9 +6,9 @@
 
 ## 1. Estado actual del repositorio
 
-El repositorio existente nació con una arquitectura basada en sitio estático, Cloudflare Pages, Cloudflare D1 y lógica de certificados en Cloudflare. La estructura actual incluye `public/`, `src/`, `db/`, `docs/` y `wrangler.toml`.
+El repositorio nació con un prototipo basado en sitio estático, Cloudflare Worker, Cloudflare D1 y lógica de certificados en Cloudflare (`public/`, `src/`, `db/`, `wrangler.toml`). Ese árbol legado **fue eliminado del repositorio** bajo el hallazgo F-07 (ver §15 F); sigue recuperable en el historial de git. La estructura actual es `frontend/`, `backend/`, `qa/`, `docs/` y `.github/`.
 
-La migración debe ser incremental. No se elimina el sistema anterior hasta que exista reemplazo funcional.
+La migración fue incremental: el sistema anterior no se eliminó hasta que existió reemplazo funcional.
 
 ## 2. Arquitectura objetivo
 
@@ -437,6 +437,16 @@ Mover el flujo privado al backend nuevo.
 
 ### F — Retirar legado
 Solo después de pruebas, migración de datos y plan de rollback.
+
+**Estado (hallazgo F-07): completado para el repositorio.** Se eliminaron
+`public/`, `src/`, `db/` y `wrangler.toml`. La base D1 solo contenía datos de
+ejemplo (sin certificados ni registros de producción) y ninguna etiqueta NFC
+física apuntaba a rutas `/cert/<ID>`; el rollback es un `git revert`.
+
+**Pendiente, seguimiento operativo separado:** la limpieza de los recursos del
+dashboard de Cloudflare (aplicación Worker `artesa-nfc` conectada a Git, base D1
+`artesanfc-db`, asociación del dominio) no forma parte del repositorio y no se
+considera completada aquí.
 
 ## 16. Regla de dependencias
 

@@ -290,10 +290,10 @@ step "Starting the $QA_SERVER frontend server on $FRONTEND_URL (serving $(basena
 if [ "$QA_SERVER" = builtin ]; then
   ( cd "$QA_DIR" && exec setsid "$PYTHON" -m private_route.static_server --root "$FRONTEND_DIR" --port "$FE_PORT" ) >"$TMP/frontend.log" 2>&1 &
 else
-  # Run outside the repo (its root wrangler.toml is the legacy D1 Worker). Config and
-  # logs go to the temp dir (scanned for tokens at the end); --log-level warn keeps
-  # request lines out of its output. Its request-path store is in the RAM-backed
-  # $WR_STATE verified in the prerequisites (never disk).
+  # Run from a temp cwd outside the repo, so Wrangler never picks up any config from
+  # the working tree. Config and logs go to the temp dir (scanned for tokens at the
+  # end); --log-level warn keeps request lines out of its output. Its request-path
+  # store is in the RAM-backed $WR_STATE verified in the prerequisites (never disk).
   mkdir -p "$TMP/wrangler-cwd" "$TMP/xdg" "$TMP/wrangler-logs"
   ( cd "$TMP/wrangler-cwd" && export XDG_CONFIG_HOME="$TMP/xdg" WRANGLER_LOG_PATH="$TMP/wrangler-logs" \
       WRANGLER_SEND_METRICS=false CI=1 NO_UPDATE_NOTIFIER=1 npm_config_update_notifier=false \
