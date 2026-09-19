@@ -373,7 +373,9 @@ no una decisión abierta.
   los logs operativos de Nginx (IP, timestamp, método, path, status y
   las líneas `limiting requests` del error log, con la retención de
   la sección 12.3). El registro persistente de abuso en `AUDIT_EVENT`
-  es trabajo futuro.
+  es trabajo futuro. Las peticiones a `/c/*` en el host de la API **no**
+  se registran a propósito (sección 13), así que no forman parte de esta
+  evidencia.
 
 ### 5.5 Capa de enforcement e IP real del cliente
 
@@ -477,7 +479,10 @@ Requisitos:
   analytics de terceros); si se mide el uso de esta página, se hace
   sin el valor del token en el payload.
 - **Evitar loguear el token completo** en logs de reverse proxy o de
-  aplicación (ver sección 14.3 sobre redacción de tokens en logs).
+  aplicación (ver sección 14.3 sobre redacción de tokens en logs). Si
+  una petición literal `/c/{token}` llega al host de la API, Nginx la
+  rechaza en local (`404`, sin log, sin proxy ni redirección); ver
+  sección 13, «Rutas privadas en logs de acceso».
 - **Evitar que el token llegue a URLs de terceros** por fuga de
   referrer: si la página del certificado carga cualquier recurso de
   terceros (fuentes, analítica, CDN de terceros), debe usarse
@@ -767,7 +772,9 @@ personal cuya retención/anonimización se define aquí:
   `/c/{token}` si esa ruta llega a tocar el servidor en vez de
   resolverse client-side): se recomienda configurar el logging de
   acceso para excluir o enmascarar el segmento de path que contiene el
-  token.
+  token. En el host de la API esto ya está implementado para
+  `/c/{token}` (rechazo local y formato de log saneado; ver «Rutas
+  privadas en logs de acceso» más abajo).
 - **Errores de la base de datos en el ciclo de vida.** El `DETAIL` de
   PostgreSQL incluye valores de la fila (para `certificate`, el
   `token_hash`). Los servicios de ciclo de vida traducen los fallos de
@@ -815,14 +822,62 @@ personal cuya retención/anonimización se define aquí:
     (probado); revisar este punto antes de actualizar FastAPI.
   - Una excepción que no es de base de datos y que encadena una de base de
     datos (`raise X from db_exc`) sigue imprimiendo la cadena completa.
-- **Rutas privadas en logs de acceso (seguimiento aparte, fuera de la
-  frontera anterior).** El token viaja en el cuerpo del `POST` a
-  `certificates/resolve`, y `/c/{token}` es una ruta del frontend estático,
-  no de la API. Aun así, si alguien alcanza el servidor de la API
-  directamente, el log de acceso de Uvicorn (que registra ruta y query) y
-  `$uri` en el `log_format` de Nginx registrarían el `/c/<token>` literal.
-  Queda pendiente un cambio propio (redacción de la ruta en ambos logs de
-  acceso); no forma parte del saneamiento de errores de base de datos.
+- **Rutas privadas en logs de acceso (`/c/{token}` en el host de la API).**
+  El token viaja en el cuerpo del `POST` a `certificates/resolve`, y
+  `/c/{token}` es una ruta del frontend estático (Cloudflare Pages), no de
+  la API; pero el token es una credencial *bearer* en la ruta, y una
+  petición literal `/c/<token>` puede llegar al host de la API (enlace mal
+  formado, sondeo, error de configuración). Antes de este cambio quedaba en
+  claro en el log de Nginx (`$uri`) y, en `:80`, en el `main` heredado (línea
+  de petición completa, query incluida). En producción, la configuración de
+  `backend/nginx/artesanfc-api.conf.example` lo trata así:
+  - **Rechazo local.** `location ~* ^/c(?:/|$)` en los dos `server` (`:80` y
+    `:443`): `404` genérico, `access_log off`, sin proxy a Uvicorn y **sin
+    redirección** (tampoco en `:80`: redirigir reenviaría el token a otra
+    URL). Cubre `/c`, `/c/...` y `/C/...` (sin distinguir mayúsculas) y las
+    variantes que Nginx normaliza antes de elegir la location (`//c/`,
+    `/./c/`, `/x/../c/`, `/%63/`, `/c%2F`, barra final, `POST`, con query). No
+    afecta a `/cat`, `/c.js` ni a `/api/v1/*`. Decisión: no se conserva un
+    registro de estas peticiones (ni siquiera redactado), porque la ruta
+    contiene un secreto y no hay necesidad operativa de auditar peticiones
+    individuales a una ruta inválida en este host; por lo mismo, no sirven
+    como evidencia de abuso (sección 5.4).
+  - **Formato de log.** `log_format artesanfc_api` registra
+    `$artesanfc_log_path` (un `map` sobre `$uri`) en lugar de `$uri` crudo: toda
+    ruta del espacio `/c` que aun así llegara a registrarse (petición
+    registrada antes de elegir location, cambio futuro de rutas) se escribe
+    `/c/[redacted]`. Es defensa en profundidad, **no** sustituye al rechazo
+    local. Nunca usar `$request` ni `$request_uri` en este formato (incluyen
+    la query; `$request`, toda la línea).
+  - **Puerto 80.** El `server` de `:80` define su propio `access_log` con el
+    mismo formato, en lugar de heredar el `main` de Nginx. Las redirecciones
+    HTTP→HTTPS fuera del espacio `/c` siguen funcionando.
+  - **Query strings.** Ya estaban excluidas del log de acceso (`$uri` no las
+    incluye); sin cambios.
+  - **Log de errores de Nginx.** No contiene la ruta de estas peticiones
+    (verificado, incluidas peticiones mal formadas y URI demasiado larga).
+  - **Verificación.** `backend/nginx/validate-log-privacy.sh` (manual, Docker,
+    fuera de CI): levanta Nginx real con este ejemplo delante de Uvicorn real,
+    envía canarios por HTTP y HTTPS (`/c`, `/C`, variantes normalizadas,
+    `POST`, query, petición mal formada, URI larga, método inválido, Host
+    desconocido), comprueba que el token no aparece en ningún log de Nginx
+    ni de Uvicorn, que la petición no llega a Uvicorn y que `/api/v1/*`
+    (enrutado, rate limiting, cabeceras, log de acceso normal) no cambia. Una
+    segunda fase quita las locations y comprueba que el `map` por sí solo
+    mantiene el token fuera del log.
+  - **Limitaciones conocidas.**
+    - *Acceso directo a Uvicorn.* Alcanzar `127.0.0.1:8000` sin pasar por
+      Nginx salta esta frontera: Uvicorn registra la ruta y la query
+      literales (`uvicorn.access`), incluido un `/c/<token>`. Es aceptable: en
+      producción el tráfico debe atravesar Nginx (`docker-compose.yml` solo
+      publica en `127.0.0.1`). No se desactiva el access log de Uvicorn ni se
+      añade middleware. Uvicorn también registra la query de `/api/v1/*`;
+      ahí no viajan tokens (van en el cuerpo del `POST`).
+    - *Solo el espacio `/c`.* Un token en otra ruta (`/otra/<token>`) se
+      registra como cualquier ruta desconocida.
+    - *Logs del edge.* Los logs de Cloudflare (Pages para `artesanfc.com`,
+      y el edge del host de la API si está proxied) quedan fuera de esta
+      frontera de Nginx y de este cambio.
 - **Evitar información personal innecesaria** en logs de aplicación más
   allá de lo estrictamente necesario para seguridad/depuración (sección
   12.3 sobre IPs).
