@@ -12,3 +12,14 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 .env
+
+# Browser QA artifacts. The private-route QA (qa/) produces none by design
+# (no traces, videos, screenshots or HARs); these are defensive so a token-bearing
+# artifact from any browser tooling can never be committed by accident.
+qa/.artifacts/
+qa/**/test-results/
+qa/**/playwright-report/
+test-results/
+playwright-report/
+*.trace.zip
+*.har

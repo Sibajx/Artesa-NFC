@@ -1,0 +1,7 @@
+# Browser-QA dependency for qa/validate-private-route.sh (docs/QA_PRIVATE_ROUTE.md).
+# Kept out of backend/requirements.txt on purpose: the backend image and CI do
+# not need a browser driver. The validation script never installs anything
+# itself; it checks this exact pin and tells you what to run if it is missing.
+#
+# Chromium is a separate download:  python3 -m playwright install chromium
+playwright==1.63.0
