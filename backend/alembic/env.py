@@ -20,8 +20,13 @@ if config.config_file_name is not None:
 
 # Reuse the backend's own settings (same DATABASE_URL / .env as the API),
 # normalized to the psycopg v3 dialect (see app.db.base.normalize_database_url).
+# set_main_option() goes through ConfigParser, which reads "%" as interpolation
+# syntax, so the literal "%" of percent-encoded credentials (%40, %25, ...) must
+# be stored as "%%". get_main_option()/get_section() undo that, so SQLAlchemy
+# receives exactly the normalized URL.
 config.set_main_option(
-    "sqlalchemy.url", normalize_database_url(get_settings().database_url)
+    "sqlalchemy.url",
+    normalize_database_url(get_settings().database_url).replace("%", "%%"),
 )
 
 target_metadata = Base.metadata
