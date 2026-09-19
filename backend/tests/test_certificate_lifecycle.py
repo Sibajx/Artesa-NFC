@@ -17,6 +17,7 @@ from app.services.certificates import (
     ActiveCertificateAlreadyExists,
     ActiveCertificateNotFound,
     CertificateActivationResult,
+    CertificateLifecycleIntegrityError,
     CertificateRotationResult,
     InvalidCertificateTransition,
     activate_certificate,
@@ -268,13 +269,15 @@ def test_rotation_forced_failure_rolls_back_completely(db_session):
 
     # Force the replacement's activation to collide on token_hash with the
     # certificate we just issued, so the nested transaction's final flush
-    # raises IntegrityError partway through rotation.
+    # fails partway through rotation. The raw IntegrityError (whose DETAIL
+    # carries the token_hash) is translated, not propagated (audit F-10).
     with patch(
         "app.services.certificates.generate_certificate_token",
         return_value=original.raw_token,
     ):
-        with pytest.raises(IntegrityError):
+        with pytest.raises(CertificateLifecycleIntegrityError) as excinfo:
             rotate_certificate(db_session, piece.id)
+    assert excinfo.value.constraint == "certificate_token_hash_key"
 
     rows = db_session.execute(
         select(Certificate).where(Certificate.piece_id == piece.id)
