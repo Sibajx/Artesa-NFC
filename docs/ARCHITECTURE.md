@@ -337,6 +337,11 @@ la API, Alembic y el seed se niegan a arrancar. Valores aceptados (sin
 alias; `dev`, `development` y `prod` se rechazan): `local`, `test`, `staging`,
 `production`.
 
+- `DATABASE_URL` también es **obligatoria y sin valor por defecto** en todos
+  los entornos: si falta, está vacía o solo tiene espacios, la API, Alembic,
+  el seed y `pytest` se niegan a arrancar (`DATABASE_URL is not set`) sin
+  imprimir ningún valor. `docker-compose.yml` tampoco define un respaldo: el
+  contenedor `api` la toma solo de `.env`.
 - `production` y `staging` rechazan la `DATABASE_URL` de desarrollo o con
   contraseña vacía/placeholder; `production` además exige
   `https://artesanfc.com` en `CORS_ALLOWED_ORIGINS` y `DEBUG=false`.

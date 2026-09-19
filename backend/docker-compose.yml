@@ -19,10 +19,13 @@ services:
   api:
     build: .
     restart: unless-stopped
+    # DATABASE_URL (and APP_ENV) come only from .env: there is deliberately no
+    # `environment:` fallback here. With no DATABASE_URL the api container
+    # refuses to start (Settings fails closed, app/core/config.py) instead of
+    # silently using an implicit database. Not `${DATABASE_URL:?...}`: that is
+    # evaluated for the whole file and would also break `docker compose up db`.
     env_file:
       - .env
-    environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql://artesanfc:artesanfc@db:5432/artesanfc}
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:

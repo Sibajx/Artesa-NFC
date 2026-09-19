@@ -18,6 +18,7 @@ from app.core.config import BACKEND_DIR
 from app.core.db_safety import (
     DatabaseTarget,
     UnsafeConfigurationError,
+    assert_database_url_configured,
     assert_safe_for_tests,
     is_test_database_name,
     normalize_app_env,
@@ -70,6 +71,36 @@ def test_normalize_app_env_requires_an_explicit_known_value():
     for bad in (None, "", "  ", "dev", "development", "prod"):
         with pytest.raises(UnsafeConfigurationError):
             normalize_app_env(bad)
+
+
+# --- DATABASE_URL presence (no implicit default, issue #101) ---
+
+
+@pytest.mark.parametrize("value", [None, "", " ", "   ", "\t", "\n", " \t\n "])
+def test_unset_or_blank_database_url_is_rejected(value):
+    with pytest.raises(UnsafeConfigurationError, match="DATABASE_URL is not set") as info:
+        assert_database_url_configured(value)
+    assert not isinstance(info.value, ValueError)
+    assert_no_secrets(info.value)
+    assert info.value.__cause__ is None
+
+
+@pytest.mark.parametrize(
+    "value",
+    [credentialed_url("artesanfc_test"), credentialed_url("artesanfc", host="db"), "not even a url", "sqlite://"],
+)
+def test_any_non_blank_value_passes_the_presence_check(value):
+    # Presence only: format and target rules live in the other guards.
+    assert assert_database_url_configured(value) is None
+
+
+def test_presence_error_is_static_and_never_echoes_the_value():
+    with pytest.raises(UnsafeConfigurationError) as info:
+        assert_database_url_configured("\t  \n")
+    assert str(info.value) == (
+        "DATABASE_URL is not set. Set it explicitly (environment variable or "
+        "backend/.env); there is no default database."
+    )
 
 
 # --- test-database guard ---
@@ -157,3 +188,14 @@ def test_pytest_session_aborts_when_app_env_is_unset():
     assert result.returncode == 2
     assert "APP_ENV is not set" in output
     assert CANARY_PASSWORD not in output
+
+
+@pytest.mark.parametrize("blank", ["", "   "])
+def test_pytest_session_aborts_when_database_url_is_missing(blank):
+    # Present-but-blank (not absent) so a developer's own backend/.env cannot
+    # fill the value in and mask what is being tested.
+    result = _run_child_pytest(APP_ENV="test", DATABASE_URL=blank)
+    output = result.stdout + result.stderr
+    assert result.returncode == 2
+    assert "DATABASE_URL is not set" in output
+    assert "passed" not in output
