@@ -318,6 +318,7 @@ No todas las piezas necesitan 3D.
 
 ```text
 local
+test
 staging
 production
 ```
@@ -328,6 +329,26 @@ Producción prevista:
 artesanfc.com
 api.artesanfc.com
 ```
+
+### Entorno del backend (`APP_ENV`)
+
+`APP_ENV` es **obligatorio y sin valor por defecto** en el backend: si falta,
+la API, Alembic y el seed se niegan a arrancar. Valores aceptados (sin
+alias; `dev`, `development` y `prod` se rechazan): `local`, `test`, `staging`,
+`production`.
+
+- `production` y `staging` rechazan la `DATABASE_URL` de desarrollo o con
+  contraseña vacía/placeholder; `production` además exige
+  `https://artesanfc.com` en `CORS_ALLOWED_ORIGINS` y `DEBUG=false`.
+- Las pruebas (`pytest`) solo arrancan con `APP_ENV=test` **y** una base de
+  datos cuyo nombre tenga el token `test` (`artesanfc_test`).
+- El seed solo corre con `APP_ENV=local` (host local) o `test` (base de
+  datos de prueba); nunca en `staging` ni `production`.
+- `.env` se lee siempre de `backend/.env` (no depende del directorio de
+  trabajo) y es opcional; las variables de entorno tienen prioridad.
+
+Implementación y detalles: `backend/app/core/db_safety.py` y
+`backend/README.md` ("Environment safety").
 
 ### Base de la API en el frontend
 

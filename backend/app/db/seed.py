@@ -16,6 +16,9 @@ Scope and safety contract (Sprint 3, fictional demo data only):
   silently adopting or overwriting it.
 - Everything runs in a single transaction: any collision or database error
   rolls back the complete run.
+- The CLI refuses to run unless APP_ENV is ``local`` or ``test`` and the
+  database target is clearly non-production (app/core/db_safety.py); the
+  check happens before any connection is opened.
 """
 from __future__ import annotations
 
@@ -25,6 +28,8 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
+from app.core.db_safety import UnsafeConfigurationError, assert_safe_for_seed
 from app.db.base import SessionLocal
 from app.models.artisan import Artisan
 from app.models.enums import PublicationStatus
@@ -225,6 +230,15 @@ def seed(session: Session) -> dict:
 
 
 def main() -> None:
+    # Refuse before any session/connection exists: the seed must never write
+    # to production or to an unclear target (see app/core/db_safety.py).
+    settings = get_settings()
+    try:
+        assert_safe_for_seed(settings.app_env, settings.database_url)
+    except UnsafeConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        sys.exit(1)
+
     with SessionLocal() as session:
         try:
             with session.begin():
