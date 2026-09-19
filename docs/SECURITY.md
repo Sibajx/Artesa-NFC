@@ -774,11 +774,55 @@ personal cuya retención/anonimización se define aquí:
   restricción a errores de dominio (`LifecycleError` y derivados) que
   contienen como máximo el nombre de la restricción y el SQLSTATE, sin
   `DETAIL`, sin valores de fila y **sin encadenar** la excepción original
-  (`__cause__`/`__context__` son `None`). **Limitación conocida:** esto
-  cubre solo los errores originados en esos servicios; un error de base
-  de datos no controlado en cualquier otra ruta (por ejemplo el `commit`
-  del llamador) aún llega al log del proceso vía el 500 global, y su
-  saneamiento queda como tarea aparte.
+  (`__cause__`/`__context__` son `None`).
+- **Errores de base de datos no controlados (frontera global).** Cualquier
+  otro fallo de base de datos durante una petición (el `commit` del
+  llamador, una consulta de una ruta, el `close()` de la sesión en
+  `get_db`) lo captura `app/core/db_errors.py`, registrado en
+  `app/core/errors.py` para `sqlalchemy.exc.DBAPIError`,
+  `sqlalchemy.exc.PendingRollbackError` (su mensaje incrusta el `DETAIL`
+  original) y `psycopg.Error`. Regla: **el texto de una excepción de base
+  de datos nunca llega a ningún log** (ni `str`/`repr` de la excepción, ni
+  `exc_info`, `logger.exception` o traceback, ni SQL, parámetros, `DETAIL`
+  o URL de base de datos). Se emite una sola línea, únicamente con valores
+  validados: `event=db_error category=<categoría> sqlstate=<SQLSTATE|-> constraint=<nombre|->
+  method=<método> route=<plantilla de ruta>`; `route` es la **plantilla**
+  (`/api/v1/pieces/{slug}`), nunca la ruta literal, la query, el cuerpo,
+  las cabeceras ni la IP (si no hay plantilla segura: `<unmatched>`). La
+  respuesta es el 500 genérico de `API_CONTRACT.md` §10, sin cambios. El
+  manejador registra la clase concreta, por lo que se ejecuta dentro de
+  `ExceptionMiddleware` y **consume** la excepción: no se vuelve a lanzar
+  ni encadena (el manejador global de `Exception` corre en
+  `ServerErrorMiddleware`, que responde y relanza, y por eso Uvicorn
+  imprimía el traceback completo). Consecuencia: el 500 por error de base
+  de datos en `certificates/resolve` pasa por `ResolveNoStoreMiddleware` y
+  CORS y por tanto lleva `Cache-Control: no-store` y cabeceras CORS. **No**
+  se intercepta `Exception`, `SQLAlchemyError`, `StatementError` ni
+  `InvalidRequestError`: `RuntimeError`, `NoResultFound` y demás errores de
+  programación siguen su ruta normal con traceback en el log del servidor.
+  Probado con un proceso Uvicorn real (`tests/test_global_db_error_uvicorn.py`).
+  **Limitaciones conocidas:**
+  - Solo cubre errores *dentro de una petición HTTP*. Errores de base de
+    datos en hilos en segundo plano, tareas de arranque, internos del pool
+    de conexiones u otra ejecución fuera de una petición no pasan por esta
+    frontera.
+  - Con FastAPI ≥ 0.118 la salida de las dependencias con `yield`
+    (p. ej. `commit` o `close()` de sesión) se ejecuta *después* de enviar
+    la respuesta; un error de base de datos en ese punto ya no llegaría al
+    manejador y Starlette lo relanzaría (`response already started`) encadenado
+    a la excepción original, con lo que su texto volvería al log. El repo
+    fija `fastapi==0.115.6`, donde el cierre ocurre antes del envío
+    (probado); revisar este punto antes de actualizar FastAPI.
+  - Una excepción que no es de base de datos y que encadena una de base de
+    datos (`raise X from db_exc`) sigue imprimiendo la cadena completa.
+- **Rutas privadas en logs de acceso (seguimiento aparte, fuera de la
+  frontera anterior).** El token viaja en el cuerpo del `POST` a
+  `certificates/resolve`, y `/c/{token}` es una ruta del frontend estático,
+  no de la API. Aun así, si alguien alcanza el servidor de la API
+  directamente, el log de acceso de Uvicorn (que registra ruta y query) y
+  `$uri` en el `log_format` de Nginx registrarían el `/c/<token>` literal.
+  Queda pendiente un cambio propio (redacción de la ruta en ambos logs de
+  acceso); no forma parte del saneamiento de errores de base de datos.
 - **Evitar información personal innecesaria** en logs de aplicación más
   allá de lo estrictamente necesario para seguridad/depuración (sección
   12.3 sobre IPs).
