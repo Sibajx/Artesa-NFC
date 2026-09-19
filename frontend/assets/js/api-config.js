@@ -4,8 +4,9 @@
 // The base is chosen from an exact-hostname allowlist. Any host not listed
 // here (www, *.pages.dev previews, file://, lookalike domains, ...)
 // resolves to null — "unresolved" — and the API layer then makes no network
-// request at all, so public pages keep their static content and /c/{token}
-// shows its service-error state. Supporting a new host (www, a staging
+// request at all: public detail pages and lists show their neutral
+// "not available" state (F-08: there is no static entity content to fall back
+// to) and /c/{token} shows its service-error state. Supporting a new host (www, a staging
 // preview) means adding it here explicitly, together with the matching
 // CORS_ALLOWED_ORIGINS entry on the backend.
 

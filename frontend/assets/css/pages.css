@@ -389,3 +389,21 @@
   font-family: var(--font-display);
   font-size: var(--text-heading-2);
 }
+
+/* Public entity shells (/_shell/pieza, /_shell/artesano) and the two list
+   pages — F-08. State containers are toggled purely via [hidden] by
+   hydrate-detail.js / hydrate-list.js (no `display` override on .entity-state
+   or .list-state, so the UA [hidden] rule always wins). The retry control is
+   a <button> that must read as the same minimal editorial link as an <a>. */
+button.editorial-link {
+  appearance: none;
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font-size: inherit;
+}
+
+.list-state {
+  margin-bottom: var(--space-md);
+}

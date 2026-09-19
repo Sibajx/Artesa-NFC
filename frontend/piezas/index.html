@@ -18,16 +18,13 @@
   <link rel="stylesheet" href="../assets/css/animations.css">
   <link rel="stylesheet" href="../assets/css/pages.css">
 
-  <!-- No-JS fallback: see frontend/index.html for the full rationale
-       (same .fade-in cascade-weight reasoning applies here unchanged). -->
+  <!-- No JS: hydrate-list.js never runs, so the list is never filled. The
+       page ships no entity cards at all (F-08): the public API is the only
+       source of what is listed. A no-JS visitor sees only this notice. -->
   <noscript>
     <style>
-      .fade-in {
-        opacity: 1;
-        transform: none;
-      }
-      .card.fade-in .card__media-img {
-        opacity: 1;
+      #list-nojs {
+        display: block;
       }
     </style>
   </noscript>
@@ -66,83 +63,16 @@
 
     <p id="hydrate-status" class="sr-only" role="status" aria-live="polite"></p>
 
-    <section id="piezas" class="home-section container" aria-labelledby="piezas-title">
+    <section id="piezas" class="home-section container" aria-labelledby="piezas-title" aria-busy="true">
       <h1 id="piezas-title" class="section-heading">Piezas</h1>
-      <p class="section-note">Contenido de muestra — ficticio, no representa una pieza real.</p>
-      <ul class="card-grid" role="list">
-        <li class="card fade-in">
-          <picture class="card__media">
-            <source type="image/webp" srcset="../assets/img/card-placeholder.webp">
-            <img
-              class="card__media-img"
-              src="../assets/img/card-placeholder.jpg"
-              alt="Marcador de posición — contenido ficticio"
-              width="640"
-              height="800"
-              loading="lazy"
-              decoding="async"
-            >
-          </picture>
-          <p class="card__title">Máscara Demo 01</p>
-          <p class="card__meta">Creado por Artesano Demo 01</p>
-          <p class="card__descriptor">Madera tallada, pieza de muestra.</p>
-          <a class="editorial-link card__action" href="/piezas/mascara-demo-01/">Explorar pieza →</a>
-        </li>
-        <li class="card fade-in">
-          <picture class="card__media">
-            <source type="image/webp" srcset="../assets/img/card-placeholder.webp">
-            <img
-              class="card__media-img"
-              src="../assets/img/card-placeholder.jpg"
-              alt="Marcador de posición — contenido ficticio"
-              width="640"
-              height="800"
-              loading="lazy"
-              decoding="async"
-            >
-          </picture>
-          <p class="card__title">Figura Tallada Demo 01</p>
-          <p class="card__meta">Creado por Artesano Demo 01</p>
-          <p class="card__descriptor">Talla en madera, pieza de muestra.</p>
-          <a class="editorial-link card__action" href="/piezas/figura-tallada-demo-01/">Explorar pieza →</a>
-        </li>
-        <li class="card fade-in">
-          <picture class="card__media">
-            <source type="image/webp" srcset="../assets/img/card-placeholder.webp">
-            <img
-              class="card__media-img"
-              src="../assets/img/card-placeholder.jpg"
-              alt="Marcador de posición — contenido ficticio"
-              width="640"
-              height="800"
-              loading="lazy"
-              decoding="async"
-            >
-          </picture>
-          <p class="card__title">Textil Demo 01</p>
-          <p class="card__meta">Creado por Artesana Demo 02</p>
-          <p class="card__descriptor">Telar de cintura, pieza de muestra.</p>
-          <a class="editorial-link card__action" href="/piezas/textil-demo-01/">Explorar pieza →</a>
-        </li>
-        <li class="card fade-in">
-          <picture class="card__media">
-            <source type="image/webp" srcset="../assets/img/card-placeholder.webp">
-            <img
-              class="card__media-img"
-              src="../assets/img/card-placeholder.jpg"
-              alt="Marcador de posición — contenido ficticio"
-              width="640"
-              height="800"
-              loading="lazy"
-              decoding="async"
-            >
-          </picture>
-          <p class="card__title">Vasija Demo 01</p>
-          <p class="card__meta">Creado por Artesano Demo 03</p>
-          <p class="card__descriptor">Barro y cerámica, pieza de muestra.</p>
-          <a class="editorial-link card__action" href="/piezas/vasija-demo-01/">Explorar pieza →</a>
-        </li>
-      </ul>
+      <p id="list-nojs" class="section-lead list-state" hidden>Esta página necesita JavaScript habilitado para mostrar el catálogo de piezas.</p>
+      <p id="list-loading" class="section-lead list-state" hidden>Cargando piezas…</p>
+      <p id="list-empty" class="section-lead list-state" hidden>Aún no hay piezas publicadas.</p>
+      <div id="list-unavailable" class="list-state" hidden>
+        <p class="section-lead">No pudimos cargar las piezas. Inténtalo de nuevo en unos momentos.</p>
+        <button type="button" id="list-retry" class="editorial-link">Reintentar</button>
+      </div>
+      <ul class="card-grid" role="list" hidden></ul>
     </section>
 
   </main>

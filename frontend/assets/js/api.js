@@ -1,8 +1,19 @@
 // ArtesaNFC — public API fetch wrapper.
 // Vanilla JS, no dependencies. Every request is time-boxed with
-// AbortController (~5s) and every failure mode (network error, timeout,
-// non-2xx, JSON parse error, malformed shape) resolves to null instead of
-// throwing, so a caller can always fall back to the static page.
+// AbortController (~5s) and never throws: it always resolves to a tagged
+// result, so a caller can tell an authoritative "not published / does not
+// exist" apart from "could not find out":
+//
+//   { status: "ok", data }      2xx and the payload has the documented shape
+//   { status: "not_found" }     HTTP 404 only (API_CONTRACT.md §10: unknown
+//                               slug, draft, archived, and a piece under an
+//                               unpublished artisan are all the same 404)
+//   { status: "unavailable" }   anything else: 5xx, 429, timeout, network
+//                               error, malformed JSON/shape, or a host with
+//                               no API base configured (no request is made)
+//
+// The public API is the only authority on publication (F-08): pages must
+// never show entity content unless the result is "ok".
 
 (function (global) {
   "use strict";
@@ -55,11 +66,14 @@
     );
   }
 
+  var UNAVAILABLE = { status: "unavailable" };
+  var NOT_FOUND = { status: "not_found" };
+
   function fetchJSON(path, validate) {
     var base = getApiBase();
     if (!base) {
       warnUnresolved();
-      return Promise.resolve(null);
+      return Promise.resolve(UNAVAILABLE);
     }
 
     var controller = "AbortController" in global ? new AbortController() : null;
@@ -77,22 +91,24 @@
         signal: controller ? controller.signal : undefined
       })
       .then(function (response) {
+        if (response.status === 404) {
+          return NOT_FOUND;
+        }
         if (!response.ok) {
           throw new Error("HTTP " + response.status);
         }
-        return response.json();
-      })
-      .then(function (data) {
-        if (validate && !validate(data)) {
-          throw new Error("Malformed response shape for " + path);
-        }
-        return data;
+        return response.json().then(function (data) {
+          if (validate && !validate(data)) {
+            throw new Error("Malformed response shape for " + path);
+          }
+          return { status: "ok", data: data };
+        });
       })
       .catch(function (error) {
         console.warn(
           "[ArtesaNFC] API request failed (" + url + "): " + (error && error.message ? error.message : error)
         );
-        return null;
+        return UNAVAILABLE;
       })
       .then(function (result) {
         if (timeoutId !== null) {

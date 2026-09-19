@@ -1,16 +1,18 @@
-// ArtesaNFC — progressive enhancement for /artesanos and /piezas.
-// Static cards already in the page are the no-JS / API-down fallback.
-// They are only replaced after a successful, non-empty API response;
-// any failure or empty result leaves them exactly as rendered.
+// ArtesaNFC — /artesanos and /piezas listings (F-08).
+//
+// The two list pages ship NO entity cards: what is listed comes only from the
+// public API, which is the sole authority on publication. A valid 200 with
+// items renders them; a valid 200 with `data: []` is the authoritative "nothing
+// is published" and shows an empty state (it is NOT a failure, so nothing old
+// is kept); every other outcome (5xx, 429, timeout, network error, malformed
+// response, a host with no API base) shows a neutral unavailable state with a
+// retry control. Cards are built with textContent / encodeURIComponent only.
 
 (function () {
   "use strict";
 
   var api = window.ArtesaNFC && window.ArtesaNFC.api;
   var config = window.ArtesaNFC && window.ArtesaNFC.apiConfig;
-  if (!api || !config) {
-    return;
-  }
 
   var PLACEHOLDER_JPG = "/assets/img/card-placeholder.jpg";
 
@@ -33,14 +35,15 @@
     img.height = 800;
     img.alt = alt || "";
 
-    if (url) {
-      img.src = config.resolveMediaUrl(url);
+    var resolved = url ? config.resolveMediaUrl(url) : null;
+    if (resolved) {
+      img.src = resolved;
       img.addEventListener("error", function onError() {
         img.removeEventListener("error", onError);
         img.src = PLACEHOLDER_JPG;
       });
     } else {
-      // ArtisanSummary carries no media (API_CONTRACT.md §8) — placeholder
+      // ArtisanSummary carries no media (API_CONTRACT.md §8) — the placeholder
       // is the correct steady state here, not a fallback from a failure.
       img.src = PLACEHOLDER_JPG;
     }
@@ -49,118 +52,165 @@
     return picture;
   }
 
-  function hydrateArtisans(list) {
-    var section = document.getElementById("artesanos");
-    var grid = section && section.querySelector(".card-grid");
-    if (!grid) {
-      return;
-    }
+  function buildArtisanCard(artisan) {
+    var displayName = artisan.artistic_name || artisan.full_name;
 
-    var items = list.filter(function (a) {
-      return a && typeof a.slug === "string" && typeof a.full_name === "string";
-    });
-    if (!items.length) {
-      announce("Mostrando contenido de referencia: no se pudo cargar el directorio de artesanos desde la API.");
-      return;
-    }
+    var li = document.createElement("li");
+    li.className = "card";
+    li.appendChild(buildImage(null, "Retrato de " + displayName));
 
-    var frag = document.createDocumentFragment();
-    items.forEach(function (artisan) {
-      var displayName = artisan.artistic_name || artisan.full_name;
+    var title = document.createElement("p");
+    title.className = "card__title";
+    title.textContent = displayName;
+    li.appendChild(title);
 
-      var li = document.createElement("li");
-      li.className = "card";
-      li.appendChild(buildImage(null, "Retrato de " + displayName));
-
-      var title = document.createElement("p");
-      title.className = "card__title";
-      title.textContent = displayName;
-      li.appendChild(title);
-
-      var action = document.createElement("a");
-      action.className = "editorial-link card__action";
-      action.href = "/artesanos/" + encodeURIComponent(artisan.slug) + "/";
-      action.textContent = "Conocer al artesano →";
-      li.appendChild(action);
-
-      frag.appendChild(li);
-    });
-
-    grid.textContent = "";
-    grid.appendChild(frag);
+    var action = document.createElement("a");
+    action.className = "editorial-link card__action";
+    action.href = "/artesanos/" + encodeURIComponent(artisan.slug) + "/";
+    action.textContent = "Conocer al artesano →";
+    li.appendChild(action);
+    return li;
   }
 
-  function hydratePieces(list) {
-    var section = document.getElementById("piezas");
-    var grid = section && section.querySelector(".card-grid");
-    if (!grid) {
-      return;
+  function buildPieceCard(piece) {
+    var mediaUrl = piece.cover_media && piece.cover_media.url;
+    var altText = (piece.cover_media && piece.cover_media.alt_text) || piece.name;
+
+    var li = document.createElement("li");
+    li.className = "card";
+    li.appendChild(buildImage(mediaUrl, altText));
+
+    var title = document.createElement("p");
+    title.className = "card__title";
+    title.textContent = piece.name;
+    li.appendChild(title);
+
+    // ArtisanPieceSummary has no artisan name field — never fabricate one
+    // (API_CONTRACT.md §8); public_code is the one extra field it does
+    // provide, so it's the only meta line shown here.
+    if (piece.public_code) {
+      var meta = document.createElement("p");
+      meta.className = "card__meta";
+      meta.textContent = "Código público: " + piece.public_code;
+      li.appendChild(meta);
     }
 
-    var items = list.filter(function (p) {
-      return p && typeof p.slug === "string" && typeof p.name === "string";
+    var action = document.createElement("a");
+    action.className = "editorial-link card__action";
+    action.href = "/piezas/" + encodeURIComponent(piece.slug) + "/";
+    action.textContent = "Explorar pieza →";
+    li.appendChild(action);
+    return li;
+  }
+
+  var LISTS = {
+    artesanos: {
+      sectionId: "artesanos",
+      fetch: function () {
+        return api.getArtisans();
+      },
+      isValid: function (a) {
+        return !!a && typeof a.slug === "string" && typeof a.full_name === "string";
+      },
+      build: buildArtisanCard,
+      emptyMessage: "Aún no hay artesanos publicados.",
+      unavailableMessage: "No se pudo cargar el directorio de artesanos."
+    },
+    piezas: {
+      sectionId: "piezas",
+      fetch: function () {
+        return api.getPieces();
+      },
+      isValid: function (p) {
+        return !!p && typeof p.slug === "string" && typeof p.name === "string";
+      },
+      build: buildPieceCard,
+      emptyMessage: "Aún no hay piezas publicadas.",
+      unavailableMessage: "No se pudo cargar el catálogo de piezas."
+    }
+  };
+
+  function setState(section, name) {
+    var parts = {
+      loading: section.querySelector("#list-loading"),
+      empty: section.querySelector("#list-empty"),
+      unavailable: section.querySelector("#list-unavailable"),
+      list: section.querySelector(".card-grid")
+    };
+    Object.keys(parts).forEach(function (key) {
+      if (parts[key]) {
+        parts[key].hidden = key !== name;
+      }
     });
-    if (!items.length) {
-      announce("Mostrando contenido de referencia: no se pudo cargar el catálogo de piezas desde la API.");
+    section.setAttribute("aria-busy", name === "loading" ? "true" : "false");
+  }
+
+  var requestIds = {};
+
+  function load(list) {
+    var section = document.getElementById(list.sectionId);
+    var grid = section && section.querySelector(".card-grid");
+    if (!section || !grid) {
       return;
     }
 
-    var frag = document.createDocumentFragment();
-    items.forEach(function (piece) {
-      var mediaUrl = piece.cover_media && piece.cover_media.url;
-      var altText = (piece.cover_media && piece.cover_media.alt_text) || piece.name;
+    var mine = (requestIds[list.sectionId] = (requestIds[list.sectionId] || 0) + 1);
+    grid.textContent = "";
+    setState(section, "loading");
+    announce("Cargando…");
 
-      var li = document.createElement("li");
-      li.className = "card";
-      li.appendChild(buildImage(mediaUrl, altText));
-
-      var title = document.createElement("p");
-      title.className = "card__title";
-      title.textContent = piece.name;
-      li.appendChild(title);
-
-      // ArtisanPieceSummary has no artisan name field — never fabricate one
-      // (API_CONTRACT.md §8); public_code is the one extra field it does
-      // provide, so it's the only meta line shown here.
-      if (piece.public_code) {
-        var meta = document.createElement("p");
-        meta.className = "card__meta";
-        meta.textContent = "Código público: " + piece.public_code;
-        li.appendChild(meta);
+    var request = api && config ? list.fetch() : Promise.resolve({ status: "unavailable" });
+    request.then(function (result) {
+      if (mine !== requestIds[list.sectionId]) {
+        return;
       }
 
-      var action = document.createElement("a");
-      action.className = "editorial-link card__action";
-      action.href = "/piezas/" + encodeURIComponent(piece.slug) + "/";
-      action.textContent = "Explorar pieza →";
-      li.appendChild(action);
+      if (!result || result.status !== "ok" || !result.data || !Array.isArray(result.data.data)) {
+        setState(section, "unavailable");
+        announce(list.unavailableMessage);
+        return;
+      }
 
-      frag.appendChild(li);
+      var items = result.data.data;
+      if (items.length === 0) {
+        setState(section, "empty");
+        announce(list.emptyMessage);
+        return;
+      }
+
+      var valid = items.filter(list.isValid);
+      if (valid.length === 0) {
+        // Non-empty but nothing usable: the payload is malformed, which is a
+        // failure to find out, not an authoritative "empty".
+        setState(section, "unavailable");
+        announce(list.unavailableMessage);
+        return;
+      }
+
+      var frag = document.createDocumentFragment();
+      valid.forEach(function (item) {
+        frag.appendChild(list.build(item));
+      });
+      grid.appendChild(frag);
+      setState(section, "list");
+      announce("");
     });
-
-    grid.textContent = "";
-    grid.appendChild(frag);
   }
 
   document.addEventListener("DOMContentLoaded", function () {
-    if (document.getElementById("artesanos")) {
-      api.getArtisans().then(function (payload) {
-        if (payload && Array.isArray(payload.data) && payload.data.length) {
-          hydrateArtisans(payload.data);
-        } else {
-          announce("Mostrando contenido de referencia: no se pudo cargar el directorio de artesanos desde la API.");
-        }
-      });
-    }
-
-    if (document.getElementById("piezas")) {
-      api.getPieces().then(function (payload) {
-        if (payload && Array.isArray(payload.data) && payload.data.length) {
-          hydratePieces(payload.data);
-        } else {
-          announce("Mostrando contenido de referencia: no se pudo cargar el catálogo de piezas desde la API.");
-        }
-      });
-    }
+    Object.keys(LISTS).forEach(function (key) {
+      var list = LISTS[key];
+      var section = document.getElementById(list.sectionId);
+      if (!section) {
+        return;
+      }
+      var retry = section.querySelector("#list-retry");
+      if (retry) {
+        retry.addEventListener("click", function () {
+          load(list);
+        });
+      }
+      load(list);
+    });
   });
 })();
