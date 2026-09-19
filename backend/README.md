@@ -141,7 +141,14 @@ seed) fails fast, without printing the database URL, if:
 test unless `APP_ENV=test` **and** the `DATABASE_URL` database name has a
 `test` token delimited by `_` or `-` (`artesanfc_test`, `test_artesanfc`;
 `contest` and `latest` do not qualify). `APP_ENV` is never set for you: export
-it explicitly. A future CI job only needs to export the same two variables.
+it explicitly.
+
+**CI.** `.github/workflows/backend-ci.yml` (validation only, no deployment)
+runs on pull requests into `develop` and pushes to `develop`. It starts a
+disposable PostgreSQL 16 service with a test-marked database
+(`artesanfc_test`), exports `APP_ENV=test` and the matching `DATABASE_URL`,
+then runs `alembic upgrade head`, `alembic check` and `pytest -q` from
+`backend/` on Python 3.12 (the Dockerfile's version).
 
 **Seed policy.** `python -m app.db.seed` requires `APP_ENV=local` or
 `test`. Under `test` the database name must be test-marked; under `local`
