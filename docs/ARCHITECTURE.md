@@ -61,11 +61,12 @@ No es fuente de verdad para artesanos, piezas o certificados.
 ### Cloudflare (edge y Tunnel)
 
 - Terminación TLS y HTTPS obligatorio.
-- Rate limiting de `POST /api/v1/certificates/resolve` (capa primaria; regla
-  pendiente de aplicar, umbral pendiente de validar contra el plan de
-  Cloudflare).
-- Allowlist de rutas públicas del host de la API (`/api/v1/*`) y bloqueo del
-  resto (regla pendiente de aplicar).
+- Rate limiting de `POST /api/v1/certificates/resolve` (capa primaria; regla C
+  aplicada: 10 solicitudes por periodo de 10 segundos por IP, Block con
+  mitigación de 10 segundos).
+- Restricción del host de la API al namespace público (`/api/v1/*`) con bloqueo
+  del resto (regla A aplicada) y bloqueo de `POST` a resolve con query string
+  (regla B aplicada).
 - Entrega al origen mediante el Tunnel: el servidor no expone puertos públicos.
 
 Estas reglas son configuración operativa **no versionada**; el repo solo las

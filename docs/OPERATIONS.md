@@ -1,8 +1,9 @@
 # ArtesaNFC — Operaciones de producción (borde de la API)
 
-**Estado:** vigente para el piloto. Cierra los hallazgos N-03 y F-14 en lo que
-el repositorio puede cerrar; lo que depende de Cloudflare o del servidor queda
-descrito aquí como **pendiente de aplicar** y **pendiente de verificar**.
+**Estado:** vigente para el piloto. Cierra los hallazgos N-03 y F-14. Las reglas
+A, B y C de Cloudflare están **aplicadas y verificadas externamente** (§2, §8,
+§10) y los flags de Uvicorn de la unit systemd están **aplicados y verificados en
+producción** (§2, §3).
 **Alcance:** el camino de una petición a `api.artesanfc.com` y las superficies
 operativas de la API (`/docs`, `/health`, tamaño de cuerpo, rate limiting).
 **Sin secretos:** este documento no contiene credenciales, tokens de API,
@@ -45,10 +46,10 @@ PostgreSQL
 | `/health` = 200 con DB, 503 sin DB, `no-store`, `HEAD` | FastAPI | Código + tests | **Aplicado** (al desplegar esta versión) |
 | Límite de cuerpo 1024 bytes en `POST /api/v1/certificates/resolve` | FastAPI | Código + tests | **Aplicado** (al desplegar esta versión) |
 | `Cache-Control: no-store` y CORS también en el `413` | FastAPI | Código + tests | **Aplicado** (al desplegar esta versión) |
-| `--proxy-headers --forwarded-allow-ips 127.0.0.1` | Uvicorn (unit systemd) | Solo documentado (§3) | **Pendiente de verificar en el servidor** |
-| Allowlist `/api/v1/*` en el host de la API (regla A) | Cloudflare | Solo documentado (§8) | **Pendiente de aplicar** |
-| Bloqueo de `POST` a resolve con query string (regla B) | Cloudflare | Solo documentado (§8) | **Pendiente de aplicar** |
-| Rate limit de `POST` a resolve por IP (regla C) | Cloudflare | Solo documentado (§8) | **Pendiente de aplicar; umbral pendiente de validar contra el plan** |
+| `--host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips 127.0.0.1` | Uvicorn (unit systemd) | Solo documentado (§3) | **Aplicado y verificado en producción** (servicio reiniciado y validado) |
+| Restricción al namespace `/api/v1/*` en el host de la API (regla A) | Cloudflare | Solo documentado (§8) | **Aplicada y verificada externamente** |
+| Bloqueo de `POST` a resolve con query string (regla B) | Cloudflare | Solo documentado (§8) | **Aplicada y verificada externamente** |
+| Rate limit de `POST` a resolve por IP (regla C) | Cloudflare | Solo documentado (§8) | **Aplicada y verificada externamente** (10 solicitudes por periodo de 10 s por IP; Block; mitigación de 10 s) |
 | Rate limit en memoria dentro de FastAPI | — | No existe | **Decidido: no se implementa** |
 | Nginx | — | Ejemplo, no desplegado | **No aplica** |
 
@@ -81,6 +82,11 @@ EnvironmentFile=<archivo-de-entorno-con-los-valores-anteriores>
 ExecStart=<venv>/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips 127.0.0.1
 Restart=on-failure
 ```
+
+**Estado verificado en producción:** el `ExecStart` real usa `--host 127.0.0.1
+--port 8000 --proxy-headers --forwarded-allow-ips 127.0.0.1`; el servicio fue
+reiniciado y validado correctamente. Los comandos de abajo siguen siendo la forma
+de reverificarlo.
 
 Verificación (solo lectura): `systemctl cat artesa-nfc.service`,
 `systemctl show artesa-nfc.service -p Environment -p EnvironmentFiles` (revisar
@@ -161,21 +167,26 @@ Un único endpoint, `GET` y `HEAD /health` (no forma parte del contrato público
 - No afecta a `OPTIONS`, `GET` ni a otros endpoints.
 - Detalle técnico: `SECURITY.md` §5.6.
 
-## 8. Reglas de Cloudflare pendientes de aplicar
+## 8. Reglas de Cloudflare (A, B y C aplicadas)
 
-**No aplicadas.** Se aplican de una en una, en este orden, verificando (§10)
-después de cada una. Si el plan ofrece la acción *Log* (o equivalente), usarla
-primero para revisar falsos positivos antes de pasar a *Block*. Las expresiones
-usan el lenguaje de reglas de Cloudflare; confirmar la sintaxis exacta en el
-dashboard al crearlas.
+**Aplicadas y verificadas externamente** (A, B y C activas; comportamiento
+observado en §10). Son configuración del dashboard **no versionada**: este repo no
+las crea ni las cambia. Las expresiones de abajo son la **referencia documentada**
+para auditarlas o reaplicarlas si hiciera falta (se aplican de una en una, en este
+orden, verificando (§10) después de cada una; si el plan ofrece la acción *Log*,
+usarla primero para revisar falsos positivos). La regla realmente activa se
+comprueba por su comportamiento, no por este texto. Las expresiones usan el
+lenguaje de reglas de Cloudflare; confirmar la sintaxis exacta en el dashboard.
 
-Antes de empezar:
+Antes de (re)aplicarlas:
 
 - Confirmar que el Managed Transform "Remove visitor IP headers" está apagado (§4).
 - Confirmar que el servicio del Tunnel apunta al origen esperado
   (`http://localhost:8000`) y que no hay reglas previas que interfieran.
 
 ### Regla A — solo el namespace público en el host de la API
+
+**Estado: aplicada y activa** (en el dashboard: `api namespace restriction`).
 
 Objetivo: desde Internet, `api.artesanfc.com` solo debe atender `/api/v1/*`.
 Quedan bloqueados `/health`, `/c/*`, `/` y cualquier otra ruta que no sea del
@@ -193,6 +204,8 @@ sirva).
 
 ### Regla B — `POST` a resolve con query string
 
+**Estado: aplicada y activa.** Verificado: `POST` a resolve con query string → 403; sin query string → 200.
+
 Objetivo: el token viaja en el cuerpo; una petición a resolve con query string
 es un cliente equivocado (o un intento de dejar un token en un log). Se bloquea
 antes de que llegue al origen, donde Uvicorn registraría la query.
@@ -203,21 +216,17 @@ antes de que llegue al origen, donde Uvicorn registraría la query.
 
 ### Regla C — rate limit de `POST /api/v1/certificates/resolve` por IP
 
+**Estado: aplicada y activa.** Configuración vigente: rate limiting de Cloudflare sobre `/api/v1/certificates/resolve`: **10 solicitudes** en un periodo de conteo de **10 segundos**, por IP; acción **Block**; duración de la mitigación de **10 segundos**. Verificado externamente: las primeras 10 solicitudes pasan y las siguientes reciben HTTP 429.
+
 - Tipo: regla de rate limiting.
 - Expresión de coincidencia: `(http.host eq "api.artesanfc.com" and http.request.method eq "POST" and starts_with(http.request.uri.path, "/api/v1/certificates/resolve"))`
 - Contador: por IP de origen del visitante.
-- **Umbral deseado** (`SECURITY.md` §5.1): 30 solicitudes por minuto por IP en
-  régimen sostenido, con una ráfaga pequeña (unas 5) tolerada para recargas y
-  escaneos NFC repetidos.
-- **Estado del umbral: PENDIENTE DE VALIDACIÓN de las capacidades del plan de
-  Cloudflare. No es un hecho aplicable todavía.** Antes de fijar cualquier
-  número hay que comprobar en el dashboard: cuántas reglas de rate limiting
-  admite el plan; qué periodos de conteo ofrece; qué características de
-  agrupación permite (IP); qué acción y respuesta permite (bloqueo, código de
-  estado, cuerpo) y cuánto dura el bloqueo; y que no existe un concepto de
-  "burst" separado (se aproxima con umbral y periodo). Como candidato ilustrativo,
-  si solo hubiera periodo de 10 s, 5 solicitudes por 10 s equivaldrían a unas 30
-  por minuto sostenidas; es un candidato, no una decisión.
+- **Configuración vigente:** 10 solicitudes en un periodo de conteo de 10
+  segundos, por IP; acción Block; mitigación de 10 segundos. Es la única
+  configuración que rige y **no** se expresa como tasa por minuto.
+- **Objetivo de diseño original (no es la configuración vigente):**
+  `SECURITY.md` §5.1 aprobó como referencia 30 solicitudes por minuto por IP con
+  una ráfaga pequeña. Cualquier ajuste de la regla vigente es una decisión aparte.
 - Opcional y posterior: un límite más laxo para los `GET` públicos
   (`SECURITY.md` §5.2, 120 por minuto por IP), sujeto a las mismas capacidades.
 - Las respuestas generadas por Cloudflare (403 de bloqueo, 429 de rate limit)
@@ -252,6 +261,8 @@ Resultados esperados según la fase:
 | `curl -sS -i $API/api/v1/artisans` | 200 con datos | 200 con datos |
 | `curl -sS -i -X POST "$API/api/v1/certificates/resolve?token=NOT_A_TOKEN" -H 'Content-Type: application/json' -d '{"token":"x"}'` | 200 `unavailable` (**y Uvicorn registra la query**) | 403 |
 
+**Verificado externamente** con las reglas A, B y C activas (comportamiento observado): `/health` → 403; `/docs` → 403; `GET /api/v1/artisans` → 200; `POST` a resolve normal → 200; `POST` a resolve con query string → 403; al exceder el rate limit (las primeras 10 solicitudes pasan y las siguientes reciben HTTP 429) → 429. Las demás filas de la tabla siguen siendo el resultado esperado por diseño y no se afirman aquí como observadas.
+
 Comprobaciones adicionales:
 
 1. **Límite de cuerpo** (esperado `413` con `Cache-Control: no-store` y, con
@@ -273,10 +284,11 @@ Comprobaciones adicionales:
 3. **Sin token en logs** tras las pruebas de `/c/NOT_A_TOKEN` y de `?token=`:
    en el servidor, `journalctl -u artesa-nfc --since "-15 min" | grep -c NOT_A_TOKEN`
    debe dar `0` una vez aplicadas las reglas A y B.
-4. **Rate limit** (solo tras aplicar la regla C y con el umbral ya validado):
-   una ráfaga corta de peticiones inválidas a resolve desde una IP propia debe
-   terminar en el estado que la regla defina (429 o 403 de Cloudflare); esperar
-   a que expire el bloqueo antes de seguir.
+4. **Rate limit** (regla C activa: 10 solicitudes por periodo de 10 s por IP;
+   Block con mitigación de 10 s): en una ráfaga de peticiones inválidas a resolve
+   desde una IP propia, las primeras 10 pasan y las siguientes reciben `429` de
+   Cloudflare (verificado); esperar a que expire la mitigación (10 s) antes de
+   seguir.
 5. **CORS intacto**: una petición `OPTIONS` de preflight con
    `Origin: https://artesanfc.com` a resolve responde 200 con
    `Access-Control-Allow-Origin: https://artesanfc.com`.
@@ -307,3 +319,22 @@ No se corrigen aquí (siguen abiertos): la validación de CORS de producción qu
 acepta orígenes extra (N-01); el `500` no controlado sin `no-store`/CORS y el
 `503` general en rutas de datos (N-02); los constraints de base de datos
 (F-12); CSP y HSTS; el volumen de logs y su retención (`SECURITY.md` §12.3).
+
+## 13. Provisioning de certificados y tags NFC
+
+La emisión de tokens y la programación de tags **solo** se hacen con
+`python -m app.cli.provision`, ejecutado por SSH en el host del backend/PostgreSQL
+(procedimiento completo, fallos y recuperación en `docs/PROVISIONING.md`).
+
+- Cargar el entorno real del servicio **sin teclear secretos**:
+  `set -a; source <archivo-de-entorno-del-servicio>; set +a` (nunca
+  `export DATABASE_URL=...`, que queda en el historial).
+- No usar `script`, `tee`, redirecciones, grabadores de terminal ni logging de
+  tmux/screen: la CLI se niega a mostrar la URL sin un terminal interactivo real.
+- Con `APP_ENV=production` hay que teclear `production` para continuar. `staging`
+  está rechazado.
+- No reemplaza al servicio: no toca `artesa-nfc.service` ni las reglas de
+  Cloudflare, y no añade endpoints. La URL del tag apunta al frontend
+  (`https://artesanfc.com/c/…`), nunca al host de la API.
+- Crear artesanos y piezas **no** forma parte de este flujo: son un prerrequisito
+  externo.

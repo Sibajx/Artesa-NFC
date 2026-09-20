@@ -181,8 +181,8 @@ rejected.
 
 ## Production edge and operational surfaces
 
-Audit findings N-03 / F-14. Full detail, the Cloudflare rules still to be
-applied and the verification checklist: [`../docs/OPERATIONS.md`](../docs/OPERATIONS.md).
+Audit findings N-03 / F-14. Full detail, the Cloudflare rules (A, B and C, applied
+and verified externally) and the verification checklist: [`../docs/OPERATIONS.md`](../docs/OPERATIONS.md).
 
 Real production topology: **Cloudflare → Cloudflare Tunnel → Uvicorn / FastAPI →
 PostgreSQL**. **Nginx is NOT currently deployed**; `nginx/artesanfc-api.conf.example`
@@ -203,11 +203,39 @@ What the application itself guarantees (versioned and tested):
   stops as soon as the limit is passed. The `413` keeps CORS for an allowed
   origin and `Cache-Control: no-store`.
 
-Required, **not applied by the repo**: Uvicorn must run with
-`--proxy-headers --forwarded-allow-ips 127.0.0.1` (never `--forwarded-allow-ips '*'`),
-and the Cloudflare rules (path allowlist, no query string on resolve,
-rate limit) must be applied and verified as described in `docs/OPERATIONS.md`.
+Required, **not applied by the repo** (verified in production): Uvicorn runs with
+`--host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips 127.0.0.1`
+(never `--forwarded-allow-ips '*'`). The Cloudflare rules (path allowlist, no query
+string on resolve, rate limit of 10 requests per 10-second period per IP with Block
+and a 10-second mitigation) are applied and verified externally. Both are server /
+dashboard configuration, not versioned here (`docs/OPERATIONS.md`).
 The application does not read `X-Forwarded-For` itself.
+
+## Certificate and NFC provisioning (N-09)
+
+`python -m app.cli.provision` (in Spanish) issues a piece's certificate, shows
+its URL once and guides writing the NTAG213 tag. Subcommands: `list`, `status`,
+`issue`, `rotate`, `revoke`, `lock`; `issue`/`rotate`/`revoke`/`lock` accept
+`--dry-run` (read-only, generates no token). The full procedure, failure table
+and rules are in [`../docs/PROVISIONING.md`](../docs/PROVISIONING.md); in short:
+
+- It never accepts a token (no option, stdin, environment variable or file) and
+  only ever shows the full URL `https://artesanfc.com/c/{token}`, once, on a real
+  interactive terminal. It writes no files and no logs.
+- `APP_ENV=production` is allowed (type `production` to continue); `staging` is
+  refused; `local` needs a local database host and `test` a test database. With
+  `local`/`test` the URL is a marked rehearsal (`http://127.0.0.1:5500/c/...`)
+  that must never be written to a real tag.
+- Pieces and artisans must already exist and be published: creating them is not
+  part of this tool (the seed is refused in production).
+
+Try it locally (rehearsal) against the disposable database from the setup above:
+
+```bash
+python -m app.db.seed                                # demo pieces (local/test only)
+python -m app.cli.provision list
+python -m app.cli.provision issue --piece DEMO-MASCARA-01 --dry-run
+```
 
 ## Docker scope for Sprint 3
 

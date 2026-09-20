@@ -162,3 +162,26 @@ UI / Texto: Manrope
 - La tipografía puede revisarse en versiones futuras si existe una razón clara de identidad, legibilidad o producto.
 
 **Consecuencias:** Esta decisión debe reflejarse en `docs/DESIGN_SYSTEM.md`. Un cambio futuro debe registrarse mediante una nueva ADR que reemplace o superseda esta decisión.
+
+## ADR-026 — Provisioning de certificados y tags NFC por CLI local
+
+**Estado:** Aceptado para el piloto
+
+**Fecha:** 2026-09-20 (issue #107, N-09)
+
+**Decisión:** la emisión de tokens y la programación de tags NFC se hacen con
+una CLI interactiva (`python -m app.cli.provision`), ejecutada por SSH en el host
+del backend/PostgreSQL, que reutiliza los servicios de ciclo de vida existentes.
+No hay API administrativa (ni temporal), no se acepta el token por ningún canal de
+entrada y solo se muestra la URL completa, una vez, en un terminal interactivo.
+`AUDIT_EVENT` queda diferido; el bloqueo físico es un paso aparte y opcional.
+
+**Alternativas descartadas:** comando no interactivo para tuberías con
+herramientas NFC (el token viajaría por pipes, argv o volcados; sin hardware
+definido), REPL manual (sin barreras contra errores) y API administrativa (el
+contrato prohíbe el token en cualquier respuesta y faltan autenticación y
+auditoría).
+
+**Consecuencias:** el detalle operativo vive en `docs/PROVISIONING.md`. Crear
+artesanos y piezas sigue fuera de este flujo. Una futura API administrativa o un
+lector USB integrado serían decisiones nuevas.

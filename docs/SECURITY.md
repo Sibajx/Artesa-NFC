@@ -135,6 +135,28 @@ usan algoritmos propios basados en primos, secuencias ni ninguna otra
 criptografía casera (ADR-007) — el token es puro output de CSPRNG, sin
 transformación adicional que reduzca su entropía efectiva.
 
+### 2.2 Canal de entrega del token (provisioning)
+
+`SECURITY.md` §3 describe el token como existente "generación → entrega para
+programar el NFC". Ese canal queda definido (issue #107, N-09;
+`docs/PROVISIONING.md`):
+
+- El **único** punto de entrada soportado es la CLI `python -m app.cli.provision`,
+  ejecutada por SSH en el host del backend/PostgreSQL. No hay API administrativa
+  para esto; el seed sigue prohibido en producción.
+- El token en claro **nunca entra** al sistema por argv, stdin, variables de
+  entorno, archivos ni flags: la CLI solo lo **muestra**.
+- Se muestra **una sola vez**, como parte de la URL completa
+  `https://artesanfc.com/c/{token}` (nunca aislado, nunca su hash), **después** de
+  que el commit que guarda su hash terminó bien, y solo en un terminal
+  interactivo real (pantalla alterna, sin scrollback). Sin TTY se niega antes de
+  generar nada.
+- No escribe archivos ni logs, no imprime tracebacks y desactiva los core dumps.
+- Un token perdido después del commit **no se recupera**: se rota.
+- Riesgos residuales que la CLI no elimina: pantalla, portapapeles y herramienta
+  NFC del operador; capturas o grabaciones; el historial del navegador del
+  teléfono tras el escaneo.
+
 ## 3. Hash y verificación del token
 
 `DATA_MODEL.md` §2.3 deja deliberadamente el algoritmo exacto para este
@@ -310,8 +332,14 @@ sobre-ingeniería.
 
 ### 5.1 `POST /api/v1/certificates/resolve`
 
-**Valores por defecto aprobados para el MVP** (enforcement previsto en el
-borde de Cloudflare, pendiente de aplicar; ver sección 5.5):
+**Configuración vigente en producción (regla C de Cloudflare):** 10 solicitudes
+en un periodo de conteo de 10 segundos, por IP; acción Block; mitigación de 10
+segundos. Verificado externamente: las primeras 10 solicitudes pasan y las
+siguientes reciben `429` (`docs/OPERATIONS.md` §8). No se expresa como tasa por
+minuto.
+
+**Valores por defecto aprobados originalmente para el MVP** (objetivo de diseño;
+**no** son la configuración vigente; ver sección 5.5):
 
 - **30 solicitudes por minuto por IP.**
 - Se permite un **burst pequeño** (unas pocas solicitudes casi
@@ -335,8 +363,9 @@ Estos valores son **defaults operativos**, configurables sin necesidad
 de cambiar el contrato público de la API (`API_CONTRACT.md` no define
 límites numéricos, solo que existe rate limiting y el código `429`).
 Un escaneo NFC legítimo normal (una persona consultando su certificado
-ocasionalmente) queda muy por debajo de 30 solicitudes por minuto, por
-lo que no debería verse afectado bajo uso normal. No se sobre-diseña
+ocasionalmente) queda muy por debajo del objetivo de diseño original (30
+solicitudes por minuto) y de la configuración vigente (10 solicitudes por
+periodo de 10 segundos), por lo que no debería verse afectado bajo uso normal. No se sobre-diseña
 rate limiting distribuido (ej. coordinación entre múltiples nodos) para
 este piloto de tamaño pequeño; un límite por IP en el borde (Cloudflare)
 es suficiente para el volumen esperado.
@@ -384,11 +413,13 @@ no una decisión abierta.
 > producción es Cloudflare → Cloudflare Tunnel → Uvicorn/FastAPI. **Nginx no
 > está desplegado**, así que lo que sigue en esta sección describe el ejemplo
 > de Nginx (alternativa) y **no es enforcement vigente**. La capa primaria de
-> rate limiting de `POST /api/v1/certificates/resolve` es Cloudflare (regla
-> pendiente de aplicar; el umbral depende de las capacidades del plan y está
-> pendiente de validar). FastAPI sigue sin limitador propio, pero aplica un
+> rate limiting de `POST /api/v1/certificates/resolve` es Cloudflare (regla C,
+> aplicada: 10 solicitudes por periodo de 10 segundos por IP, Block con
+> mitigación de 10 segundos; `docs/OPERATIONS.md` §8). FastAPI sigue sin limitador
+> propio, pero aplica un
 > límite de cuerpo de 1024 bytes a esa ruta (sección 5.6). La IP real llega a
-> Uvicorn con `--proxy-headers --forwarded-allow-ips 127.0.0.1`; nunca `*`.
+> Uvicorn con `--proxy-headers --forwarded-allow-ips 127.0.0.1` (verificado en
+> producción); nunca `*`.
 
 - **En el ejemplo de Nginx (alternativa, no desplegada), Nginx es la capa de
   enforcement del rate limiting**; la configuración de ejemplo está en
@@ -473,7 +504,10 @@ hardware):
 - **No bloquear (`lock`) un tag hasta validar la URL definitiva**
   (ADR-021, ya aprobado): el bloqueo de escritura es irreversible en
   NTAG213 y debe aplicarse solo tras confirmar que la URL grabada es la
-  correcta y funcional.
+  correcta y funcional. En el piloto el bloqueo **no es automático ni
+  obligatorio**: es un paso aparte (`provision lock`), recomendado tras verificar
+  la escritura y varios escaneos, solo si la herramienta NFC usada lo confirma de
+  forma explícita, y el tag puede quedar sin bloquear (`docs/PROVISIONING.md` §6).
 - **Una vez verificado un tag de producción, el bloqueo de escritura
   (write-protection) puede usarse** para prevenir reescritura
   accidental (por el propio equipo de ArtesaNFC, no por terceros) —
@@ -514,7 +548,7 @@ Requisitos:
 - **Evitar loguear el token completo** en logs de reverse proxy o de
   aplicación (ver sección 14.3 sobre redacción de tokens en logs). Si
   una petición literal `/c/{token}` llega al host de la API, el ejemplo de
-  Nginx (no desplegado; el equivalente pendiente en producción es la regla A
+  Nginx (no desplegado; el equivalente en producción es la regla A, ya activa,
   de `docs/OPERATIONS.md`) la rechaza en local (`404`, sin log, sin proxy ni
   redirección); ver sección 13, «Rutas privadas en logs de acceso».
 - **Evitar que el token llegue a URLs de terceros** por fuga de
@@ -740,6 +774,14 @@ registrarse nunca.
 - Emisión de certificado (`certificate` pasa de `draft` a `active`).
 - Revocación de certificado, incluyendo el motivo interno (sección 15).
 - Asignación, reemplazo y bloqueo (`locked`) de un `NFC_TAG`.
+
+> **Estado en el piloto:** `AUDIT_EVENT` está **diferido** (brecha aceptada
+> conscientemente en el issue #107; sin modelo, tabla ni migración). Hasta que
+> exista, la procedencia mínima de emisión, revocación, programación y bloqueo
+> queda en campos existentes (`issued_at`, `revoked_at`, `revocation_reason`,
+> `programmed_at`, `locked_at` y una línea no secreta por operación en
+> `nfc_tag.notes`; `docs/PROVISIONING.md` §8). Es un riesgo conocido, no un
+> sustituto de la auditoría.
 - Abuso detectado contra `certificates/resolve` (ej. una IP superando
   el rate limit repetidamente, o un volumen alto de `unavailable`
   consecutivos desde el mismo origen).
@@ -904,7 +946,7 @@ personal cuya retención/anonimización se define aquí:
       Nginx salta esta frontera: Uvicorn registra la ruta y la query
       literales (`uvicorn.access`), incluido un `/c/<token>`. Hoy esa es la
       situación de producción (el Tunnel llega directo a Uvicorn; Nginx no
-      está desplegado): la mitigación pendiente está en el borde, con la regla
+      está desplegado): la mitigación está en el borde y ya está activa, con la regla
       A de `docs/OPERATIONS.md` (bloquea `/c/*` y todo lo que no sea
       `/api/v1/*` antes del origen) y la regla B (bloquea `POST` a resolve con
       query string). No se desactiva el access log de Uvicorn ni se añade
@@ -1065,8 +1107,8 @@ Requisitos base:
 - **Punto de entrada real:** Cloudflare Tunnel → Uvicorn en
   `127.0.0.1:8000` (Nginx no está desplegado; `docs/OPERATIONS.md`).
   FastAPI **no se expone directamente a internet**: escucha solo en
-  loopback. Uvicorn debe correr con `--proxy-headers
-  --forwarded-allow-ips 127.0.0.1`; **nunca** `--forwarded-allow-ips '*'`
+  loopback. Uvicorn corre con `--proxy-headers
+  --forwarded-allow-ips 127.0.0.1` (verificado en producción); **nunca** `--forwarded-allow-ips '*'`
   (permitiría a cualquiera falsificar IP y esquema).
 - **HTTPS:** lo termina Cloudflare; el origen es HTTP en loopback. Los
   certificados Let's Encrypt del ejemplo de Nginx solo aplican si se adopta
@@ -1075,7 +1117,7 @@ Requisitos base:
   `/redoc`, `/openapi.json` ni `/docs/oauth2-redirect` (aplicado en la app).
   `/health` es un endpoint operativo (200 / 503 según la base de datos,
   `no-store`) para uso local; en el borde queda fuera de la allowlist
-  (regla A de `docs/OPERATIONS.md`, pendiente de aplicar).
+  (regla A de `docs/OPERATIONS.md`, activa: `/health` desde fuera responde 403).
 - **Límite de cuerpo** en `certificates/resolve`: sección 5.6.
 - **Contenedores con mínimo privilegio** donde se use Docker
   (`ARCHITECTURE.md` menciona `Dockerfile`/`docker-compose.yml`): no
