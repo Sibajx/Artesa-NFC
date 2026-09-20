@@ -5,8 +5,10 @@ from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.core.db_safety import (
+    ENV_LOCAL,
     ENV_PRODUCTION,
     ENV_STAGING,
+    ENV_TEST,
     UnsafeConfigurationError,
     assert_database_url_configured,
     assert_production_grade_database,
@@ -97,6 +99,15 @@ class Settings(BaseSettings):
                     "false (docs/SECURITY.md)."
                 )
         return self
+
+    @property
+    def docs_enabled(self) -> bool:
+        """Interactive docs (/docs, /redoc, /docs/oauth2-redirect) and the
+        OpenAPI schema (/openapi.json) are a local/test convenience only:
+        staging and production do not serve them at all (docs/SECURITY.md
+        section 13, docs/OPERATIONS.md). Deciding it here, in the app, keeps
+        it independent of whatever sits in front of the API."""
+        return self.app_env in (ENV_LOCAL, ENV_TEST)
 
     @property
     def cors_allowed_origins_list(self) -> list[str]:

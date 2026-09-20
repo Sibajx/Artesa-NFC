@@ -259,10 +259,11 @@ def test_no_store_response_keeps_cors_headers_for_allowed_origin():
         "/api/v1/pieces",
         "/api/v1/artisans/does-not-exist",
         "/api/v1/pieces/does-not-exist",
-        "/health",
         "/api/v1/certificates/other",
     ],
 )
+# /health is deliberately not listed: it sets its own `no-store`
+# (tests/test_health.py), not this resolve-scoped middleware's.
 def test_other_paths_do_not_get_no_store(path):
     response = client.get(path)
     assert "cache-control" not in response.headers
