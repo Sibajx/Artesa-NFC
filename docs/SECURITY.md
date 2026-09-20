@@ -310,8 +310,10 @@ sobre-ingeniería.
 
 ### 5.1 `POST /api/v1/certificates/resolve`
 
-**Valores por defecto aprobados para el MVP** (enforcement previsto en el
-borde de Cloudflare, pendiente de aplicar; ver sección 5.5):
+**Valores por defecto aprobados para el MVP** (enforcement en el borde de
+Cloudflare, regla C activa con **10 solicitudes por 10 segundos por IP**, el valor
+realmente aplicado; los valores siguientes son la referencia de diseño, ver
+sección 5.5 y `docs/OPERATIONS.md` §8):
 
 - **30 solicitudes por minuto por IP.**
 - Se permite un **burst pequeño** (unas pocas solicitudes casi
@@ -384,9 +386,8 @@ no una decisión abierta.
 > producción es Cloudflare → Cloudflare Tunnel → Uvicorn/FastAPI. **Nginx no
 > está desplegado**, así que lo que sigue en esta sección describe el ejemplo
 > de Nginx (alternativa) y **no es enforcement vigente**. La capa primaria de
-> rate limiting de `POST /api/v1/certificates/resolve` es Cloudflare (regla
-> pendiente de aplicar; el umbral depende de las capacidades del plan y está
-> pendiente de validar). FastAPI sigue sin limitador propio, pero aplica un
+> rate limiting de `POST /api/v1/certificates/resolve` es Cloudflare (regla C,
+> aplicada: 10 solicitudes por 10 segundos por IP; `docs/OPERATIONS.md` §8). FastAPI sigue sin limitador propio, pero aplica un
 > límite de cuerpo de 1024 bytes a esa ruta (sección 5.6). La IP real llega a
 > Uvicorn con `--proxy-headers --forwarded-allow-ips 127.0.0.1`; nunca `*`.
 
@@ -514,7 +515,7 @@ Requisitos:
 - **Evitar loguear el token completo** en logs de reverse proxy o de
   aplicación (ver sección 14.3 sobre redacción de tokens en logs). Si
   una petición literal `/c/{token}` llega al host de la API, el ejemplo de
-  Nginx (no desplegado; el equivalente pendiente en producción es la regla A
+  Nginx (no desplegado; el equivalente en producción es la regla A, ya activa,
   de `docs/OPERATIONS.md`) la rechaza en local (`404`, sin log, sin proxy ni
   redirección); ver sección 13, «Rutas privadas en logs de acceso».
 - **Evitar que el token llegue a URLs de terceros** por fuga de
@@ -904,7 +905,7 @@ personal cuya retención/anonimización se define aquí:
       Nginx salta esta frontera: Uvicorn registra la ruta y la query
       literales (`uvicorn.access`), incluido un `/c/<token>`. Hoy esa es la
       situación de producción (el Tunnel llega directo a Uvicorn; Nginx no
-      está desplegado): la mitigación pendiente está en el borde, con la regla
+      está desplegado): la mitigación está en el borde y ya está activa, con la regla
       A de `docs/OPERATIONS.md` (bloquea `/c/*` y todo lo que no sea
       `/api/v1/*` antes del origen) y la regla B (bloquea `POST` a resolve con
       query string). No se desactiva el access log de Uvicorn ni se añade
@@ -1075,7 +1076,7 @@ Requisitos base:
   `/redoc`, `/openapi.json` ni `/docs/oauth2-redirect` (aplicado en la app).
   `/health` es un endpoint operativo (200 / 503 según la base de datos,
   `no-store`) para uso local; en el borde queda fuera de la allowlist
-  (regla A de `docs/OPERATIONS.md`, pendiente de aplicar).
+  (regla A de `docs/OPERATIONS.md`, activa: `/health` desde fuera responde 403).
 - **Límite de cuerpo** en `certificates/resolve`: sección 5.6.
 - **Contenedores con mínimo privilegio** donde se use Docker
   (`ARCHITECTURE.md` menciona `Dockerfile`/`docker-compose.yml`): no

@@ -181,8 +181,8 @@ rejected.
 
 ## Production edge and operational surfaces
 
-Audit findings N-03 / F-14. Full detail, the Cloudflare rules still to be
-applied and the verification checklist: [`../docs/OPERATIONS.md`](../docs/OPERATIONS.md).
+Audit findings N-03 / F-14. Full detail, the Cloudflare rules (A, B and C, applied
+and verified externally) and the verification checklist: [`../docs/OPERATIONS.md`](../docs/OPERATIONS.md).
 
 Real production topology: **Cloudflare → Cloudflare Tunnel → Uvicorn / FastAPI →
 PostgreSQL**. **Nginx is NOT currently deployed**; `nginx/artesanfc-api.conf.example`
@@ -205,8 +205,9 @@ What the application itself guarantees (versioned and tested):
 
 Required, **not applied by the repo**: Uvicorn must run with
 `--proxy-headers --forwarded-allow-ips 127.0.0.1` (never `--forwarded-allow-ips '*'`),
-and the Cloudflare rules (path allowlist, no query string on resolve,
-rate limit) must be applied and verified as described in `docs/OPERATIONS.md`.
+while the Cloudflare rules (path allowlist, no query string on resolve, rate limit
+of 10 requests per 10 seconds per IP) are applied and verified externally: they are
+dashboard configuration, not versioned here (`docs/OPERATIONS.md`).
 The application does not read `X-Forwarded-For` itself.
 
 ## Docker scope for Sprint 3
