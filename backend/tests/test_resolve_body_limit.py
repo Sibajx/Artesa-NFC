@@ -132,15 +132,17 @@ def test_chunked_body_over_the_limit_is_413():
     assert outcome.receive_calls == 3  # stopped as soon as 1200 > 1024, nothing more asked for
 
 
-def test_an_unbounded_stream_is_cut_off_after_the_limit_is_passed():
+def test_a_huge_stream_is_cut_off_after_the_limit_is_passed():
     chunks_served = count()
 
-    def endless():
-        while True:
+    def huge():
+        # ~10 MB if nobody stops reading. Bounded on purpose: if the limit ever
+        # broke, this must fail on the assertions below instead of hanging.
+        for _ in range(20_000):
             next(chunks_served)
             yield b"x" * 512
 
-    outcome = call(app, stream=endless(), content_length=None)
+    outcome = call(app, stream=huge(), content_length=None)
     assert outcome.status == 413 and outcome.json == TOO_LARGE
     # 512, 1024 (still allowed), 1536 (over): the third chunk trips it. One
     # more may have been prefetched by the iterator; the point is that it is
