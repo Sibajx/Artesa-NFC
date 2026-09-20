@@ -229,12 +229,43 @@ def activate_certificate(db: Session, certificate: Certificate) -> CertificateAc
     return _run(db, work, known={_UQ_ONE_ACTIVE_PER_PIECE: _already_active})
 
 
-def revoke_certificate(db: Session, certificate: Certificate) -> Certificate:
+def issue_certificate(db: Session, piece_id: uuid.UUID) -> CertificateActivationResult:
+    """Issue a piece's first (or next, after a revocation) certificate: create
+    the draft and activate it as one atomic unit.
+
+    `activate_certificate` needs an existing draft and only `rotate_certificate`
+    ever created one, so a piece with no active certificate had no supported
+    way to get one. This mirrors rotation's second half: a SAVEPOINT around
+    "insert draft -> activate", so a failed activation never leaves an orphan
+    draft behind. Every guarantee of `activate_certificate` applies unchanged
+    (one active certificate per piece, `raw_token` only in the result). The
+    caller owns the commit.
+    """
+
+    def work() -> CertificateActivationResult:
+        draft = Certificate(piece_id=piece_id, status=CertificateStatus.draft)
+        db.add(draft)
+        db.flush()
+        return activate_certificate(db, draft)
+
+    # No `known` mapping: the activation translates its own unique-index
+    # failure (ActiveCertificateAlreadyExists).
+    return _run(db, work)
+
+
+def revoke_certificate(
+    db: Session, certificate: Certificate, *, reason: str | None = None
+) -> Certificate:
     """Revoke an active certificate, preserving its token_hash/issued_at history.
 
     Decided on the locked, reloaded persisted state: a stale handle (e.g. the
     certificate was already revoked by a rotation) raises
     `CertificateLifecycleConflict` and leaves `revoked_at` untouched.
+
+    `reason` (optional) is stored as `revocation_reason`, the internal,
+    never-public note of DATA_MODEL.md section 2.3. Callers pass a short code,
+    never free text that could carry a secret; with `reason=None` the column
+    is left exactly as before.
     """
     believed = snapshot_and_expire(db, certificate, _LIFECYCLE_FIELDS)
 
@@ -245,13 +276,17 @@ def revoke_certificate(db: Session, certificate: Certificate) -> Certificate:
 
         certificate.status = CertificateStatus.revoked
         certificate.revoked_at = datetime.now(timezone.utc)
+        if reason is not None:
+            certificate.revocation_reason = reason
         db.flush()
         return certificate
 
     return _run(db, work)
 
 
-def rotate_certificate(db: Session, piece_id: uuid.UUID) -> CertificateRotationResult:
+def rotate_certificate(
+    db: Session, piece_id: uuid.UUID, *, reason: str | None = None
+) -> CertificateRotationResult:
     """Revoke the piece's active certificate and activate a brand-new replacement.
 
     Runs as one atomic unit via a SAVEPOINT (`Session.begin_nested`): if any
@@ -267,6 +302,8 @@ def rotate_certificate(db: Session, piece_id: uuid.UUID) -> CertificateRotationR
     (a competitor changed the lifecycle; the loser deliberately does not
     rotate the winner's brand-new token away); none -> the genuine
     `ActiveCertificateNotFound`.
+
+    `reason` (optional) becomes the revoked certificate's `revocation_reason`.
     """
 
     def work() -> CertificateRotationResult:
@@ -278,7 +315,7 @@ def rotate_certificate(db: Session, piece_id: uuid.UUID) -> CertificateRotationR
                 )
             raise ActiveCertificateNotFound(f"Piece {piece_id} has no active certificate to rotate.")
 
-        revoke_certificate(db, active_certificate)
+        revoke_certificate(db, active_certificate, reason=reason)
 
         new_certificate = Certificate(piece_id=piece_id, status=CertificateStatus.draft)
         db.add(new_certificate)

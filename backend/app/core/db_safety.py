@@ -31,6 +31,13 @@ VALID_ENVS = (ENV_LOCAL, ENV_TEST, ENV_STAGING, ENV_PRODUCTION)
 # The seed writes fictional demo data and may only ever run in these.
 SEED_ALLOWED_ENVS = (ENV_LOCAL, ENV_TEST)
 
+# The certificate/NFC provisioning CLI (app/cli/provision.py, issue N-09) is the
+# one supported way to issue tokens for real pieces, so unlike the seed it may
+# run in production. `staging` is deliberately absent: there is no staging
+# frontend origin to build a certificate URL for yet, and a tag written with
+# the wrong host cannot be fixed once locked.
+PROVISIONING_ALLOWED_ENVS = (ENV_LOCAL, ENV_TEST, ENV_PRODUCTION)
+
 # The well-known development database URL. Settings.database_url has NO
 # default any more (DATABASE_URL must be configured explicitly; see
 # assert_database_url_configured), so this is not applied anywhere at runtime.
@@ -207,4 +214,52 @@ def assert_safe_for_seed(app_env: str | None, url: str) -> None:
             "Refusing to seed: with APP_ENV=local the database host must be a "
             "local development host (localhost, 127.0.0.1, ::1, db or a unix "
             "socket). No database was touched."
+        )
+
+
+def is_local_database_target(url: str) -> bool:
+    """True when every host the driver could connect to is a local one
+    (loopback, the compose ``db`` service or a unix socket). Used for the
+    provisioning banner ("host: local" / "host: remoto"): it never returns the
+    host itself, so the banner cannot leak it."""
+    return all(_is_local_host(host) for host in parse_database_target(url).hosts)
+
+
+def assert_safe_for_provisioning(app_env: str | None, url: str) -> None:
+    """Certificate/NFC provisioning (issue N-09) writes real lifecycle state
+    and issues bearer tokens, so it is refused unless the target is clear:
+
+    * ``production``: allowed, but still requires a production-grade database
+      URL (the same check ``Settings`` applies at startup, repeated here so the
+      guard stands on its own).
+    * ``local``: only against a local development host.
+    * ``test``: only against a test-marked database.
+    * ``staging``, aliases and anything else: refused.
+
+    Never the seed guard: ``assert_safe_for_seed`` refuses production on
+    purpose and must stay that way. Messages are credential-free and in
+    Spanish because the operator reads them."""
+    env = (app_env or "").strip().lower()
+    if env not in PROVISIONING_ALLOWED_ENVS:
+        raise UnsafeConfigurationError(
+            f"Provisioning rechazado: APP_ENV es {env[:32]!r}; solo se permite con "
+            "APP_ENV=production, local o test. No se tocó la base de datos."
+        )
+    if env == ENV_PRODUCTION:
+        assert_production_grade_database(url, env)
+        return
+    target = parse_database_target(url)
+    if env == ENV_TEST:
+        if not is_test_database_name(target.database):
+            raise UnsafeConfigurationError(
+                "Provisioning rechazado: con APP_ENV=test la base de datos debe estar "
+                "marcada como de prueba (un token 'test' delimitado por '_' o '-'). "
+                "No se tocó la base de datos."
+            )
+        return
+    if not all(_is_local_host(host) for host in target.hosts):
+        raise UnsafeConfigurationError(
+            "Provisioning rechazado: con APP_ENV=local el host de la base de datos debe "
+            "ser local (localhost, 127.0.0.1, ::1, db o un socket unix). "
+            "No se tocó la base de datos."
         )
