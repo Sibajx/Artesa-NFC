@@ -23,15 +23,25 @@ Frontend público
   │ HTTPS / JSON
   ▼
 api.artesanfc.com
-Nginx
+Cloudflare (edge: reglas y rate limiting)
   │
   ▼
-FastAPI
+Cloudflare Tunnel (cloudflared)
+  │  http://localhost:8000
+  ▼
+Uvicorn / FastAPI
+(127.0.0.1:8000, artesa-nfc.service)
   │
   ▼
 PostgreSQL
 Fuente de verdad
 ```
+
+**Topología real de producción:** Cloudflare → Cloudflare Tunnel → Uvicorn /
+FastAPI → PostgreSQL. **Nginx NO está desplegado actualmente** y no está en el
+request path: `backend/nginx/artesanfc-api.conf.example` es una configuración
+alternativa / de referencia, no el enforcement vigente. Qué controla cada capa,
+qué está aplicado y qué está pendiente: `docs/OPERATIONS.md`.
 
 ## 3. Responsabilidades
 
@@ -48,13 +58,26 @@ Fuente de verdad
 
 No es fuente de verdad para artesanos, piezas o certificados.
 
-### Nginx
+### Cloudflare (edge y Tunnel)
 
-- Reverse proxy a FastAPI.
-- Headers.
-- Límites de tamaño.
-- Rate limiting complementario.
-- Separación de rutas públicas y administrativas.
+- Terminación TLS y HTTPS obligatorio.
+- Rate limiting de `POST /api/v1/certificates/resolve` (capa primaria; regla
+  pendiente de aplicar, umbral pendiente de validar contra el plan de
+  Cloudflare).
+- Allowlist de rutas públicas del host de la API (`/api/v1/*`) y bloqueo del
+  resto (regla pendiente de aplicar).
+- Entrega al origen mediante el Tunnel: el servidor no expone puertos públicos.
+
+Estas reglas son configuración operativa **no versionada**; el repo solo las
+documenta con exactitud en `docs/OPERATIONS.md`.
+
+### Nginx (alternativa, NO desplegada)
+
+Nginx no está en el request path de producción. El ejemplo del repo
+(`backend/nginx/artesanfc-api.conf.example`) se conserva como referencia
+alternativa y no debe asumirse como protección activa. Adoptarlo detrás del
+Tunnel exigiría una variante distinta (HTTP en loopback, IP real desde
+`CF-Connecting-IP`); ver `docs/OPERATIONS.md`.
 
 ### FastAPI
 
@@ -68,6 +91,9 @@ No es fuente de verdad para artesanos, piezas o certificados.
 - Generación segura de tokens.
 - Acceso a base de datos.
 - Logs relevantes.
+- Límite de cuerpo de `POST /api/v1/certificates/resolve` (1024 bytes, `413`).
+- `/health` dependiente de la base de datos (`200` / `503`, `no-store`).
+- Sin `/docs`, `/redoc` ni `/openapi.json` en `staging` y `production`.
 
 ### PostgreSQL
 

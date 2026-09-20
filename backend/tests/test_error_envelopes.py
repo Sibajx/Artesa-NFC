@@ -97,3 +97,40 @@ def test_unhandled_exception_returns_generic_public_500_envelope():
     }
 
     _assert_no_internal_leak(response.text)
+
+
+# --- D. 413 payload_too_large -------------------------------------------------
+# The body-size limit on certificates/resolve answers 413 itself (see
+# tests/test_resolve_body_limit.py); the code/message live in the same tables
+# as every other public error, so a raised 413 and the helper agree.
+
+PAYLOAD_TOO_LARGE = {
+    "error": {"code": "payload_too_large", "message": "The request body is too large."}
+}
+
+
+def test_error_response_helper_builds_the_413_envelope():
+    import json
+
+    from app.core.errors import error_response
+
+    response = error_response(413)
+    assert response.status_code == 413
+    assert json.loads(response.body) == PAYLOAD_TOO_LARGE
+
+
+def test_a_raised_413_uses_the_same_envelope():
+    from fastapi import FastAPI, HTTPException
+
+    from app.core.errors import register_exception_handlers
+
+    probe = FastAPI()
+    register_exception_handlers(probe)
+
+    @probe.get("/too-big")
+    def too_big():
+        raise HTTPException(status_code=413, detail="Payload Too Large")
+
+    response = TestClient(probe).get("/too-big")
+    assert response.status_code == 413
+    assert response.json() == PAYLOAD_TOO_LARGE

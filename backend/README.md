@@ -82,7 +82,11 @@ Python environment, not from inside the Docker image — see
    ```
 
    `GET http://localhost:8000/health` should report
-   `{"status": "ok", "database": "connected"}`.
+   `{"status": "ok", "database": "connected"}`. When the database cannot be
+   reached it answers `503` with
+   `{"status": "unavailable", "database": "unavailable"}` (both are
+   `Cache-Control: no-store`; `HEAD /health` gives the same status). See
+   [Production edge and operational surfaces](#production-edge-and-operational-surfaces).
 
 7. **Run the test suite** (needs its own test database)
 
@@ -174,6 +178,36 @@ take priority over it.
 `DATABASE_URL` is explicitly configured (it is not seed/test guarded), and an extra
 localhost origin next to `https://artesanfc.com` in production CORS is not
 rejected.
+
+## Production edge and operational surfaces
+
+Audit findings N-03 / F-14. Full detail, the Cloudflare rules still to be
+applied and the verification checklist: [`../docs/OPERATIONS.md`](../docs/OPERATIONS.md).
+
+Real production topology: **Cloudflare → Cloudflare Tunnel → Uvicorn / FastAPI →
+PostgreSQL**. **Nginx is NOT currently deployed**; `nginx/artesanfc-api.conf.example`
+is an alternative/reference and is not the current enforcement.
+
+What the application itself guarantees (versioned and tested):
+
+- **No docs outside local/test.** With `APP_ENV=staging` or `production`,
+  `/docs`, `/redoc`, `/openapi.json` and `/docs/oauth2-redirect` are plain 404s;
+  `local` and `test` keep them (use `APP_ENV=local` for Swagger).
+- **`/health`** is database-aware: `200` when the database is reachable, `503`
+  when not, exact fixed bodies, `Cache-Control: no-store`, `HEAD` supported. Do
+  not wire it to an automatic restart (a database blip should not restart the
+  process).
+- **Body limit** on `POST /api/v1/certificates/resolve` (with or without a
+  trailing slash): more than 1024 bytes is `413` (`payload_too_large`), whether
+  declared by `Content-Length`, chunked or without `Content-Length`; reading
+  stops as soon as the limit is passed. The `413` keeps CORS for an allowed
+  origin and `Cache-Control: no-store`.
+
+Required, **not applied by the repo**: Uvicorn must run with
+`--proxy-headers --forwarded-allow-ips 127.0.0.1` (never `--forwarded-allow-ips '*'`),
+and the Cloudflare rules (path allowlist, no query string on resolve,
+rate limit) must be applied and verified as described in `docs/OPERATIONS.md`.
+The application does not read `X-Forwarded-For` itself.
 
 ## Docker scope for Sprint 3
 

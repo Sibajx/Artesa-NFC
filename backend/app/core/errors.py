@@ -15,6 +15,7 @@ _DEFAULT_MESSAGES: dict[int, str] = {
     400: "The request could not be processed.",
     404: "The requested resource does not exist.",
     405: "This method is not allowed for this resource.",
+    413: "The request body is too large.",
     429: "Too many requests.",
     500: "An unexpected error occurred.",
 }
@@ -23,6 +24,7 @@ _DEFAULT_CODES: dict[int, str] = {
     400: "bad_request",
     404: "not_found",
     405: "method_not_allowed",
+    413: "payload_too_large",
     429: "rate_limited",
     500: "internal_error",
 }
@@ -44,6 +46,14 @@ def _error_body(status_code: int, detail: object) -> dict:
         message = detail if isinstance(detail, str) else "An error occurred."
     code = _DEFAULT_CODES.get(status_code, "error")
     return {"error": {"code": code, "message": message}}
+
+
+def error_response(status_code: int) -> JSONResponse:
+    """The standard public envelope for a status the application answers
+    itself, outside any route (e.g. ASGI middleware that must reject a
+    request before the router or the body parser runs). Same body a raised
+    ``HTTPException`` with that status would produce."""
+    return JSONResponse(status_code=status_code, content=_error_body(status_code, ""))
 
 
 async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
