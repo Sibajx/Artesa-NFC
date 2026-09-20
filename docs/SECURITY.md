@@ -310,8 +310,8 @@ sobre-ingeniería.
 
 ### 5.1 `POST /api/v1/certificates/resolve`
 
-**Valores por defecto aprobados para el MVP** (enforcement en Nginx,
-ver sección 5.5):
+**Valores por defecto aprobados para el MVP** (enforcement previsto en el
+borde de Cloudflare, pendiente de aplicar; ver sección 5.5):
 
 - **30 solicitudes por minuto por IP.**
 - Se permite un **burst pequeño** (unas pocas solicitudes casi
@@ -338,8 +338,8 @@ Un escaneo NFC legítimo normal (una persona consultando su certificado
 ocasionalmente) queda muy por debajo de 30 solicitudes por minuto, por
 lo que no debería verse afectado bajo uso normal. No se sobre-diseña
 rate limiting distribuido (ej. coordinación entre múltiples nodos) para
-este piloto de tamaño pequeño; un límite por IP a nivel de Nginx/proceso
-único es suficiente para el volumen esperado.
+este piloto de tamaño pequeño; un límite por IP en el borde (Cloudflare)
+es suficiente para el volumen esperado.
 
 ### 5.2 Endpoints públicos `GET` (`artisans`, `pieces`)
 
@@ -370,17 +370,28 @@ no una decisión abierta.
   plano** de los intentos individuales (sección 3.2, sección 12.2).
 - **Estado en el MVP (Sprint 4):** `AUDIT_EVENT` sigue diferido (no hay
   modelo, servicio ni API). La evidencia de abuso proviene por ahora de
-  los logs operativos de Nginx (IP, timestamp, método, path, status y
-  las líneas `limiting requests` del error log, con la retención de
-  la sección 12.3). El registro persistente de abuso en `AUDIT_EVENT`
+  los logs de Uvicorn (IP real vía `--proxy-headers`, timestamp, método,
+  path, status) y de los eventos del edge de Cloudflare, con la retención
+  de la sección 12.3 (si se adoptara el ejemplo de Nginx, también sus logs
+  y las líneas `limiting requests` de su error log). El registro persistente de abuso en `AUDIT_EVENT`
   es trabajo futuro. Las peticiones a `/c/*` en el host de la API **no**
   se registran a propósito (sección 13), así que no forman parte de esta
   evidencia.
 
 ### 5.5 Capa de enforcement e IP real del cliente
 
-- **Nginx es la capa de enforcement del rate limiting en el MVP**; la
-  configuración de ejemplo está en
+> **Actualización (N-03 / F-14; `docs/OPERATIONS.md`).** La topología real de
+> producción es Cloudflare → Cloudflare Tunnel → Uvicorn/FastAPI. **Nginx no
+> está desplegado**, así que lo que sigue en esta sección describe el ejemplo
+> de Nginx (alternativa) y **no es enforcement vigente**. La capa primaria de
+> rate limiting de `POST /api/v1/certificates/resolve` es Cloudflare (regla
+> pendiente de aplicar; el umbral depende de las capacidades del plan y está
+> pendiente de validar). FastAPI sigue sin limitador propio, pero aplica un
+> límite de cuerpo de 1024 bytes a esa ruta (sección 5.6). La IP real llega a
+> Uvicorn con `--proxy-headers --forwarded-allow-ips 127.0.0.1`; nunca `*`.
+
+- **En el ejemplo de Nginx (alternativa, no desplegada), Nginx es la capa de
+  enforcement del rate limiting**; la configuración de ejemplo está en
   `backend/nginx/artesanfc-api.conf.example`. FastAPI no implementa un
   limitador propio: un contador en memoria no sería correcto con varios
   workers/instancias, y `request.client` puede ser el proxy y no el
@@ -408,6 +419,28 @@ no una decisión abierta.
   habría que centralizarlos o moverlos al edge (fuera del alcance del
   piloto, sección 5.1). Que la configuración exista no prueba su
   enforcement: debe verificarse en el despliegue real.
+
+### 5.6 Límite de cuerpo de `certificates/resolve`
+
+`POST /api/v1/certificates/resolve` rechaza con `413` cualquier cuerpo de más
+de **1024 bytes** (el cuerpo legítimo, `{"token": "<43 caracteres>"}`, mide unos
+60 bytes). Uvicorn no impone límite de cuerpo y FastAPI lee el cuerpo completo
+en memoria antes de validarlo, así que sin este límite una sola petición podría
+hacer que el proceso almacenara todo lo que el edge deje pasar.
+
+- Implementado en la app (`ResolveBodySizeLimitMiddleware`, `app/main.py`), no
+  en una capa externa: no depende de qué haya delante ni del plan de
+  Cloudflare.
+- Aplica solo a `POST /api/v1/certificates/resolve` (con y sin `/` final). No
+  afecta a `OPTIONS`, a `GET` ni a ningún otro endpoint.
+- **No confía solo en `Content-Length`**: un `Content-Length` mayor de 1024 se
+  rechaza sin leer el cuerpo; un cuerpo sin `Content-Length` (chunked) o con uno
+  falso se cuenta al llegar, y en cuanto supera el límite se responde `413` y
+  se deja de leer (el resto nunca se consume).
+- Respuesta: `413` con el envelope estándar `payload_too_large` /
+  `The request body is too large.` (`API_CONTRACT.md` §10), con
+  `Cache-Control: no-store` y CORS del origen permitido. El contenido recibido
+  no se refleja en la respuesta ni se registra.
 
 ## 6. Seguridad NFC
 
@@ -480,9 +513,10 @@ Requisitos:
   sin el valor del token en el payload.
 - **Evitar loguear el token completo** en logs de reverse proxy o de
   aplicación (ver sección 14.3 sobre redacción de tokens en logs). Si
-  una petición literal `/c/{token}` llega al host de la API, Nginx la
-  rechaza en local (`404`, sin log, sin proxy ni redirección); ver
-  sección 13, «Rutas privadas en logs de acceso».
+  una petición literal `/c/{token}` llega al host de la API, el ejemplo de
+  Nginx (no desplegado; el equivalente pendiente en producción es la regla A
+  de `docs/OPERATIONS.md`) la rechaza en local (`404`, sin log, sin proxy ni
+  redirección); ver sección 13, «Rutas privadas en logs de acceso».
 - **Evitar que el token llegue a URLs de terceros** por fuga de
   referrer: si la página del certificado carga cualquier recurso de
   terceros (fuentes, analítica, CDN de terceros), debe usarse
@@ -660,8 +694,8 @@ CORS de producción** — nunca `*`, y nunca inferido implícitamente.
 ## 11. Headers / seguridad de transporte
 
 Requisitos esperados en producción (implementación coordinada entre
-Nginx y Cloudflare Pages/frontend, según `ARCHITECTURE.md` §3, sin
-fijar aquí la configuración exacta):
+Cloudflare —edge y Pages— y la API, según `ARCHITECTURE.md` §3 y
+`docs/OPERATIONS.md`, sin fijar aquí la configuración exacta):
 
 - **HTTPS obligatorio** en todo el sistema; sin variante HTTP servida
   en producción (redirección forzosa a HTTPS como mínimo).
@@ -688,7 +722,7 @@ fijar aquí la configuración exacta):
   ninguna en el MVP).
 
 `CROSS-DOCUMENT CHANGE REQUIRED`: ninguno — estos headers son
-responsabilidad de configuración de Nginx/Cloudflare Pages, no
+responsabilidad de configuración de Cloudflare (edge y Pages), no
 requieren cambios a `DATA_MODEL.md` ni `API_CONTRACT.md`.
 
 ## 12. Audit logging
@@ -868,10 +902,13 @@ personal cuya retención/anonimización se define aquí:
   - **Limitaciones conocidas.**
     - *Acceso directo a Uvicorn.* Alcanzar `127.0.0.1:8000` sin pasar por
       Nginx salta esta frontera: Uvicorn registra la ruta y la query
-      literales (`uvicorn.access`), incluido un `/c/<token>`. Es aceptable: en
-      producción el tráfico debe atravesar Nginx (`docker-compose.yml` solo
-      publica en `127.0.0.1`). No se desactiva el access log de Uvicorn ni se
-      añade middleware. Uvicorn también registra la query de `/api/v1/*`;
+      literales (`uvicorn.access`), incluido un `/c/<token>`. Hoy esa es la
+      situación de producción (el Tunnel llega directo a Uvicorn; Nginx no
+      está desplegado): la mitigación pendiente está en el borde, con la regla
+      A de `docs/OPERATIONS.md` (bloquea `/c/*` y todo lo que no sea
+      `/api/v1/*` antes del origen) y la regla B (bloquea `POST` a resolve con
+      query string). No se desactiva el access log de Uvicorn ni se añade
+      middleware. Uvicorn también registra la query de `/api/v1/*`;
       ahí no viajan tokens (van en el cuerpo del `POST`).
     - *Solo el espacio `/c`.* Un token en otra ruta (`/otra/<token>`) se
       registra como cualquier ruta desconocida.
@@ -1025,12 +1062,21 @@ Requisitos base:
   servidor.
 - **Deshabilitar login SSH directo como root** donde sea práctico;
   usar un usuario con `sudo` en su lugar.
-- **Nginx como reverse proxy** frente a FastAPI (`ARCHITECTURE.md`
-  §3): FastAPI **no se expone directamente a internet** si Nginx está
-  al frente — Nginx es el único punto de entrada HTTP/HTTPS del
-  backend.
-- **Certificados HTTPS** válidos y renovados automáticamente (ej.
-  Let's Encrypt) para `api.artesanfc.com`.
+- **Punto de entrada real:** Cloudflare Tunnel → Uvicorn en
+  `127.0.0.1:8000` (Nginx no está desplegado; `docs/OPERATIONS.md`).
+  FastAPI **no se expone directamente a internet**: escucha solo en
+  loopback. Uvicorn debe correr con `--proxy-headers
+  --forwarded-allow-ips 127.0.0.1`; **nunca** `--forwarded-allow-ips '*'`
+  (permitiría a cualquiera falsificar IP y esquema).
+- **HTTPS:** lo termina Cloudflare; el origen es HTTP en loopback. Los
+  certificados Let's Encrypt del ejemplo de Nginx solo aplican si se adopta
+  esa alternativa.
+- **Superficies no públicas:** `staging` y `production` no sirven `/docs`,
+  `/redoc`, `/openapi.json` ni `/docs/oauth2-redirect` (aplicado en la app).
+  `/health` es un endpoint operativo (200 / 503 según la base de datos,
+  `no-store`) para uso local; en el borde queda fuera de la allowlist
+  (regla A de `docs/OPERATIONS.md`, pendiente de aplicar).
+- **Límite de cuerpo** en `certificates/resolve`: sección 5.6.
 - **Contenedores con mínimo privilegio** donde se use Docker
   (`ARCHITECTURE.md` menciona `Dockerfile`/`docker-compose.yml`): no
   ejecutar procesos de aplicación como `root` dentro del contenedor

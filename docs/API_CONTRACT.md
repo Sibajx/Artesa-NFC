@@ -539,6 +539,7 @@ Reglas adicionales:
 | `400 Bad Request` | Solicitud semánticamente inválida que **no** es un error ordinario de validación de esquema/entrada (ej. una combinación de parámetros de query mutuamente excluyentes, o una regla de negocio de la solicitud que no puede expresarse como validación de esquema). |
 | `404 Not Found` | `GET /api/v1/artisans/{slug}` o `GET /api/v1/pieces/{slug}` cuando el slug no corresponde a ningún recurso publicado (incluye el caso del invariante de la sección 9). |
 | `405 Method Not Allowed` | Método HTTP no soportado en una ruta existente (ej. `DELETE /api/v1/pieces`). |
+| `413 Payload Too Large` | Solo `POST /api/v1/certificates/resolve`: cuerpo de más de 1024 bytes (`Content-Length` mayor, o cuerpo sin `Content-Length`/chunked que lo supera al llegar). Se rechaza sin leer el resto. Código `payload_too_large`; lleva `Cache-Control: no-store` y CORS del origen permitido (`SECURITY.md` §5.6). |
 | `422 Unprocessable Entity` | Errores de validación de entrada de la solicitud — body, parámetros de query y parámetros de path — incluyendo tipo incorrecto, campo faltante, o valor fuera del rango/enum esperado (ej. `token` ausente en `certificates/resolve`, o `availability_status=xyz` en un filtro de query). Corresponde al comportamiento estándar de validación de FastAPI/Pydantic; no se requiere convertir estos casos a `400`. |
 | `429 Too Many Requests` | Rate limiting activado (mecanismo definido en `SECURITY.md`; el código y la forma de respuesta sí son parte de este contrato). |
 | `500 Internal Server Error` | Error no controlado del servidor. |
@@ -554,7 +555,7 @@ solicitud en sí (ej. `token` ausente o de tipo incorrecto), nunca para
 distinguir por qué un token no produjo un certificado válido — ese
 resultado siempre es `200 OK` con `status: unavailable`.
 
-### Forma de error (para `400`, `404`, `405`, `422`, `429`, `500`)
+### Forma de error (para `400`, `404`, `405`, `413`, `422`, `429`, `500`)
 
 ```json
 {
@@ -567,12 +568,23 @@ resultado siempre es `200 OK` con `status: unavailable`.
 
 - `code`: string estable en `snake_case`, pensado para lógica del
   cliente (ej. `validation_error`, `not_found`, `method_not_allowed`,
-  `rate_limited`, `internal_error`).
+  `payload_too_large`, `rate_limited`, `internal_error`).
 - `message`: texto legible, no sensible, sin detalles de
   implementación.
 - **Nunca** se incluyen stack traces, mensajes de excepción de
   base de datos, nombres de tabla/columna, ni rutas de archivo del
   servidor.
+
+### Fuera del contrato: `GET|HEAD /health`
+
+`/health` es un endpoint **operativo**, no parte de la API pública: el
+frontend no debe consumirlo. Responde `200`
+`{"status": "ok", "database": "connected"}` si la API alcanza su base de datos
+y `503` `{"status": "unavailable", "database": "unavailable"}` si no, siempre
+con `Cache-Control: no-store` y sin ningún detalle de la falla; `HEAD /health`
+devuelve el mismo estado sin cuerpo. Tampoco forman parte del contrato
+`/docs`, `/redoc` ni `/openapi.json`: solo existen con `APP_ENV=local` o
+`test`. Ver `docs/OPERATIONS.md`.
 
 ### `error.details` en respuestas `422` (aprobado)
 
