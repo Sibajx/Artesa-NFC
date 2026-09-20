@@ -135,6 +135,28 @@ usan algoritmos propios basados en primos, secuencias ni ninguna otra
 criptografía casera (ADR-007) — el token es puro output de CSPRNG, sin
 transformación adicional que reduzca su entropía efectiva.
 
+### 2.2 Canal de entrega del token (provisioning)
+
+`SECURITY.md` §3 describe el token como existente "generación → entrega para
+programar el NFC". Ese canal queda definido (issue #107, N-09;
+`docs/PROVISIONING.md`):
+
+- El **único** punto de entrada soportado es la CLI `python -m app.cli.provision`,
+  ejecutada por SSH en el host del backend/PostgreSQL. No hay API administrativa
+  para esto; el seed sigue prohibido en producción.
+- El token en claro **nunca entra** al sistema por argv, stdin, variables de
+  entorno, archivos ni flags: la CLI solo lo **muestra**.
+- Se muestra **una sola vez**, como parte de la URL completa
+  `https://artesanfc.com/c/{token}` (nunca aislado, nunca su hash), **después** de
+  que el commit que guarda su hash terminó bien, y solo en un terminal
+  interactivo real (pantalla alterna, sin scrollback). Sin TTY se niega antes de
+  generar nada.
+- No escribe archivos ni logs, no imprime tracebacks y desactiva los core dumps.
+- Un token perdido después del commit **no se recupera**: se rota.
+- Riesgos residuales que la CLI no elimina: pantalla, portapapeles y herramienta
+  NFC del operador; capturas o grabaciones; el historial del navegador del
+  teléfono tras el escaneo.
+
 ## 3. Hash y verificación del token
 
 `DATA_MODEL.md` §2.3 deja deliberadamente el algoritmo exacto para este
@@ -474,7 +496,10 @@ hardware):
 - **No bloquear (`lock`) un tag hasta validar la URL definitiva**
   (ADR-021, ya aprobado): el bloqueo de escritura es irreversible en
   NTAG213 y debe aplicarse solo tras confirmar que la URL grabada es la
-  correcta y funcional.
+  correcta y funcional. En el piloto el bloqueo **no es automático ni
+  obligatorio**: es un paso aparte (`provision lock`), recomendado tras verificar
+  la escritura y varios escaneos, solo si la herramienta NFC usada lo confirma de
+  forma explícita, y el tag puede quedar sin bloquear (`docs/PROVISIONING.md` §6).
 - **Una vez verificado un tag de producción, el bloqueo de escritura
   (write-protection) puede usarse** para prevenir reescritura
   accidental (por el propio equipo de ArtesaNFC, no por terceros) —
@@ -741,6 +766,14 @@ registrarse nunca.
 - Emisión de certificado (`certificate` pasa de `draft` a `active`).
 - Revocación de certificado, incluyendo el motivo interno (sección 15).
 - Asignación, reemplazo y bloqueo (`locked`) de un `NFC_TAG`.
+
+> **Estado en el piloto:** `AUDIT_EVENT` está **diferido** (brecha aceptada
+> conscientemente en el issue #107; sin modelo, tabla ni migración). Hasta que
+> exista, la procedencia mínima de emisión, revocación, programación y bloqueo
+> queda en campos existentes (`issued_at`, `revoked_at`, `revocation_reason`,
+> `programmed_at`, `locked_at` y una línea no secreta por operación en
+> `nfc_tag.notes`; `docs/PROVISIONING.md` §8). Es un riesgo conocido, no un
+> sustituto de la auditoría.
 - Abuso detectado contra `certificates/resolve` (ej. una IP superando
   el rate limit repetidamente, o un volumen alto de `unavailable`
   consecutivos desde el mismo origen).

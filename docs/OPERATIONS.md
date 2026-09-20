@@ -314,3 +314,22 @@ No se corrigen aquí (siguen abiertos): la validación de CORS de producción qu
 acepta orígenes extra (N-01); el `500` no controlado sin `no-store`/CORS y el
 `503` general en rutas de datos (N-02); los constraints de base de datos
 (F-12); CSP y HSTS; el volumen de logs y su retención (`SECURITY.md` §12.3).
+
+## 13. Provisioning de certificados y tags NFC
+
+La emisión de tokens y la programación de tags **solo** se hacen con
+`python -m app.cli.provision`, ejecutado por SSH en el host del backend/PostgreSQL
+(procedimiento completo, fallos y recuperación en `docs/PROVISIONING.md`).
+
+- Cargar el entorno real del servicio **sin teclear secretos**:
+  `set -a; source <archivo-de-entorno-del-servicio>; set +a` (nunca
+  `export DATABASE_URL=...`, que queda en el historial).
+- No usar `script`, `tee`, redirecciones, grabadores de terminal ni logging de
+  tmux/screen: la CLI se niega a mostrar la URL sin un terminal interactivo real.
+- Con `APP_ENV=production` hay que teclear `production` para continuar. `staging`
+  está rechazado.
+- No reemplaza al servicio: no toca `artesa-nfc.service` ni las reglas de
+  Cloudflare, y no añade endpoints. La URL del tag apunta al frontend
+  (`https://artesanfc.com/c/…`), nunca al host de la API.
+- Crear artesanos y piezas **no** forma parte de este flujo: son un prerrequisito
+  externo.

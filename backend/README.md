@@ -210,6 +210,32 @@ of 10 requests per 10 seconds per IP) are applied and verified externally: they 
 dashboard configuration, not versioned here (`docs/OPERATIONS.md`).
 The application does not read `X-Forwarded-For` itself.
 
+## Certificate and NFC provisioning (N-09)
+
+`python -m app.cli.provision` (in Spanish) issues a piece's certificate, shows
+its URL once and guides writing the NTAG213 tag. Subcommands: `list`, `status`,
+`issue`, `rotate`, `revoke`, `lock`; `issue`/`rotate`/`revoke`/`lock` accept
+`--dry-run` (read-only, generates no token). The full procedure, failure table
+and rules are in [`../docs/PROVISIONING.md`](../docs/PROVISIONING.md); in short:
+
+- It never accepts a token (no option, stdin, environment variable or file) and
+  only ever shows the full URL `https://artesanfc.com/c/{token}`, once, on a real
+  interactive terminal. It writes no files and no logs.
+- `APP_ENV=production` is allowed (type `production` to continue); `staging` is
+  refused; `local` needs a local database host and `test` a test database. With
+  `local`/`test` the URL is a marked rehearsal (`http://127.0.0.1:5500/c/...`)
+  that must never be written to a real tag.
+- Pieces and artisans must already exist and be published: creating them is not
+  part of this tool (the seed is refused in production).
+
+Try it locally (rehearsal) against the disposable database from the setup above:
+
+```bash
+python -m app.db.seed                                # demo pieces (local/test only)
+python -m app.cli.provision list
+python -m app.cli.provision issue --piece DEMO-MASCARA-01 --dry-run
+```
+
 ## Docker scope for Sprint 3
 
 `docker-compose.yml` currently starts two services: `db` (PostgreSQL)

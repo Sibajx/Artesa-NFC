@@ -170,6 +170,12 @@ equivalente) puede agregarse más adelante mediante una migración
 **aditiva** si surge una necesidad real de producto/auditoría — no se
 anticipa aquí ni se bloquea el resto de este documento por ello.
 
+**Códigos de `revocation_reason` (provisioning, issue #107):** el campo sigue
+siendo `text` opcional y **no cambia el esquema**, pero la CLI de provisioning
+solo escribe un código de la lista fija `lost`, `damaged`, `compromised`,
+`wrong-tag`, `replaced`, `not-deployed`, `other` (nunca texto libre, donde podría
+acabar un secreto pegado por error). Sigue siendo interno y nunca público.
+
 Límites de seguridad que este documento sí fija (y no delega):
 
 - `piece.id`, `piece.public_code`, `nfc_tag.physical_uid` y el token
@@ -208,6 +214,15 @@ Reglas de integridad conceptuales:
   Un tag no puede estar `programmed` ni `locked` sin estar asignado a una pieza.
 - **Bloqueo (actualizado, issue #70):** `CHECK (locked_at IS NULL OR status IN ('locked', 'replaced', 'retired'))`.
   `locked_at` solo se establece cuando el tag efectivamente alcanzó el estado `locked`, pero se preserva como metadato histórico si ese tag luego pasa a `replaced` o `retired` — no se borra al salir de `locked` (evita perder cuándo se bloqueó un tag que después fue reemplazado o dado de baja). `available` y `programmed` siguen exigiendo `locked_at IS NULL`.
+
+**Formato canónico de `physical_uid` (provisioning, issue #107):** el campo sigue
+siendo `text` sin restricción en la base de datos (**sin cambio de esquema**), pero
+`services.nfc_tags.normalize_physical_uid` fija el formato con el que se registra
+cualquier tag nuevo: bytes en hexadecimal en mayúsculas separados por `:`, 7 bytes
+y primer byte `04` (fabricante NXP, NTAG213), por ejemplo `04:A1:B2:C3:D4:E5:F6`.
+Acepta `:`, `-`, espacios o sin separador, en cualquier caso. Al ser único, el UID
+de un tag `retired`/`replaced` sigue ocupado (las filas nunca se borran). Sigue
+sin ser un secreto ni un factor de autenticación (ADR-008).
 
 El historial de NFC se preserva (aprobado): una pieza puede tener varios
 registros históricos de `NFC_TAG` (por ejemplo, tags marcados como
