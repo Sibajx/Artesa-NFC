@@ -62,7 +62,8 @@ No es fuente de verdad para artesanos, piezas o certificados.
 
 - Terminación TLS y HTTPS obligatorio.
 - Rate limiting de `POST /api/v1/certificates/resolve` (capa primaria; regla C
-  aplicada: 10 solicitudes por 10 segundos por IP).
+  aplicada: 10 solicitudes por periodo de 10 segundos por IP, Block con
+  mitigación de 10 segundos).
 - Restricción del host de la API al namespace público (`/api/v1/*`) con bloqueo
   del resto (regla A aplicada) y bloqueo de `POST` a resolve con query string
   (regla B aplicada).

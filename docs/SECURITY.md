@@ -332,10 +332,14 @@ sobre-ingeniería.
 
 ### 5.1 `POST /api/v1/certificates/resolve`
 
-**Valores por defecto aprobados para el MVP** (enforcement en el borde de
-Cloudflare, regla C activa con **10 solicitudes por 10 segundos por IP**, el valor
-realmente aplicado; los valores siguientes son la referencia de diseño, ver
-sección 5.5 y `docs/OPERATIONS.md` §8):
+**Configuración vigente en producción (regla C de Cloudflare):** 10 solicitudes
+en un periodo de conteo de 10 segundos, por IP; acción Block; mitigación de 10
+segundos. Verificado externamente: las primeras 10 solicitudes pasan y las
+siguientes reciben `429` (`docs/OPERATIONS.md` §8). No se expresa como tasa por
+minuto.
+
+**Valores por defecto aprobados originalmente para el MVP** (objetivo de diseño;
+**no** son la configuración vigente; ver sección 5.5):
 
 - **30 solicitudes por minuto por IP.**
 - Se permite un **burst pequeño** (unas pocas solicitudes casi
@@ -359,8 +363,9 @@ Estos valores son **defaults operativos**, configurables sin necesidad
 de cambiar el contrato público de la API (`API_CONTRACT.md` no define
 límites numéricos, solo que existe rate limiting y el código `429`).
 Un escaneo NFC legítimo normal (una persona consultando su certificado
-ocasionalmente) queda muy por debajo de 30 solicitudes por minuto, por
-lo que no debería verse afectado bajo uso normal. No se sobre-diseña
+ocasionalmente) queda muy por debajo del objetivo de diseño original (30
+solicitudes por minuto) y de la configuración vigente (10 solicitudes por
+periodo de 10 segundos), por lo que no debería verse afectado bajo uso normal. No se sobre-diseña
 rate limiting distribuido (ej. coordinación entre múltiples nodos) para
 este piloto de tamaño pequeño; un límite por IP en el borde (Cloudflare)
 es suficiente para el volumen esperado.
@@ -409,9 +414,12 @@ no una decisión abierta.
 > está desplegado**, así que lo que sigue en esta sección describe el ejemplo
 > de Nginx (alternativa) y **no es enforcement vigente**. La capa primaria de
 > rate limiting de `POST /api/v1/certificates/resolve` es Cloudflare (regla C,
-> aplicada: 10 solicitudes por 10 segundos por IP; `docs/OPERATIONS.md` §8). FastAPI sigue sin limitador propio, pero aplica un
+> aplicada: 10 solicitudes por periodo de 10 segundos por IP, Block con
+> mitigación de 10 segundos; `docs/OPERATIONS.md` §8). FastAPI sigue sin limitador
+> propio, pero aplica un
 > límite de cuerpo de 1024 bytes a esa ruta (sección 5.6). La IP real llega a
-> Uvicorn con `--proxy-headers --forwarded-allow-ips 127.0.0.1`; nunca `*`.
+> Uvicorn con `--proxy-headers --forwarded-allow-ips 127.0.0.1` (verificado en
+> producción); nunca `*`.
 
 - **En el ejemplo de Nginx (alternativa, no desplegada), Nginx es la capa de
   enforcement del rate limiting**; la configuración de ejemplo está en
@@ -1099,8 +1107,8 @@ Requisitos base:
 - **Punto de entrada real:** Cloudflare Tunnel → Uvicorn en
   `127.0.0.1:8000` (Nginx no está desplegado; `docs/OPERATIONS.md`).
   FastAPI **no se expone directamente a internet**: escucha solo en
-  loopback. Uvicorn debe correr con `--proxy-headers
-  --forwarded-allow-ips 127.0.0.1`; **nunca** `--forwarded-allow-ips '*'`
+  loopback. Uvicorn corre con `--proxy-headers
+  --forwarded-allow-ips 127.0.0.1` (verificado en producción); **nunca** `--forwarded-allow-ips '*'`
   (permitiría a cualquiera falsificar IP y esquema).
 - **HTTPS:** lo termina Cloudflare; el origen es HTTP en loopback. Los
   certificados Let's Encrypt del ejemplo de Nginx solo aplican si se adopta

@@ -2,8 +2,8 @@
 
 **Estado:** vigente para el piloto. Cierra los hallazgos N-03 y F-14. Las reglas
 A, B y C de Cloudflare están **aplicadas y verificadas externamente** (§2, §8,
-§10); lo que depende del servidor (flags de Uvicorn, §3) sigue **pendiente de
-verificar**.
+§10) y los flags de Uvicorn de la unit systemd están **aplicados y verificados en
+producción** (§2, §3).
 **Alcance:** el camino de una petición a `api.artesanfc.com` y las superficies
 operativas de la API (`/docs`, `/health`, tamaño de cuerpo, rate limiting).
 **Sin secretos:** este documento no contiene credenciales, tokens de API,
@@ -46,10 +46,10 @@ PostgreSQL
 | `/health` = 200 con DB, 503 sin DB, `no-store`, `HEAD` | FastAPI | Código + tests | **Aplicado** (al desplegar esta versión) |
 | Límite de cuerpo 1024 bytes en `POST /api/v1/certificates/resolve` | FastAPI | Código + tests | **Aplicado** (al desplegar esta versión) |
 | `Cache-Control: no-store` y CORS también en el `413` | FastAPI | Código + tests | **Aplicado** (al desplegar esta versión) |
-| `--proxy-headers --forwarded-allow-ips 127.0.0.1` | Uvicorn (unit systemd) | Solo documentado (§3) | **Pendiente de verificar en el servidor** |
+| `--host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips 127.0.0.1` | Uvicorn (unit systemd) | Solo documentado (§3) | **Aplicado y verificado en producción** (servicio reiniciado y validado) |
 | Restricción al namespace `/api/v1/*` en el host de la API (regla A) | Cloudflare | Solo documentado (§8) | **Aplicada y verificada externamente** |
 | Bloqueo de `POST` a resolve con query string (regla B) | Cloudflare | Solo documentado (§8) | **Aplicada y verificada externamente** |
-| Rate limit de `POST` a resolve por IP (regla C) | Cloudflare | Solo documentado (§8) | **Aplicada y verificada externamente** (10 solicitudes / 10 s por IP) |
+| Rate limit de `POST` a resolve por IP (regla C) | Cloudflare | Solo documentado (§8) | **Aplicada y verificada externamente** (10 solicitudes por periodo de 10 s por IP; Block; mitigación de 10 s) |
 | Rate limit en memoria dentro de FastAPI | — | No existe | **Decidido: no se implementa** |
 | Nginx | — | Ejemplo, no desplegado | **No aplica** |
 
@@ -82,6 +82,11 @@ EnvironmentFile=<archivo-de-entorno-con-los-valores-anteriores>
 ExecStart=<venv>/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips 127.0.0.1
 Restart=on-failure
 ```
+
+**Estado verificado en producción:** el `ExecStart` real usa `--host 127.0.0.1
+--port 8000 --proxy-headers --forwarded-allow-ips 127.0.0.1`; el servicio fue
+reiniciado y validado correctamente. Los comandos de abajo siguen siendo la forma
+de reverificarlo.
 
 Verificación (solo lectura): `systemctl cat artesa-nfc.service`,
 `systemctl show artesa-nfc.service -p Environment -p EnvironmentFiles` (revisar
@@ -211,19 +216,17 @@ antes de que llegue al origen, donde Uvicorn registraría la query.
 
 ### Regla C — rate limit de `POST /api/v1/certificates/resolve` por IP
 
-**Estado: aplicada y activa: 10 solicitudes por 10 segundos por IP.** Verificado: al excederlo responde 429.
+**Estado: aplicada y activa.** Configuración vigente: rate limiting de Cloudflare sobre `/api/v1/certificates/resolve`: **10 solicitudes** en un periodo de conteo de **10 segundos**, por IP; acción **Block**; duración de la mitigación de **10 segundos**. Verificado externamente: las primeras 10 solicitudes pasan y las siguientes reciben HTTP 429.
 
 - Tipo: regla de rate limiting.
 - Expresión de coincidencia: `(http.host eq "api.artesanfc.com" and http.request.method eq "POST" and starts_with(http.request.uri.path, "/api/v1/certificates/resolve"))`
 - Contador: por IP de origen del visitante.
-- **Umbral deseado** (`SECURITY.md` §5.1): 30 solicitudes por minuto por IP en
-  régimen sostenido, con una ráfaga pequeña (unas 5) tolerada para recargas y
-  escaneos NFC repetidos.
-- **Umbral aplicado: 10 solicitudes por 10 segundos por IP** (verificado: al
-  excederlo responde `429`). En régimen sostenido equivale a hasta 60 por minuto,
-  más laxo que el umbral deseado de arriba; es el valor real y cualquier ajuste
-  es una decisión aparte. La duración del bloqueo y otras capacidades del plan no
-  se documentan aquí.
+- **Configuración vigente:** 10 solicitudes en un periodo de conteo de 10
+  segundos, por IP; acción Block; mitigación de 10 segundos. Es la única
+  configuración que rige y **no** se expresa como tasa por minuto.
+- **Objetivo de diseño original (no es la configuración vigente):**
+  `SECURITY.md` §5.1 aprobó como referencia 30 solicitudes por minuto por IP con
+  una ráfaga pequeña. Cualquier ajuste de la regla vigente es una decisión aparte.
 - Opcional y posterior: un límite más laxo para los `GET` públicos
   (`SECURITY.md` §5.2, 120 por minuto por IP), sujeto a las mismas capacidades.
 - Las respuestas generadas por Cloudflare (403 de bloqueo, 429 de rate limit)
@@ -258,7 +261,7 @@ Resultados esperados según la fase:
 | `curl -sS -i $API/api/v1/artisans` | 200 con datos | 200 con datos |
 | `curl -sS -i -X POST "$API/api/v1/certificates/resolve?token=NOT_A_TOKEN" -H 'Content-Type: application/json' -d '{"token":"x"}'` | 200 `unavailable` (**y Uvicorn registra la query**) | 403 |
 
-**Verificado externamente** con las reglas A, B y C activas (comportamiento observado): `/health` → 403; `/docs` → 403; `GET /api/v1/artisans` → 200; `POST` a resolve normal → 200; `POST` a resolve con query string → 403; al exceder el rate limit → 429. Las demás filas de la tabla siguen siendo el resultado esperado por diseño y no se afirman aquí como observadas.
+**Verificado externamente** con las reglas A, B y C activas (comportamiento observado): `/health` → 403; `/docs` → 403; `GET /api/v1/artisans` → 200; `POST` a resolve normal → 200; `POST` a resolve con query string → 403; al exceder el rate limit (las primeras 10 solicitudes pasan y las siguientes reciben HTTP 429) → 429. Las demás filas de la tabla siguen siendo el resultado esperado por diseño y no se afirman aquí como observadas.
 
 Comprobaciones adicionales:
 
@@ -281,9 +284,11 @@ Comprobaciones adicionales:
 3. **Sin token en logs** tras las pruebas de `/c/NOT_A_TOKEN` y de `?token=`:
    en el servidor, `journalctl -u artesa-nfc --since "-15 min" | grep -c NOT_A_TOKEN`
    debe dar `0` una vez aplicadas las reglas A y B.
-4. **Rate limit** (regla C activa: 10 solicitudes / 10 s por IP): una ráfaga
-   corta de peticiones inválidas a resolve desde una IP propia termina en `429`
-   de Cloudflare (verificado); esperar a que expire el bloqueo antes de seguir.
+4. **Rate limit** (regla C activa: 10 solicitudes por periodo de 10 s por IP;
+   Block con mitigación de 10 s): en una ráfaga de peticiones inválidas a resolve
+   desde una IP propia, las primeras 10 pasan y las siguientes reciben `429` de
+   Cloudflare (verificado); esperar a que expire la mitigación (10 s) antes de
+   seguir.
 5. **CORS intacto**: una petición `OPTIONS` de preflight con
    `Origin: https://artesanfc.com` a resolve responde 200 con
    `Access-Control-Allow-Origin: https://artesanfc.com`.

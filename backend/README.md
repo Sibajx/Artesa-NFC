@@ -203,10 +203,11 @@ What the application itself guarantees (versioned and tested):
   stops as soon as the limit is passed. The `413` keeps CORS for an allowed
   origin and `Cache-Control: no-store`.
 
-Required, **not applied by the repo**: Uvicorn must run with
-`--proxy-headers --forwarded-allow-ips 127.0.0.1` (never `--forwarded-allow-ips '*'`),
-while the Cloudflare rules (path allowlist, no query string on resolve, rate limit
-of 10 requests per 10 seconds per IP) are applied and verified externally: they are
+Required, **not applied by the repo** (verified in production): Uvicorn runs with
+`--host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips 127.0.0.1`
+(never `--forwarded-allow-ips '*'`). The Cloudflare rules (path allowlist, no query
+string on resolve, rate limit of 10 requests per 10-second period per IP with Block
+and a 10-second mitigation) are applied and verified externally. Both are server /
 dashboard configuration, not versioned here (`docs/OPERATIONS.md`).
 The application does not read `X-Forwarded-For` itself.
 
