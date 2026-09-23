@@ -98,6 +98,11 @@ set -a; source <archivo-de-entorno-del-servicio>; set +a   # solo la ruta queda 
 <venv>/bin/python -m app.cli.provision list
 ```
 
+Con el layout de releases de N-08 (`docs/DEPLOYMENT.md`), el equivalente es
+`/home/energias/artesa-nfc/bin/artesa-deploy run provision list`: ejecuta la CLI
+del release activo con el entorno de `shared/.env`, sin `source` ni secretos en
+el shell, y con el terminal interactivo intacto.
+
 - **No** teclear `export DATABASE_URL=...` ni pasar credenciales por argumentos
   (quedarían en el historial y en la lista de procesos).
 - No usar `script`, `tee`, redirecciones, grabadores de terminal ni logging de

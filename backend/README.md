@@ -237,6 +237,32 @@ python -m app.cli.provision list
 python -m app.cli.provision issue --piece DEMO-MASCARA-01 --dry-run
 ```
 
+## Production releases and deployment (N-08)
+
+Production is deployed from immutable, verified release artifacts, never from a
+checkout or a copied tree. Everything is documented in `docs/DEPLOYMENT.md`
+(ADR-027); the tools are standard-library Python in `ops/`:
+
+```bash
+# build (operator machine or CI, never production); refuses a dirty tree and
+# any commit not reachable from origin/main
+git fetch origin && python3 ops/build_release.py --repo .. --ref origin/main --out ../dist
+
+# on the server, as the service user
+bin/artesa-deploy prepare <release-id>
+bin/artesa-deploy deploy  <release-id> --expect-commit <sha> --dry-run
+```
+
+- `requirements.txt` stays the development/test dependency list.
+  `requirements-prod.in` pins the runtime dependencies (same versions) and
+  `requirements-prod.lock` is its pip-tools lock with hashes, the only thing a
+  release installs (`docs/DEPLOYMENT.md` §6 has the regeneration command).
+- Every Alembic revision must be classified in `ops/migration-classes.json`
+  (`baseline` / `additive` / `breaking`); the release build fails otherwise.
+- `pytest tests/ops` covers the tooling with fakes;
+  `tests/ops/rehearsal/run_rehearsal.py --pg-bindir <PostgreSQL 18 bin>` runs
+  the real end-to-end rehearsal against disposable PostgreSQL 18 containers.
+
 ## Docker scope for Sprint 3
 
 `docker-compose.yml` currently starts two services: `db` (PostgreSQL)

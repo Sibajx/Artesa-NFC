@@ -185,3 +185,44 @@ auditoría).
 **Consecuencias:** el detalle operativo vive en `docs/PROVISIONING.md`. Crear
 artesanos y piezas sigue fuera de este flujo. Una futura API administrativa o un
 lector USB integrado serían decisiones nuevas.
+
+## ADR-027 — Despliegues del backend inmutables, verificables y recuperables
+
+**Estado:** Aceptado (N-08). Implementado en el repositorio; adopción en el
+servidor pendiente de una ventana aprobada por el PO.
+
+**Fecha:** 2026-09-23
+
+**Contexto:** el incidente del 2026-09-20/21: producción no era un checkout de
+Git (árbol híbrido de varias copias), el venv compartido derivó y dejó el
+servicio en crash-loop, y otra aplicación que compartía directorio y venv tomó
+el puerto 8000. No había forma de saber qué commit corría.
+
+**Decisión:** artifact inmutable construido **fuera de producción** desde objetos
+Git, solo desde historia alcanzable desde `origin/main` (D5, D7), con
+`RELEASE.json`, `MANIFEST.sha256` y checksum SHA-256 (firma diferida, D6),
+reproducible byte a byte desde el mismo commit (los tags de Git no forman
+parte del artifact);
+layout `bin/ incoming/ releases/ shared/ current previous` (D2) con un venv por
+release instalado desde `requirements-prod.lock` (pip-tools, hashes, PyPI; D3,
+D4, D16); herramienta estándar en `bin/` (D15) con fases explícitas,
+`--dry-run` y fail-closed; `--expect-commit` obligatorio en producción;
+migraciones `breaking` rechazadas (D9); antes de cualquier migración, backup
+`pg_dump -Fc` y restore-check del mismo dump en un PostgreSQL desechable
+(D10, D11) con ensayo de la migración sobre la copia; rollback automático
+**solo** en despliegues `CODE_ONLY`, nunca tras una migración, y nunca
+`downgrade` (D13); sudo interactivo o paso manual, sin `NOPASSWD` (D14);
+`shared/.env` leído y compuesto por la herramienta (D18); retención de 5
+releases (D12); evidencia por despliegue en
+`shared/state/deployments/`; CI obligatorio en `main` que valida el release sin
+desplegar (D17), con la suite ejecutada sobre las dependencias exactas del
+lock de producción.
+
+**Alternativas descartadas:** `git pull` en el servidor (el servidor no debe
+tener credenciales ni árbol mutable), Docker (fuera del alcance del piloto),
+despliegue automático desde CI, downgrade automático, un venv compartido.
+
+**Consecuencias:** el detalle vive en `docs/DEPLOYMENT.md`; la unit objetivo en
+`backend/ops/systemd/artesa-nfc.service.example`. Quedan abiertos: la firma del
+artifact, los backups programados/fuera del host/cifrados (issue aparte, antes
+del lanzamiento final) y la política de reinicio de la unit.
