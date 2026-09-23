@@ -2,13 +2,16 @@ name: Backend CI
 
 # Validation only: no deployment, no secrets. Runs the backend against a
 # disposable PostgreSQL service (audit finding F-04).
+# Also required on main (N-08, D17): release-ci.yml adds the release checks.
 on:
   pull_request:
     branches:
       - develop
+      - main
   push:
     branches:
       - develop
+      - main
 
 permissions:
   contents: read

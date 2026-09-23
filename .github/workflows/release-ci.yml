@@ -1,0 +1,194 @@
+name: Release CI
+
+# N-08 (ADR-027): validates that main can produce a deployable, reproducible,
+# verifiable release. It NEVER deploys: no secrets, no SSH, no Cloudflare, no
+# production database. The deployment stays a controlled operator action
+# (docs/DEPLOYMENT.md).
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-validation:
+    name: release-validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    defaults:
+      run:
+        working-directory: backend
+
+    env:
+      APP_ENV: test
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/artesanfc_test
+      PYTHONDONTWRITEBYTECODE: "1"
+
+    services:
+      postgres:
+        # Production runs PostgreSQL 18.
+        image: postgres:18
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: artesanfc_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d artesanfc_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Check out repository (full history, needed for origin/main reachability)
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python (production interpreter)
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Lock file installs with hashes only (binary wheels, no resolver)
+        run: |
+          python -m venv /tmp/lockvenv
+          /tmp/lockvenv/bin/python -m pip install --disable-pip-version-check --no-cache-dir \
+            --require-hashes --only-binary=:all: --no-deps -r requirements-prod.lock
+          /tmp/lockvenv/bin/python -m pip check
+
+      - name: Lock file is reproducible from requirements-prod.in (pip-tools)
+        run: |
+          python -m venv /tmp/piptools
+          /tmp/piptools/bin/python -m pip install --disable-pip-version-check -q pip==26.2.1 pip-tools==7.6.1
+          cp requirements-prod.lock /tmp/regen.lock
+          /tmp/piptools/bin/pip-compile -q --generate-hashes --no-emit-index-url --strip-extras \
+            --pip-args="--only-binary=:all:" --output-file=/tmp/regen.lock requirements-prod.in
+          diff <(grep -v -- '--output-file=' requirements-prod.lock) <(grep -v -- '--output-file=' /tmp/regen.lock)
+
+      - name: Install the production lock + test-only tools (no runtime version drift)
+        # The release is validated against exactly the dependencies production
+        # installs: requirements-prod.lock with hashes. The test-only packages
+        # of requirements.txt (pytest, httpx) are added on top, constrained to
+        # the lock's pins, and the lock is re-checked afterwards.
+        run: |
+          python -m pip install --disable-pip-version-check --no-cache-dir \
+            --require-hashes --only-binary=:all: --no-deps -r requirements-prod.lock
+          grep -E '^[A-Za-z0-9][A-Za-z0-9._-]*==' requirements-prod.lock | sed 's/[[:space:]]*\\$//' > /tmp/prod-constraints.txt
+          grep -vxF -f <(grep -vE '^\s*(#|$)' requirements-prod.in) requirements.txt | grep -vE '^\s*(#|$)' > /tmp/test-only.txt
+          cat /tmp/test-only.txt
+          python -m pip install --disable-pip-version-check --no-cache-dir --only-binary=:all: \
+            -c /tmp/prod-constraints.txt -r /tmp/test-only.txt
+          python -m pip check
+          python - <<'EOF'
+          import re
+          from importlib.metadata import version
+          pins = dict(re.findall(r"^([A-Za-z0-9][A-Za-z0-9._-]*)==(\S+)", open("requirements-prod.lock").read(), re.M))
+          drift = {n: (v, version(n)) for n, v in pins.items() if version(n) != v}
+          assert not drift, f"installed runtime packages differ from requirements-prod.lock: {drift}"
+          print(f"runtime == requirements-prod.lock ({len(pins)} pins)")
+          EOF
+
+      - name: Migrations apply and match the models
+        run: |
+          alembic upgrade head
+          alembic check
+          test "$(alembic heads | wc -l)" = "1"
+
+      - name: Test suite (application + ops)
+        run: pytest -q
+
+      - name: Dirty-tree protection
+        run: |
+          echo "# dirty" >> app/main.py
+          if python ops/build_release.py --rehearsal --ref HEAD --out /tmp/dirty; then
+            echo "a dirty tracked tree must refuse the build" >&2; exit 1
+          fi
+          git checkout -- app/main.py
+
+      - name: Build the release artifact twice from the same commit
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            FLAGS="--ref ${GITHUB_SHA}"                 # production channel: must be reachable from origin/main
+          else
+            FLAGS="--rehearsal --ref HEAD"              # PR merge commit: not on main yet
+          fi
+          python ops/build_release.py $FLAGS --out /tmp/dist-a | tee /tmp/build-a.txt
+          python ops/build_release.py $FLAGS --out /tmp/dist-b
+          cmp /tmp/dist-a/*.tar.gz /tmp/dist-b/*.tar.gz
+          cmp /tmp/dist-a/*.tar.gz.sha256 /tmp/dist-b/*.tar.gz.sha256
+
+      - name: Verify checksum, MANIFEST, RELEASE.json and secret exclusion
+        run: |
+          cd /tmp/dist-a && sha256sum -c *.tar.gz.sha256 && cd -
+          python - <<'EOF'
+          import glob, sys, tarfile
+          sys.path.insert(0, "ops")
+          import release_artifact as ra, release_common as rc
+          [artifact] = glob.glob("/tmp/dist-a/*.tar.gz")
+          v = ra.verify_artifact(artifact)
+          rel = v.release
+          assert rel["project"] == "artesa-nfc" and rel["git"]["commit_short"] == rel["git"]["commit"][:12]
+          assert rel["alembic"]["heads_count"] == 1 and rel["build"]["target_python"] == "3.14"
+          names = set(v.contents)
+          bad = [n for n in names if n.startswith(("tests/", "docs/")) or ".env" in n or "__pycache__" in n
+                 or n.endswith((".pyc", ".pem", ".key", ".db", ".sqlite", ".log", ".dump"))]
+          assert not bad, bad
+          assert {n.split("/")[0] for n in names} <= {"app", "alembic", "ops", "alembic.ini", "requirements-prod.lock", "RELEASE.json", "MANIFEST.sha256"}
+          with tarfile.open(artifact) as tar:
+              assert all(m.isreg() and m.uid == 0 and m.gid == 0 and m.mode == 0o644 for m in tar)
+          print(f"verified {v.release_id}: {rel['artifact']['file_count']} files, content {rel['artifact']['content_sha256'][:16]}")
+          EOF
+
+      - name: Upload artifact (for review only; deployment is manual)
+        uses: actions/upload-artifact@v4
+        with:
+          name: artesa-nfc-release
+          path: |
+            /tmp/dist-a/*.tar.gz
+            /tmp/dist-a/*.tar.gz.sha256
+          retention-days: 14
+
+  release-rehearsal:
+    # End-to-end dry-run and rehearsal of the deploy tool in a temp root:
+    # real hashed installs, real Uvicorn, PostgreSQL 18 containers, real
+    # pg_dump/pg_restore and an initdb restore-check. Never touches production.
+    name: release-rehearsal
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: release-validation
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python (production interpreter)
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install PostgreSQL 18 programs (PGDG)
+        run: |
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y --no-install-recommends postgresql-18 postgresql-client-18
+          /usr/lib/postgresql/18/bin/initdb --version
+
+      - name: Rehearsal (deploy dry-runs, code-only, migration, rollback, refusals)
+        working-directory: backend
+        run: python tests/ops/rehearsal/run_rehearsal.py --pg-bindir /usr/lib/postgresql/18/bin
