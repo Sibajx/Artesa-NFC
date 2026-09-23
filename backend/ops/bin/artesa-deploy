@@ -1,0 +1,10 @@
+#!/bin/sh
+# Launcher for the N-08 deploy tool (ADR-027, docs/DEPLOYMENT.md).
+#
+# Installed as <root>/bin/artesa-deploy by `artesa-deploy install-tools <id>`,
+# next to bin/ops -> ops-<release-id>/ (a read-only copy of that verified
+# release's ops/ tool). Runs with the system Python in isolated mode: no user
+# site-packages, no PYTHON* environment variables, no bytecode written.
+set -eu
+here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+exec /usr/bin/python3 -I -B "$here/ops/artesa_deploy.py" "$@"

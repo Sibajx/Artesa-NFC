@@ -1,0 +1,59 @@
+# EXAMPLE ONLY -- not installed, not applied. ADR-027 / docs/DEPLOYMENT.md section 3.
+#
+# Target unit for the immutable-release layout. Nothing in this repository
+# writes /etc/systemd/system; an operator adopts it deliberately, in a
+# maintenance window, after the first release has been prepared.
+#
+# How this differs from the units seen in production on 2026-09-21:
+#   * production's artesa-nfc.service ran WorkingDirectory=/home/energias/artesa-nfc-backend
+#     with `Restart=always` / `RestartSec=3` (the historical example in older
+#     docs used `Restart=on-failure`; the two do not match). That directory was
+#     ALSO the working directory and venv of a second service (artesa-finanzas),
+#     which is how both ended up fighting over port 8000.
+#   * here the unit runs ONLY from <root>/current, with the per-release venv and
+#     the shared, 0600 environment file. `artesa-deploy` refuses to deploy (exit
+#     11) when WorkingDirectory / ExecStart do not point at <root>/current.
+#
+# Another application (finanzas, anything else) must have its OWN directory,
+# venv, unit and port. The deploy tool fails closed if 127.0.0.1:8000 is held by
+# a process whose cwd is not the active release.
+
+[Unit]
+Description=ArtesaNFC Backend (FastAPI)
+After=network.target postgresql.service
+Wants=postgresql.service
+
+# --- crash-loop protection (RECOMMENDED, not applied anywhere yet) ----------------------
+# On 2026-09-21 this service restarted 12742 times (RestartSec=3 with no limit)
+# because its venv lacked SQLAlchemy, filling the journal with 7.6M lines
+# (2.1 GB). With a start limit systemd stops retrying and the unit shows
+# `failed` instead of an endless `activating (auto-restart)`. Suggested values
+# (StartLimit* belong in [Unit]); tune them before adopting:
+#StartLimitIntervalSec=300
+#StartLimitBurst=5
+
+[Service]
+Type=simple
+User=energias
+WorkingDirectory=/home/energias/artesa-nfc/current
+
+# Only the variables the app reads (APP_ENV, DATABASE_URL, DEBUG, CORS_ALLOWED_ORIGINS).
+# The file must be 0600, owned by the service user; never a symlink into a release.
+EnvironmentFile=/home/energias/artesa-nfc/shared/.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+
+ExecStart=/home/energias/artesa-nfc/current/venv/bin/python \
+    -m uvicorn app.main:app \
+    --host 127.0.0.1 \
+    --port 8000 \
+    --proxy-headers \
+    --forwarded-allow-ips 127.0.0.1
+
+# The restart policy is an operational decision this example does not make.
+# Restart=on-failure with a start limit is the usual pairing; whatever is chosen
+# must be documented in docs/OPERATIONS.md.
+#Restart=on-failure
+#RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
