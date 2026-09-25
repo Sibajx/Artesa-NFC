@@ -230,11 +230,23 @@ def main() -> int:
         step("R1 built (rehearsal channel, single Alembic head)", r1.release["channel"] == "rehearsal" and r1.release["alembic"]["heads_count"] == 1, r1.release_id)
         again = build(clone, work / "again", 1)
         step("same commit -> same content_sha256 and same artifact bytes", again.release["artifact"]["content_sha256"] == r1.release["artifact"]["content_sha256"] and again.artifact.read_bytes() == r1.artifact.read_bytes())
+        # D7 both ways, whatever ref CI checked out: pin the clone's origin/main to HEAD
+        # (merged -> allowed), then add a commit only this clone has (unmerged -> refused
+        # as "not reachable"). A missing origin/main ("cannot evaluate") is not a pass.
+        git(clone, "update-ref", "refs/remotes/origin/main", "HEAD")
         try:
-            br.build_release(clone, work / "prodbuild", ref="HEAD", rehearsal=False)
-            step("production-channel build of an unmerged commit is refused", False, "it was allowed")
+            br.build_release(clone, work / "prodbuild-merged", ref="HEAD", rehearsal=False)
+            merged_ok, merged = True, "merged: allowed"
         except rc.OpsError as exc:
-            step("production-channel build of an unmerged commit is refused", exc.code == rc.Exit.ARTIFACT_INVALID, exc.message[:70])
+            merged_ok, merged = False, f"merged: refused ({exc.message[:50]})"
+        git(clone, "commit", "-q", "--allow-empty", "-m", "rehearsal: unmerged")
+        try:
+            br.build_release(clone, work / "prodbuild-unmerged", ref="HEAD", rehearsal=False)
+            unmerged_ok, unmerged = False, "unmerged: allowed"
+        except rc.OpsError as exc:
+            unmerged_ok = exc.code == rc.Exit.ARTIFACT_INVALID and "not reachable from origin/main" in exc.message
+            unmerged = f"unmerged: exit {int(exc.code)} {exc.message[:45]}"
+        step("production-channel build of an unmerged commit is refused", merged_ok and unmerged_ok, f"{merged}; {unmerged}")
         (clone / "backend" / "app" / "r2_marker.py").write_text('MARK = "r2"\n'); git(clone, "add", "-A"); git(clone, "commit", "-q", "-m", "r2 code-only")
         r2 = build(clone, root / "incoming", 2)
         head = r1.release["alembic"]["head"]
