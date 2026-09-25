@@ -59,8 +59,11 @@ exactitud (aquí) y aporta una verificación externa (§10).
 
 ## 3. systemd: flags esperados de Uvicorn
 
-La unit real vive en el servidor y no se gestiona desde este repo. Lo que
-producción **debe** cumplir:
+La unit real vive en el servidor y no se gestiona desde este repo. La unit
+objetivo del layout de releases de N-08 (`WorkingDirectory=<root>/current`, venv
+por release, `shared/.env`) es
+`backend/ops/systemd/artesa-nfc.service.example` (ver `docs/DEPLOYMENT.md` §3;
+todavía no instalada). Lo que producción **debe** cumplir:
 
 | Requisito | Valor |
 |---|---|
@@ -303,7 +306,7 @@ Comprobaciones adicionales:
 
 | Qué | Cómo |
 |---|---|
-| Cambio de la app (docs, `/health`, límite de cuerpo) | Volver al commit anterior (`git revert` o el release previo, anotado antes de desplegar) y reiniciar `artesa-nfc.service`. No hay migraciones. |
+| Cambio de la app (docs, `/health`, límite de cuerpo) | Volver al commit anterior (`git revert` o el release previo, anotado antes de desplegar) y reiniciar `artesa-nfc.service`. No hay migraciones. Con el layout de N-08: `artesa-deploy rollback` (`docs/DEPLOYMENT.md` §7.3). |
 | Una regla de Cloudflare | Desactivarla o eliminarla desde el dashboard (efecto inmediato); se aplicaron de una en una, así que la causa se aísla. |
 | Cambio de flags de Uvicorn | Restaurar la unit anterior, `systemctl daemon-reload` y reiniciar el servicio. |
 | Nginx | No aplica: no está desplegado. |
@@ -328,7 +331,9 @@ La emisión de tokens y la programación de tags **solo** se hacen con
 
 - Cargar el entorno real del servicio **sin teclear secretos**:
   `set -a; source <archivo-de-entorno-del-servicio>; set +a` (nunca
-  `export DATABASE_URL=...`, que queda en el historial).
+  `export DATABASE_URL=...`, que queda en el historial). Con el layout de N-08,
+  `bin/artesa-deploy run provision <args>` lo hace por ti desde `shared/.env`
+  (`docs/DEPLOYMENT.md` §11.6).
 - No usar `script`, `tee`, redirecciones, grabadores de terminal ni logging de
   tmux/screen: la CLI se niega a mostrar la URL sin un terminal interactivo real.
 - Con `APP_ENV=production` hay que teclear `production` para continuar. `staging`
