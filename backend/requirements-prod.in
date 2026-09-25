@@ -1,0 +1,20 @@
+# Runtime-only direct dependencies of the production backend (N-08, ADR-027).
+#
+# Source of truth for requirements-prod.lock. Keep the pins identical to the
+# runtime lines of requirements.txt (a test enforces it); requirements.txt
+# additionally carries the test-only packages (pytest, httpx) that must never
+# reach a production release.
+#
+# Regenerate (Python 3.14, the production interpreter; pip==26.2.1,
+# pip-tools==7.6.1, as release-ci does) with:
+#   pip-compile --generate-hashes --no-emit-index-url --strip-extras \
+#       --pip-args="--only-binary=:all:" \
+#       --output-file=requirements-prod.lock requirements-prod.in
+# pip-compile keeps the existing pins; changing a version is a separate,
+# reviewed change (docs/DEPLOYMENT.md section 6).
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic-settings==2.7.1
+psycopg[binary]==3.2.10
+sqlalchemy==2.0.44
+alembic==1.14.0

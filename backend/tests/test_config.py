@@ -9,9 +9,11 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import traceback
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from app.core.config import BACKEND_DIR, ENV_FILE, Settings
 from app.core.db_safety import DEFAULT_DATABASE_URL, UnsafeConfigurationError
@@ -28,13 +30,22 @@ _DOTENV_ONLY_KEYS = (
 )
 
 
+# DATABASE_URL has no default (issue #101), so every test starts from an
+# explicit, obviously fake local one. Tests about a missing/blank value remove
+# or blank it themselves.
+LOCAL_DB = "postgresql://example:example@localhost:5432/example"
+DB_NOT_SET = "DATABASE_URL is not set"
+
+
 @pytest.fixture(autouse=True)
 def _isolated_env(monkeypatch):
     """The suite itself runs with APP_ENV=test and a real DATABASE_URL
-    exported; start every test here from a blank slate, as APP_ENV=local."""
+    exported; start every test here from a blank slate, as APP_ENV=local with
+    an explicit local DATABASE_URL."""
     for key in ("APP_ENV", "DATABASE_URL", "CORS_ALLOWED_ORIGINS", "DEBUG"):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("APP_ENV", "local")
+    monkeypatch.setenv("DATABASE_URL", LOCAL_DB)
 
 
 def test_settings_ignores_docker_compose_only_postgres_keys(tmp_path, monkeypatch):
@@ -115,10 +126,10 @@ def _settings(**overrides) -> Settings:
     return Settings(_env_file=None, **kwargs)
 
 
-def test_local_defaults_are_allowed_with_explicit_app_env():
+def test_local_with_explicit_app_env_and_database_url_is_allowed():
     settings = Settings(_env_file=None)
     assert settings.app_env == "local"
-    assert settings.database_url == DEFAULT_DATABASE_URL
+    assert settings.database_url == LOCAL_DB
     assert settings.cors_allowed_origins_list == [
         "http://127.0.0.1:5500",
         "http://localhost:5500",
@@ -231,6 +242,149 @@ def test_config_errors_and_repr_never_contain_credentials():
     assert CANARY_PASSWORD not in str(settings)
 
 
+# --- DATABASE_URL is required: no implicit runtime default (issue #101) ---
+
+
+def _no_database_url(monkeypatch):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+
+
+def test_database_url_has_no_default_and_stays_out_of_repr():
+    field = Settings.model_fields["database_url"]
+    assert field.default == ""
+    assert field.default != DEFAULT_DATABASE_URL
+    assert field.repr is False
+
+
+def test_database_url_unset_fails_closed(monkeypatch):
+    _no_database_url(monkeypatch)
+    with pytest.raises(UnsafeConfigurationError, match=DB_NOT_SET) as info:
+        Settings(_env_file=None)
+    # Not a ValueError: pydantic would wrap it in a ValidationError that echoes
+    # the input (see db_safety.py).
+    assert not isinstance(info.value, ValueError)
+    assert_no_secrets(info.value)
+
+
+@pytest.mark.parametrize("blank", ["", " ", "   ", "\t", "\n", " \t\n "])
+def test_database_url_blank_env_var_fails_closed(monkeypatch, blank):
+    monkeypatch.setenv("DATABASE_URL", blank)
+    with pytest.raises(UnsafeConfigurationError, match=DB_NOT_SET):
+        Settings(_env_file=None)
+
+
+@pytest.mark.parametrize("line", ["DATABASE_URL=", 'DATABASE_URL=""', 'DATABASE_URL="   "'])
+def test_database_url_blank_in_env_file_fails_closed(tmp_path, monkeypatch, line):
+    _no_database_url(monkeypatch)
+    env_file = tmp_path / ".env"
+    env_file.write_text(f"APP_ENV=local\n{line}\n")
+    with pytest.raises(UnsafeConfigurationError, match=DB_NOT_SET):
+        Settings(_env_file=env_file)
+
+
+@pytest.mark.parametrize("blank", ["", "   "])
+def test_database_url_blank_init_value_fails_closed(blank):
+    with pytest.raises(UnsafeConfigurationError, match=DB_NOT_SET):
+        Settings(_env_file=None, database_url=blank)
+
+
+@pytest.mark.parametrize("app_env", ["local", "test", "staging", "production"])
+@pytest.mark.parametrize("blank", [None, "", "   "])
+def test_missing_database_url_fails_in_every_environment(monkeypatch, app_env, blank):
+    _no_database_url(monkeypatch)
+    # Everything else is valid for production, so DATABASE_URL is the only reason.
+    kwargs = {"app_env": app_env, "cors_allowed_origins": PROD_ORIGIN, "debug": False}
+    if blank is not None:
+        kwargs["database_url"] = blank
+    with pytest.raises(UnsafeConfigurationError, match=DB_NOT_SET):
+        Settings(_env_file=None, **kwargs)
+
+
+def test_app_env_is_validated_before_database_url(monkeypatch):
+    _no_database_url(monkeypatch)
+    monkeypatch.delenv("APP_ENV")
+    with pytest.raises(UnsafeConfigurationError, match="APP_ENV is not set"):
+        Settings(_env_file=None)
+    monkeypatch.setenv("APP_ENV", "prod")
+    with pytest.raises(UnsafeConfigurationError, match="unsupported value"):
+        Settings(_env_file=None)
+
+
+def test_database_url_is_validated_before_the_production_guards():
+    # Missing URL wins over bad CORS and DEBUG, and over the staging/production
+    # placeholder-password rule (which needs a URL to inspect).
+    with pytest.raises(UnsafeConfigurationError, match=DB_NOT_SET):
+        _settings(database_url="", cors_allowed_origins="http://localhost:5500", debug=True)
+
+
+def test_missing_database_url_error_never_echoes_the_environment(tmp_path, monkeypatch):
+    # Regression for the rejected "required field" design: pydantic's
+    # "Field required" error prints the whole input dict, which includes the
+    # dotenv-only POSTGRES_* keys (and would include DATABASE_URL if set).
+    _no_database_url(monkeypatch)
+    monkeypatch.setenv("UNRELATED_SHELL_SECRET", "ShellCanarySecret")
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "APP_ENV=local\n"
+        f"POSTGRES_USER={CANARY_USER}\n"
+        f"POSTGRES_PASSWORD={CANARY_PASSWORD}\n"
+        "POSTGRES_DB=canary_db\n"
+        "POSTGRES_HOST=canary.host.example\n"
+    )
+    with pytest.raises(UnsafeConfigurationError) as info:
+        Settings(_env_file=env_file)
+    assert_no_secrets(info.value, "canary_db", "canary.host.example", "ShellCanarySecret")
+    text = str(info.value) + repr(info.value) + "".join(traceback.format_exception(info.value))
+    for marker in ("input_value", "input_type", "validation error", "postgres_password"):
+        assert marker not in text.lower(), marker
+
+
+def test_explicit_local_database_url_still_works_including_the_dev_url(monkeypatch):
+    # Explicit is fine in local (and only rejected by the staging/production
+    # guard); what is gone is the *implicit* default.
+    monkeypatch.setenv("DATABASE_URL", DEFAULT_DATABASE_URL)
+    assert Settings(_env_file=None).database_url == DEFAULT_DATABASE_URL
+
+
+def test_database_url_value_is_stored_unmodified(monkeypatch):
+    # The presence check only inspects the value; it must not strip or
+    # re-encode it (percent-encoded credentials, F-11).
+    raw = "postgresql://canaryuser:canary%40pw@localhost:5432/artesanfc_test"
+    monkeypatch.setenv("DATABASE_URL", raw)
+    assert Settings(_env_file=None).database_url == raw
+
+
+def test_pydantic_validation_errors_hide_input_values():
+    assert Settings.model_config["hide_input_in_errors"] is True
+    url = f"postgresql://{CANARY_USER}:{CANARY_PASSWORD}@localhost:5432/artesanfc_test"
+    with pytest.raises(ValidationError) as info:
+        Settings(_env_file=None, database_url=url, debug="notabool-canary")
+    text = str(info.value)
+    assert "input_value" not in text
+    assert "notabool-canary" not in text
+    assert_no_secrets(info.value)
+
+
+def test_import_of_the_app_fails_closed_without_database_url():
+    # What uvicorn/alembic/seed hit first: app.db.base builds the engine at
+    # import time. A present-but-blank variable beats any backend/.env.
+    env = {
+        **os.environ,
+        "PYTHONPATH": str(BACKEND_DIR),
+        "APP_ENV": "local",
+        "DATABASE_URL": "",
+        "POSTGRES_PASSWORD": CANARY_PASSWORD,
+    }
+    result = subprocess.run(
+        [sys.executable, "-c", "import app.db.base"],
+        cwd=BACKEND_DIR, env=env, capture_output=True, text=True, timeout=60,
+    )
+    assert result.returncode != 0
+    assert f"UnsafeConfigurationError: {DB_NOT_SET}" in result.stderr
+    assert CANARY_PASSWORD not in result.stdout + result.stderr
+    assert "input_value" not in result.stderr
+
+
 # --- deterministic .env resolution ---
 
 
@@ -242,11 +396,19 @@ def test_env_file_is_anchored_to_backend_dir_not_the_working_directory(tmp_path,
     stray = tmp_path / ".env"
     stray.write_text("DATABASE_URL=postgresql://stray:stray@stray.example:5432/stray_marker\n")
     monkeypatch.chdir(tmp_path)
+    # A real environment variable would shadow the dotenv file below.
+    monkeypatch.delenv("DATABASE_URL")
 
     # Positive control: the marker file *would* be picked up if it were read.
     assert "stray_marker" in Settings(_env_file=stray).database_url
-    # ...but a cwd-relative ".env" is not consulted any more.
-    assert "stray_marker" not in Settings().database_url
+    # ...but a cwd-relative ".env" is not consulted any more. DATABASE_URL has
+    # no default, so without another source (a developer's own backend/.env)
+    # this refuses to start instead of returning a value.
+    try:
+        value = Settings().database_url
+    except UnsafeConfigurationError:
+        value = ""
+    assert "stray_marker" not in value
 
 
 def test_env_file_path_is_identical_from_any_working_directory():

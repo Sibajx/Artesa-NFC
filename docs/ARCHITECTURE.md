@@ -23,15 +23,25 @@ Frontend público
   │ HTTPS / JSON
   ▼
 api.artesanfc.com
-Nginx
+Cloudflare (edge: reglas y rate limiting)
   │
   ▼
-FastAPI
+Cloudflare Tunnel (cloudflared)
+  │  http://localhost:8000
+  ▼
+Uvicorn / FastAPI
+(127.0.0.1:8000, artesa-nfc.service)
   │
   ▼
 PostgreSQL
 Fuente de verdad
 ```
+
+**Topología real de producción:** Cloudflare → Cloudflare Tunnel → Uvicorn /
+FastAPI → PostgreSQL. **Nginx NO está desplegado actualmente** y no está en el
+request path: `backend/nginx/artesanfc-api.conf.example` es una configuración
+alternativa / de referencia, no el enforcement vigente. Qué controla cada capa,
+qué está aplicado y qué está pendiente: `docs/OPERATIONS.md`.
 
 ## 3. Responsabilidades
 
@@ -48,13 +58,27 @@ Fuente de verdad
 
 No es fuente de verdad para artesanos, piezas o certificados.
 
-### Nginx
+### Cloudflare (edge y Tunnel)
 
-- Reverse proxy a FastAPI.
-- Headers.
-- Límites de tamaño.
-- Rate limiting complementario.
-- Separación de rutas públicas y administrativas.
+- Terminación TLS y HTTPS obligatorio.
+- Rate limiting de `POST /api/v1/certificates/resolve` (capa primaria; regla C
+  aplicada: 10 solicitudes por periodo de 10 segundos por IP, Block con
+  mitigación de 10 segundos).
+- Restricción del host de la API al namespace público (`/api/v1/*`) con bloqueo
+  del resto (regla A aplicada) y bloqueo de `POST` a resolve con query string
+  (regla B aplicada).
+- Entrega al origen mediante el Tunnel: el servidor no expone puertos públicos.
+
+Estas reglas son configuración operativa **no versionada**; el repo solo las
+documenta con exactitud en `docs/OPERATIONS.md`.
+
+### Nginx (alternativa, NO desplegada)
+
+Nginx no está en el request path de producción. El ejemplo del repo
+(`backend/nginx/artesanfc-api.conf.example`) se conserva como referencia
+alternativa y no debe asumirse como protección activa. Adoptarlo detrás del
+Tunnel exigiría una variante distinta (HTTP en loopback, IP real desde
+`CF-Connecting-IP`); ver `docs/OPERATIONS.md`.
 
 ### FastAPI
 
@@ -68,6 +92,9 @@ No es fuente de verdad para artesanos, piezas o certificados.
 - Generación segura de tokens.
 - Acceso a base de datos.
 - Logs relevantes.
+- Límite de cuerpo de `POST /api/v1/certificates/resolve` (1024 bytes, `413`).
+- `/health` dependiente de la base de datos (`200` / `503`, `no-store`).
+- Sin `/docs`, `/redoc` ni `/openapi.json` en `staging` y `production`.
 
 ### PostgreSQL
 
@@ -142,6 +169,39 @@ GET /piezas/{slug}
 ```
 
 La pieza pública enlaza al artesano y el perfil del artesano muestra sus piezas.
+
+### Publicación en las rutas públicas (hallazgo F-08)
+
+La API pública es la **única autoridad de publicación**. El frontend no
+contiene ninguna página por entidad:
+
+- `/piezas/{slug}` y `/artesanos/{slug}` se sirven con **un shell neutro por
+  tipo** (`frontend/_shell/pieza/`, `frontend/_shell/artesano/`) mediante las
+  reglas de `frontend/_redirects`
+  (`/piezas/:slug  /_shell/pieza/  200`, con y sin `/` final, y las dos
+  equivalentes para `/artesanos`). El shell no contiene nombre, texto, imagen ni
+  slug; `hydrate-detail.js` lee el slug de `location.pathname` y muestra la
+  entidad **solo** tras un `200` válido.
+- `404` (slug desconocido, borrador, archivado, pieza bajo artesano no
+  publicado: el API no los distingue y la página tampoco) → una única página
+  "no disponible" con `noindex`. `5xx`, `429`, timeout, red, respuesta
+  malformada, host sin base de API o URL que no sea exactamente un slug →
+  "no disponible ahora", reintentable, con `noindex`. Sin JavaScript: solo un
+  aviso neutro.
+- `/piezas/` y `/artesanos/` no traen tarjetas: se llenan desde el API. Un `200`
+  con `data: []` muestra un estado vacío, no conserva nada anterior.
+- Las listas y las rutas anidadas (`/piezas/a/b/`) no tienen rewrite; estas
+  últimas conservan su comportamiento anterior (fallback SPA a Home).
+- Reglas de `_redirects`: se usa el placeholder `:slug` y **no** `*`. Con
+  Wrangler 4.135.0 la primera regla que coincide gana y un rewrite `200` se
+  aplica incluso sobre un archivo existente; `/piezas/*` también coincide con
+  `/piezas/` y taparía la lista (`docs/QA_PRIVATE_ROUTE.md` §5).
+- Los shells viven en `/_shell/`, fuera de `/piezas/` y `/artesanos/`, para que
+  ningún slug pueda chocar con ellos.
+- SEO: los metadatos (`<title>`, description, canonical) los pone el JS solo con
+  un `200` válido. Costo asumido y documentado: sin metadatos por entidad en el
+  HTML servido. Una evolución posible es pre-renderizar solo lo publicado en un
+  build, con verificación en runtime (fuera de F-08: hoy no hay build).
 
 ## 6. Certificado privado
 
@@ -337,6 +397,11 @@ la API, Alembic y el seed se niegan a arrancar. Valores aceptados (sin
 alias; `dev`, `development` y `prod` se rechazan): `local`, `test`, `staging`,
 `production`.
 
+- `DATABASE_URL` también es **obligatoria y sin valor por defecto** en todos
+  los entornos: si falta, está vacía o solo tiene espacios, la API, Alembic,
+  el seed y `pytest` se niegan a arrancar (`DATABASE_URL is not set`) sin
+  imprimir ningún valor. `docker-compose.yml` tampoco define un respaldo: el
+  contenedor `api` la toma solo de `.env`.
 - `production` y `staging` rechazan la `DATABASE_URL` de desarrollo o con
   contraseña vacía/placeholder; `production` además exige
   `https://artesanfc.com` en `CORS_ALLOWED_ORIGINS` y `DEBUG=false`.
@@ -362,9 +427,10 @@ página (sin comodines ni configuración por HTML):
 | `artesanfc.com` | `https://api.artesanfc.com/api/v1` |
 | cualquier otro (`www`, `*.pages.dev`, `file://`, `[::1]`, …) | sin resolver (`null`) |
 
-- Con la base sin resolver, `api.js` no hace ninguna petición de red: las
-  páginas públicas conservan su contenido estático y `/c/{token}` muestra su
-  estado de error de servicio. Un host no-local nunca puede resolver a
+- Con la base sin resolver, `api.js` no hace ninguna petición de red
+  (resultado `unavailable`): las páginas públicas de detalle y las listas
+  muestran su estado neutro "no disponible" (F-08: ya no hay contenido estático
+  de reserva) y `/c/{token}` muestra su estado de error de servicio. Un host no-local nunca puede resolver a
   loopback (guardia en `api-config.js`).
 - Ninguna página HTML ni otro script debe declarar o duplicar la URL de la
   API (ya no existe el `<meta name="artesanfc-api-base">`).

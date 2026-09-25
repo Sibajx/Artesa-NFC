@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -25,6 +26,21 @@ T = TypeVar("T")
 # Constraint identity the service maps deliberately (DATA_MODEL.md section 6).
 # Any other constraint failure becomes NfcTagLifecycleIntegrityError.
 _UQ_ONE_ACTIVE_PER_PIECE = "uq_nfc_tag_one_active_per_piece"
+# Postgres' default name for the unnamed UNIQUE(physical_uid) of migration
+# 9b8bb430770d (confirmed with `\d nfc_tag`).
+_UQ_PHYSICAL_UID = "nfc_tag_physical_uid_key"
+
+# The only chip the pilot supports (docs/PROJECT.md, ADR-021).
+NTAG213_CHIP_MODEL = "NTAG213"
+NTAG213_FREQUENCY = "13.56 MHz"
+NTAG213_PROTOCOL = "ISO 14443A"
+
+# NTAG213 UIDs are 7 bytes and start with 0x04, the NXP manufacturer code.
+_UID_BYTES = 7
+_UID_MANUFACTURER_BYTE = "04"
+_UID_MAX_RAW_LENGTH = 64
+_UID_SEPARATORS_RE = re.compile(r"[:\-\s]")
+_UID_HEX_RE = re.compile(r"[0-9A-F]+")
 
 # The columns a transition decides on and rewrites. Reloaded under lock before
 # every transition (services/lifecycle.py). physical_uid/notes/chip data are
@@ -67,6 +83,22 @@ class NfcTagAlreadyAssigned(NfcTagServiceError):
 
 class NfcTagNotFound(NfcTagServiceError):
     """Raised when a tag referenced by id (e.g. the replacement) does not exist."""
+
+
+class InvalidPhysicalUid(NfcTagServiceError):
+    """The text is not a valid NTAG213 UID. `reason` is one of `empty`,
+    `too_long`, `not_hex`, `wrong_length`, `not_nxp` so a caller can word its
+    own message. The exception deliberately never repeats the rejected input:
+    an operator may have pasted something that is not a UID at all (for
+    instance a certificate URL) into the prompt."""
+
+    def __init__(self, message: str, *, reason: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
+class NfcTagUidAlreadyRegistered(NfcTagServiceError):
+    """Raised when a tag with the same `physical_uid` already exists."""
 
 
 class NfcTagLifecycleConflict(NfcTagServiceError, LifecycleConflict):
@@ -142,6 +174,65 @@ def _reject_state(stale: bool, tag: NfcTag, invalid: NfcTagServiceError) -> None
             f"{', piece ' + str(tag.piece_id) if tag.piece_id else ''}); reload and retry."
         )
     raise invalid
+
+
+def normalize_physical_uid(raw: str) -> str:
+    """Canonical `nfc_tag.physical_uid`: upper-case hex bytes joined by ':',
+    e.g. `04:A1:B2:C3:D4:E5:F6` (the shape NFC apps display and the suite's
+    fixtures already use).
+
+    Accepts the UID with ':', '-', spaces or no separator, in any case. Rejects
+    anything that is not exactly 7 bytes starting with 0x04 - which also keeps
+    a mistakenly pasted token or URL out of the column, since neither can be
+    14 hex digits. The UID is inventory metadata, never a credential
+    (SECURITY.md section 6); the strictness is about typos, not secrecy.
+    """
+    if not isinstance(raw, str):
+        raise InvalidPhysicalUid("physical_uid must be text.", reason="not_hex")
+    if len(raw) > _UID_MAX_RAW_LENGTH:
+        raise InvalidPhysicalUid("The UID text is too long.", reason="too_long")
+    compact = _UID_SEPARATORS_RE.sub("", raw).upper()
+    if not compact:
+        raise InvalidPhysicalUid("The UID is empty.", reason="empty")
+    if not _UID_HEX_RE.fullmatch(compact):
+        raise InvalidPhysicalUid("The UID must contain only hexadecimal digits.", reason="not_hex")
+    if len(compact) != _UID_BYTES * 2:
+        raise InvalidPhysicalUid(f"The UID must be {_UID_BYTES} bytes.", reason="wrong_length")
+    if not compact.startswith(_UID_MANUFACTURER_BYTE):
+        raise InvalidPhysicalUid("An NTAG213 UID starts with 04.", reason="not_nxp")
+    return ":".join(compact[i : i + 2] for i in range(0, len(compact), 2))
+
+
+def register_nfc_tag(db: Session, *, physical_uid: str, notes: str | None = None) -> NfcTag:
+    """Create an unassigned `available` NTAG213 tag with a normalized UID.
+
+    Registration is inventory only: no piece, no `programmed_at`, no lock. A
+    UID that is already registered (in any status, retired tags included: a
+    row is never deleted) raises `NfcTagUidAlreadyRegistered`, decided by a
+    lookup and backed by the UNIQUE constraint for a concurrent duplicate. The
+    caller owns the commit.
+    """
+    uid = normalize_physical_uid(physical_uid)
+
+    def _already_registered() -> NfcTagUidAlreadyRegistered:
+        return NfcTagUidAlreadyRegistered("An NFC tag with this physical UID is already registered.")
+
+    def work() -> NfcTag:
+        if db.execute(select(NfcTag.id).where(NfcTag.physical_uid == uid)).first() is not None:
+            raise _already_registered()
+        tag = NfcTag(
+            physical_uid=uid,
+            chip_model=NTAG213_CHIP_MODEL,
+            frequency=NTAG213_FREQUENCY,
+            protocol=NTAG213_PROTOCOL,
+            status=NfcTagStatus.available,
+            notes=notes,
+        )
+        db.add(tag)
+        db.flush()
+        return tag
+
+    return _run(db, work, known={_UQ_PHYSICAL_UID: _already_registered})
 
 
 def assign_nfc_tag(db: Session, tag: NfcTag, piece: Piece) -> NfcTag:

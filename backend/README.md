@@ -20,8 +20,9 @@ Python environment, not from inside the Docker image — see
    ```
 
    Adjust values if needed (`.env` is git-ignored; `.env.example` has no
-   real secrets). `APP_ENV` is **required** — keep `APP_ENV=local` from the
-   example for local development; the app refuses to start without it
+   real secrets). `APP_ENV` and `DATABASE_URL` are **required** — keep
+   `APP_ENV=local` from the example for local development; the app refuses
+   to start without either of them, and there is no default database
    (see [Environment safety](#environment-safety)). The file is always
    read from `backend/.env`, wherever you start `uvicorn`/`alembic` from,
    and a real environment variable (e.g. `export APP_ENV=local`) always
@@ -81,7 +82,11 @@ Python environment, not from inside the Docker image — see
    ```
 
    `GET http://localhost:8000/health` should report
-   `{"status": "ok", "database": "connected"}`.
+   `{"status": "ok", "database": "connected"}`. When the database cannot be
+   reached it answers `503` with
+   `{"status": "unavailable", "database": "unavailable"}` (both are
+   `Cache-Control: no-store`; `HEAD /health` gives the same status). See
+   [Production edge and operational surfaces](#production-edge-and-operational-surfaces).
 
 7. **Run the test suite** (needs its own test database)
 
@@ -123,10 +128,19 @@ clear error so a typo cannot bypass the guards):
 
 | Value | Meaning |
 |---|---|
-| `local` | Local development. Development defaults are allowed. |
+| `local` | Local development. Development defaults (e.g. CORS) are allowed; `DATABASE_URL` is still required. |
 | `test` | The pytest suite. |
 | `staging` | Refuses the development default `DATABASE_URL` / placeholder password. |
 | `production` | Everything `staging` checks, plus the rules below. |
+
+**`DATABASE_URL`** is required and has no default database, in every
+environment. If it is unset, empty or whitespace-only, startup (API,
+`alembic`, seed and `pytest`) fails with `DATABASE_URL is not set` — after
+`APP_ENV` is validated and before the staging/production checks — and the
+error never contains the URL, credentials or any other environment value. An
+explicit local URL (such as the one in `.env.example`) keeps working.
+`docker-compose.yml` has no fallback for it either: the `api` container takes
+it only from `.env`.
 
 **Production guard.** With `APP_ENV=production` startup (API, `alembic`,
 seed) fails fast, without printing the database URL, if:
@@ -161,9 +175,93 @@ from the working directory. It is optional; exported environment variables
 take priority over it.
 
 **Not covered here:** `alembic upgrade` runs against whatever
-`DATABASE_URL` is configured (it is not seed/test guarded), and an extra
+`DATABASE_URL` is explicitly configured (it is not seed/test guarded), and an extra
 localhost origin next to `https://artesanfc.com` in production CORS is not
 rejected.
+
+## Production edge and operational surfaces
+
+Audit findings N-03 / F-14. Full detail, the Cloudflare rules (A, B and C, applied
+and verified externally) and the verification checklist: [`../docs/OPERATIONS.md`](../docs/OPERATIONS.md).
+
+Real production topology: **Cloudflare → Cloudflare Tunnel → Uvicorn / FastAPI →
+PostgreSQL**. **Nginx is NOT currently deployed**; `nginx/artesanfc-api.conf.example`
+is an alternative/reference and is not the current enforcement.
+
+What the application itself guarantees (versioned and tested):
+
+- **No docs outside local/test.** With `APP_ENV=staging` or `production`,
+  `/docs`, `/redoc`, `/openapi.json` and `/docs/oauth2-redirect` are plain 404s;
+  `local` and `test` keep them (use `APP_ENV=local` for Swagger).
+- **`/health`** is database-aware: `200` when the database is reachable, `503`
+  when not, exact fixed bodies, `Cache-Control: no-store`, `HEAD` supported. Do
+  not wire it to an automatic restart (a database blip should not restart the
+  process).
+- **Body limit** on `POST /api/v1/certificates/resolve` (with or without a
+  trailing slash): more than 1024 bytes is `413` (`payload_too_large`), whether
+  declared by `Content-Length`, chunked or without `Content-Length`; reading
+  stops as soon as the limit is passed. The `413` keeps CORS for an allowed
+  origin and `Cache-Control: no-store`.
+
+Required, **not applied by the repo** (verified in production): Uvicorn runs with
+`--host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips 127.0.0.1`
+(never `--forwarded-allow-ips '*'`). The Cloudflare rules (path allowlist, no query
+string on resolve, rate limit of 10 requests per 10-second period per IP with Block
+and a 10-second mitigation) are applied and verified externally. Both are server /
+dashboard configuration, not versioned here (`docs/OPERATIONS.md`).
+The application does not read `X-Forwarded-For` itself.
+
+## Certificate and NFC provisioning (N-09)
+
+`python -m app.cli.provision` (in Spanish) issues a piece's certificate, shows
+its URL once and guides writing the NTAG213 tag. Subcommands: `list`, `status`,
+`issue`, `rotate`, `revoke`, `lock`; `issue`/`rotate`/`revoke`/`lock` accept
+`--dry-run` (read-only, generates no token). The full procedure, failure table
+and rules are in [`../docs/PROVISIONING.md`](../docs/PROVISIONING.md); in short:
+
+- It never accepts a token (no option, stdin, environment variable or file) and
+  only ever shows the full URL `https://artesanfc.com/c/{token}`, once, on a real
+  interactive terminal. It writes no files and no logs.
+- `APP_ENV=production` is allowed (type `production` to continue); `staging` is
+  refused; `local` needs a local database host and `test` a test database. With
+  `local`/`test` the URL is a marked rehearsal (`http://127.0.0.1:5500/c/...`)
+  that must never be written to a real tag.
+- Pieces and artisans must already exist and be published: creating them is not
+  part of this tool (the seed is refused in production).
+
+Try it locally (rehearsal) against the disposable database from the setup above:
+
+```bash
+python -m app.db.seed                                # demo pieces (local/test only)
+python -m app.cli.provision list
+python -m app.cli.provision issue --piece DEMO-MASCARA-01 --dry-run
+```
+
+## Production releases and deployment (N-08)
+
+Production is deployed from immutable, verified release artifacts, never from a
+checkout or a copied tree. Everything is documented in `docs/DEPLOYMENT.md`
+(ADR-027); the tools are standard-library Python in `ops/`:
+
+```bash
+# build (operator machine or CI, never production); refuses a dirty tree and
+# any commit not reachable from origin/main
+git fetch origin && python3 ops/build_release.py --repo .. --ref origin/main --out ../dist
+
+# on the server, as the service user
+bin/artesa-deploy prepare <release-id>
+bin/artesa-deploy deploy  <release-id> --expect-commit <sha> --dry-run
+```
+
+- `requirements.txt` stays the development/test dependency list.
+  `requirements-prod.in` pins the runtime dependencies (same versions) and
+  `requirements-prod.lock` is its pip-tools lock with hashes, the only thing a
+  release installs (`docs/DEPLOYMENT.md` §6 has the regeneration command).
+- Every Alembic revision must be classified in `ops/migration-classes.json`
+  (`baseline` / `additive` / `breaking`); the release build fails otherwise.
+- `pytest tests/ops` covers the tooling with fakes;
+  `tests/ops/rehearsal/run_rehearsal.py --pg-bindir <PostgreSQL 18 bin>` runs
+  the real end-to-end rehearsal against disposable PostgreSQL 18 containers.
 
 ## Docker scope for Sprint 3
 
@@ -172,6 +270,14 @@ and `api` (this backend, built from `Dockerfile`). The `api` image runs
 `uvicorn` directly — **it does not run Alembic migrations or the seed
 automatically**, and the image does not currently include the
 `alembic/` directory or `alembic.ini`.
+
+The `api` service takes `DATABASE_URL` and `APP_ENV` only from `.env` (there
+is no `environment:` fallback). Without `DATABASE_URL` the container exits
+with `DATABASE_URL is not set` instead of starting against an implicit
+database (with `restart: unless-stopped` it keeps restarting until `.env` is
+fixed). To check the compose file: `docker compose config -q` (needs a
+`.env`, e.g. `cp .env.example .env`); `docker compose up -d db` does not need
+`DATABASE_URL`.
 
 This is intentional for Sprint 3 local development, not an oversight:
 migrations and seeding are run from the host environment (steps 4–5

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "revisions": {
+    "9229b1f0f11c": {
+      "class": "baseline",
+      "note": "Initial schema: artisan, piece, media_asset tables and indexes."
+    },
+    "8c2f9a74e447": {
+      "class": "additive",
+      "note": "Creates the certificate table and indexes; no existing object changes."
+    },
+    "9b8bb430770d": {
+      "class": "additive",
+      "note": "Creates the nfc_tag table and indexes; no existing object changes."
+    },
+    "895974720462": {
+      "class": "additive",
+      "note": "Relaxes ck_nfc_tag_locked_at_matches_status (locked_at may persist on replaced/retired). Older code only writes values the wider constraint still accepts."
+    }
+  }
+}

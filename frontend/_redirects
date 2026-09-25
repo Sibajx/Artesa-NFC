@@ -1,7 +1,29 @@
 # ArtesaNFC — Cloudflare Pages static routing.
-# The private certificate route (/c/{token}) is an unbounded token space —
-# it cannot be pre-rendered as one static folder per token like /piezas/*
-# and /artesanos/* are. This rewrite serves the single certificate shell
-# for any /c/* request; the shell extracts the token from the URL path
-# client-side (hydrate-certificate.js) and validates route shape there.
+#
+# Private certificate route (/c/{token}): an unbounded token space that cannot
+# be pre-rendered as one static folder per token. This rewrite serves the
+# single certificate shell for any /c/* request; the shell extracts the token
+# from the URL path client-side (hydrate-certificate.js) and validates the
+# route shape there.
 /c/*  /c/  200
+
+# Public detail routes (F-08): /piezas/{slug} and /artesanos/{slug} are served
+# by ONE neutral shell per entity type, kept under /_shell/ (outside the
+# /piezas/ and /artesanos/ namespaces, so no slug can collide with it). The
+# shells carry no entity content: hydrate-detail.js reads the slug from
+# location.pathname and shows the entity only after the public API answers 200,
+# so the API is the sole authority on publication. There is deliberately no
+# per-slug static page.
+#
+# Why `:slug` and not `*` (verified on Wrangler 4.135.0, docs/QA_PRIVATE_ROUTE.md
+# section 5): the first matching rule wins and a 200 rewrite applies even over
+# an existing file. `/piezas/*` also matches `/piezas/` (empty splat) and would
+# replace the list page with the shell. `:slug` is exactly one non-empty
+# segment: it never matches `/piezas/` or a nested path. A rule without a
+# trailing slash does not match the path with one (and vice versa), so both
+# forms are listed. The lists `/piezas/` and `/artesanos/` have no rewrite;
+# nested paths such as /piezas/a/b/ keep their previous behaviour.
+/piezas/:slug  /_shell/pieza/  200
+/piezas/:slug/  /_shell/pieza/  200
+/artesanos/:slug  /_shell/artesano/  200
+/artesanos/:slug/  /_shell/artesano/  200

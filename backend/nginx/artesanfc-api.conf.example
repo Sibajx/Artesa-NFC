@@ -8,8 +8,9 @@
 # upstream address to the real deployment.
 #
 # Policy source: docs/SECURITY.md section 5 (rate limiting) and section 7
-# (Cache-Control: no-store). Nginx is the MVP enforcement layer; FastAPI has
-# no rate limiter of its own on purpose (no per-process state, no Redis).
+# (Cache-Control: no-store). In this example Nginx is the enforcement layer;
+# FastAPI has no rate limiter of its own on purpose (no per-process state, no
+# Redis).
 #
 #   POST /api/v1/certificates/resolve   30 req/min/IP + small burst
 #   public GET endpoints (/api/v1/*)   120 req/min/IP
@@ -18,7 +19,14 @@
 # there is a single Nginx in front of the API, or if limits are later moved
 # to a shared/edge layer.
 #
-# STATUS: this file is a documented example. Verify on the real deployment
+# STATUS: NOT DEPLOYED - alternative / reference configuration only. It is NOT
+# the current production enforcement. Production today is Cloudflare ->
+# Cloudflare Tunnel -> Uvicorn/FastAPI (docs/OPERATIONS.md): no Nginx is in the
+# request path, so nothing below protects production. It also assumes a public
+# TLS listener with a Let's Encrypt certificate, which the Tunnel topology does
+# not use; adopting it behind the Tunnel would need a different variant (plain
+# HTTP on loopback and the real client IP taken from CF-Connecting-IP; see
+# docs/OPERATIONS.md). If it is ever deployed, verify on the real deployment
 # that the limits actually trigger (see the checklist at the bottom).
 
 # --- Upstream ---------------------------------------------------------------
