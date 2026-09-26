@@ -358,6 +358,30 @@ def test_install_tools_installs_a_verified_copy_and_a_launcher(tmp_path):
     assert proc.returncode == 0 and "artesa-deploy" in proc.stdout
 
 
+def test_install_tools_modes_do_not_depend_on_the_umask(tmp_path):
+    # #124: TOOL.json used to inherit the operator's umask (0664 in production with umask 002)
+    s = Scenario(tmp_path)
+    s.release("tools", {**TOOL_SOURCES, "backend/ops/bin/artesa-deploy": LAUNCHER.read_text()})
+    rid = s.ids["tools"]
+    bin_dir = s.root / "bin"
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    (bin_dir / "TOOL.json").write_text("{}\n")
+    os.chmod(bin_dir / "TOOL.json", 0o664)  # a previous install left it group-writable
+    old = os.umask(0o002)
+    try:
+        assert s.run(["install-tools", rid], answers=[rid]) == 0
+    finally:
+        os.umask(old)
+    assert stat.S_IMODE((bin_dir / "TOOL.json").stat().st_mode) == 0o644
+    info = json.loads((bin_dir / "TOOL.json").read_text())
+    assert info["release_id"] == rid and set(info["files"]) == set(ad.Tool.TOOL_FILES)
+    for name in ad.Tool.TOOL_FILES:
+        assert rc.sha256_file(str(bin_dir / f"ops-{rid}" / name)) == info["files"][name]
+        assert stat.S_IMODE((bin_dir / f"ops-{rid}" / name).stat().st_mode) == 0o444
+    assert stat.S_IMODE((bin_dir / f"ops-{rid}").stat().st_mode) == 0o555
+    assert stat.S_IMODE((bin_dir / "artesa-deploy").stat().st_mode) == 0o755
+
+
 def test_install_tools_refuses_a_release_without_the_tool(sc):
     assert sc.run(["install-tools", sc.ids["r1"]], answers=[sc.ids["r1"]]) == rc.Exit.PREFLIGHT
     assert not (sc.root / "bin" / "ops").exists()

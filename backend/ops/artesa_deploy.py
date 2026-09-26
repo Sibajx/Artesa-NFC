@@ -1231,6 +1231,7 @@ class Tool:
                     "installed_at": rc.utc_iso(self.ctx.clock()), "files": {n: rc.sha256_file(str(dest / n)) for n in self.TOOL_FILES}}
             tmp_info = self.layout.bin / f".TOOL.json.tmp-{os.getpid()}"
             tmp_info.write_text(json.dumps(info, indent=2, sort_keys=True) + "\n", encoding="ascii")
+            os.chmod(tmp_info, 0o644)  # explicit, like the files above: never the operator's umask (#124)
             os.replace(tmp_info, self.layout.bin / "TOOL.json")
             self.log().event("install_tools", command="install-tools", target_release=release_id, git_sha=release["git"]["commit"][:12], exit_code=0)
         self.ctx.say(f"installed: {self.layout.bin / 'artesa-deploy'} -> ops-{release_id}")
