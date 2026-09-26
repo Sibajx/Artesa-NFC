@@ -117,6 +117,7 @@ def test_deploy_dry_run_shows_the_plan(sc):
                    "migration: no", "candidate: 127.0.0.1:18001", "rollback target: " + sc.ids["r2"], "auto-rollback on activation failure: yes", "dry run"):
         assert needle in text, needle
     assert sc.ids["r3"] != sc.ids["r2"] and "commit" in text
+    assert "deployment action: none" not in text and "n/a (no activation will occur)" not in text
 
 
 def test_first_deployment_dry_run_does_not_promise_an_auto_rollback(tmp_path):
@@ -127,6 +128,25 @@ def test_first_deployment_dry_run_does_not_promise_an_auto_rollback(tmp_path):
     assert "source=none" in text and "rollback target: none (first deployment)" in text
     assert "auto-rollback on activation failure: yes" not in text
     assert "auto-rollback on activation failure: unavailable (first deployment; no prior release)" in text
+    assert "deployment action: none" not in text and "n/a (no activation will occur)" not in text
+
+
+@pytest.mark.parametrize("dry_run", [True, False])
+def test_deploying_the_active_release_plans_a_no_op_not_a_first_deployment(sc, dry_run):
+    # #125: target == current used to print "rollback target: none (first deployment)"
+    # and a candidate/activation/auto-rollback plan for a run that activates nothing
+    before = sc.world.state_hash()
+    args = ["deploy", sc.ids["r2"]] + (["--dry-run"] if dry_run else [])
+    assert sc.run(args, tty=not dry_run) == 0
+    text = sc.sink.text
+    assert "already the active release; nothing to deploy" in text
+    assert "deployment action: none (target is already the active release)" in text
+    assert f"rollback target: n/a (no activation will occur)   previous release: {sc.ids['r1']}" in text
+    assert "auto-rollback on activation failure: n/a (no activation will occur)" in text
+    for absent in ("first deployment", "candidate: 127.0.0.1", "then activate", "auto-rollback on activation failure: yes", "retention:"):
+        assert absent not in text, absent
+    assert sc.world.state_hash() == before and sc.world.restarts == 0 and sc.world.calls == []
+    assert (sc.current(), sc.previous()) == (sc.ids["r2"], sc.ids["r1"]) and sc.log_events() == []
 
 
 def test_dry_run_reports_auto_rollback_disabled_by_the_operator(sc):
