@@ -20,8 +20,8 @@ anyio==4.15.1 \
 click==8.5.0 \
     --hash=sha256:255bc9599cf7748b4b1a446ccc735421bd08a2ae529a8b88597d3de5664ee360
     # via uvicorn
-fastapi==0.115.6 \
-    --hash=sha256:e9240b29e36fa8f4bb7290316988e90c381e5092e0cbe84e7818cc3713bcf305
+fastapi==0.117.1 \
+    --hash=sha256:33c51a0d21cab2b9722d4e56dbb9316f3687155be6b276191790d8da03507552
     # via -r requirements-prod.in
 greenlet==3.5.6 \
     --hash=sha256:0616b8f878098c5681fd8f0dc92d887551717402342a70f0abcbfea5f5ad8a44 \
@@ -588,8 +588,8 @@ sqlalchemy==2.0.44 \
     # via
     #   -r requirements-prod.in
     #   alembic
-starlette==0.41.3 \
-    --hash=sha256:44cedb2b7c77a9de33a8b74b2b90e9f50d11fcf25d8270ea525ad71a25374ff7
+starlette==0.48.0 \
+    --hash=sha256:0764ca97b097582558ecb498132ed0c7d942f233f365b86ba37770e026510659
     # via fastapi
 typing-extensions==4.16.0 \
     --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8
