@@ -23,7 +23,7 @@ concurrency:
 jobs:
   release-validation:
     name: release-validation
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
 
     defaults:
@@ -154,7 +154,7 @@ jobs:
           EOF
 
       - name: Upload artifact (for review only; deployment is manual)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: artesa-nfc-release
           path: |
@@ -167,7 +167,7 @@ jobs:
     # real hashed installs, real Uvicorn, PostgreSQL 18 containers, real
     # pg_dump/pg_restore and an initdb restore-check. Never touches production.
     name: release-rehearsal
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     needs: release-validation
 

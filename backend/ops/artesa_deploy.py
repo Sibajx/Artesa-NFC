@@ -717,7 +717,17 @@ class Tool:
             self.ctx.say(f"  plan: source={current or 'none'} target={release_id} type={kind} class={plan.deployment_class} alembic {plan.db_revision or 'empty'} -> {plan.head}")
             self.ctx.say(f"  backup: {'REQUIRED (this run), then restore-check on a disposable cluster' if plan.pending else 'not required (code-only)'}   migration: {'yes, alembic upgrade head (forward-only)' if plan.pending else 'no'}")
             self.ctx.say(f"  candidate: 127.0.0.1:{self.ctx.candidate_port} smoke, then activate ({'manual' if self.ctx.restart_mode == 'manual' else 'interactive sudo'} restart); rollback target: {rollback_target or 'none (first deployment)'}")
-            self.ctx.say(f"  auto-rollback on activation failure: {'yes (code-only)' if (auto_rollback and not plan.pending) else 'NO'}   retention: keep {keep_releases} releases")
+            # Same conditions, in the same order, as _activate: a migration, --no-auto-rollback
+            # or no current release to return to (first deployment) each rule it out.
+            if plan.pending:
+                auto = "NO (a migration runs)"
+            elif not auto_rollback:
+                auto = "NO (--no-auto-rollback)"
+            elif not current:
+                auto = "unavailable (first deployment; no prior release)"
+            else:
+                auto = "yes (code-only)"
+            self.ctx.say(f"  auto-rollback on activation failure: {auto}   retention: keep {keep_releases} releases")
         if failure:
             return failure.code
         if dry_run:

@@ -119,6 +119,22 @@ def test_deploy_dry_run_shows_the_plan(sc):
     assert sc.ids["r3"] != sc.ids["r2"] and "commit" in text
 
 
+def test_first_deployment_dry_run_does_not_promise_an_auto_rollback(tmp_path):
+    # _activate cannot roll back without a current release: the plan must say so
+    s = Scenario(tmp_path); s.release("r1"); s.world.serving = None
+    s.run(["deploy", s.ids["r1"], "--dry-run"], tty=False)
+    text = s.sink.text
+    assert "source=none" in text and "rollback target: none (first deployment)" in text
+    assert "auto-rollback on activation failure: yes" not in text
+    assert "auto-rollback on activation failure: unavailable (first deployment; no prior release)" in text
+
+
+def test_dry_run_reports_auto_rollback_disabled_by_the_operator(sc):
+    sc.release("r3")
+    sc.run(["deploy", sc.ids["r3"], "--dry-run", "--no-auto-rollback"], tty=False)
+    assert "auto-rollback on activation failure: NO (--no-auto-rollback)" in sc.sink.text
+
+
 def test_migration_dry_run_shows_backup_and_migration_and_still_mutates_nothing(tmp_path):
     s = Scenario(tmp_path); s.release("r1"); s.activate("r1"); s.release("r_add", migration_files("ccc333", "bbb222", "additive"))
     s.record_rehearsal(); before = s.world.state_hash()
