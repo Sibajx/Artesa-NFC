@@ -12,7 +12,7 @@
 #       --output-file=requirements-prod.lock requirements-prod.in
 # pip-compile keeps the existing pins; changing a version is a separate,
 # reviewed change (docs/DEPLOYMENT.md section 6).
-fastapi==0.115.6
+fastapi==0.117.1
 uvicorn[standard]==0.34.0
 pydantic-settings==2.7.1
 psycopg[binary]==3.2.10
