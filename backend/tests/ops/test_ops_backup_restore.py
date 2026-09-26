@@ -283,3 +283,54 @@ def test_standalone_rehearsal_record_is_evidence_only(env):
     entry = json.loads(layout.rehearsal_log.read_text().splitlines()[-1])
     assert entry["ok"] is False and entry["candidate"] == "failed" and entry["target"] == "ephemeral-cluster"
     assert stat.S_IMODE(layout.rehearsal_log.stat().st_mode) == 0o600
+
+
+# --- artesa-deploy backup (on demand) records the active commit (#123) ------------------------------------
+
+def cli_backups(s):
+    dumps = sorted((s.root / "shared" / "backups").glob("*.dump")) if (s.root / "shared" / "backups").exists() else []
+    return [(d, json.loads(d.with_name(d.name + ".json").read_text())) for d in dumps]
+
+
+def test_on_demand_backup_records_the_active_commit(tmp_path):
+    s = Scenario(tmp_path); s.release("r1"); s.activate("r1")
+    commit = json.loads((s.root / "releases" / s.ids["r1"] / "RELEASE.json").read_text())["git"]["commit"]
+    assert s.run(["backup"]) == 0
+    assert "[WARN]" not in s.sink.text
+    [(dump, meta)] = cli_backups(s)
+    assert meta["active_release"] == s.ids["r1"] and meta["active_commit"] == commit and len(commit) == 40
+    assert dump.name.endswith(f"-{commit[:12]}.dump") and ddb.read_backup_meta(dump)["dump"] == dump.name
+    [event] = s.log_events()
+    assert event["event"] == "backup" and event["backup"] == dump.name and "detail" not in event
+    assert s.run(["restore-check", str(dump), "--ephemeral"], tty=False) == 0 and "restore-check OK" in s.sink.text
+
+
+@pytest.mark.parametrize("damage", ["missing", "not-json", "commit-mismatch"])
+def test_on_demand_backup_warns_but_continues_when_the_active_commit_is_unknown(tmp_path, damage):
+    # a backup matters most when something is already broken: warn, never block
+    s = Scenario(tmp_path); s.release("r1"); s.activate("r1")
+    release_json = s.root / "releases" / s.ids["r1"] / "RELEASE.json"
+    if damage == "missing":
+        release_json.unlink()
+    elif damage == "not-json":
+        release_json.write_text("{not json")
+    else:  # well-formed but untrusted: git.commit no longer matches the release id
+        data = json.loads(release_json.read_text()); data["git"]["commit"] = "f" * 40
+        release_json.write_text(json.dumps(data))
+    assert s.run(["backup"]) == 0
+    assert f"[WARN] active release commit: cannot determine the commit of the active release {s.ids['r1']}" in s.sink.text
+    assert "the backup continues with active_commit unset" in s.sink.text
+    [(dump, meta)] = cli_backups(s)
+    assert meta["active_release"] == s.ids["r1"] and meta["active_commit"] is None
+    assert dump.name == "artesa-nfc-20260921T030000Z-bbb222.dump" and oct(dump.stat().st_mode & 0o777) == "0o600"
+    [event] = s.log_events()
+    assert event["event"] == "backup" and event["exit_code"] == 0 and event["detail"] == "active commit unknown"
+    assert s.run(["restore-check", str(dump), "--ephemeral"], tty=False) == 0 and "restore-check OK" in s.sink.text
+
+
+def test_on_demand_backup_without_an_active_release_is_refused_and_writes_nothing(tmp_path):
+    s = Scenario(tmp_path); s.release("r1"); s.world.serving = None
+    assert s.run(["backup"]) == rc.Exit.PREFLIGHT and "no current release" in s.sink.text
+    backups = s.root / "shared" / "backups"
+    assert not backups.exists() or list(backups.iterdir()) == []
+    assert s.log_events() == [] and not any(os.path.basename(a[0]) == "pg_dump" and "--version" not in a for a in s.world.argv_log)

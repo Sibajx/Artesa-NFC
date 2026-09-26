@@ -565,11 +565,19 @@ class Tool:
         current = self.current_id()
         if not current:
             raise rc.OpsError(rc.Exit.PREFLIGHT, "there is no current release to run the database probe with")
+        # Same source as the deploy-path backup: the active release's validated RELEASE.json (#123).
+        # A backup matters most when something is already broken, so an unreadable commit warns, never blocks.
+        commit = self._commit_of(current)
+        missing = "" if commit else f"cannot determine the commit of the active release {current} (RELEASE.json missing or invalid); the backup continues with active_commit unset"
+        if missing:
+            self.show_gates([Gate("active release commit", "warn", missing)])
         dl.ensure_layout(self.layout)
         with dl.deploy_lock(self.layout):
             state = self.db_state(current, env)
-            result = ddb.create_backup(runner=self.ctx.runner, layout=self.layout, env_file=env, state=state, active_release=current, clock=self.ctx.clock)
-            self.log().event("backup", command="backup", source_release=current, alembic_from=state.revision, backup=result.path.name, backup_sha256=result.sha256, exit_code=0)
+            result = ddb.create_backup(runner=self.ctx.runner, layout=self.layout, env_file=env, state=state, active_release=current, clock=self.ctx.clock,
+                                       active_commit=commit)
+            self.log().event("backup", command="backup", source_release=current, alembic_from=state.revision, backup=result.path.name, backup_sha256=result.sha256,
+                             exit_code=0, **({"detail": "active commit unknown"} if missing else {}))
         self.ctx.say(f"backup {result.path.name}  {result.size} bytes  sha256 {result.sha256[:16]}...  alembic {result.alembic_revision or 'none'}")
         return 0
 
