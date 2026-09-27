@@ -341,7 +341,9 @@ def test_run_refuses_a_drifted_current_release(sc):
 # --- install-tools (bin/, D15) -----------------------------------------------------------------------------------------
 
 LAUNCHER = Path(__file__).resolve().parents[2] / "ops" / "bin" / "artesa-deploy"
-TOOL_SOURCES = {f"backend/ops/{n}": (Path(__file__).resolve().parents[2] / "ops" / n).read_text() for n in ad.Tool.TOOL_FILES}
+OPS_DIR = Path(__file__).resolve().parents[2] / "ops"
+TOOL_NAMES = sorted(ad.tool_files({p.name: "" for p in OPS_DIR.iterdir() if p.is_file()}))
+TOOL_SOURCES = {f"backend/ops/{n}": (OPS_DIR / n).read_text() for n in TOOL_NAMES}
 
 
 def test_install_tools_installs_a_verified_copy_and_a_launcher(tmp_path):
@@ -355,8 +357,8 @@ def test_install_tools_installs_a_verified_copy_and_a_launcher(tmp_path):
     assert os.readlink(bin_dir / "ops") == f"ops-{rid}"
     assert stat.S_IMODE((bin_dir / "artesa-deploy").stat().st_mode) == 0o755
     info = json.loads((bin_dir / "TOOL.json").read_text())
-    assert info["release_id"] == rid and set(info["files"]) == set(ad.Tool.TOOL_FILES)
-    for name in ad.Tool.TOOL_FILES:
+    assert info["release_id"] == rid and set(info["files"]) == set(TOOL_NAMES)
+    for name in TOOL_NAMES:
         assert rc.sha256_file(str(bin_dir / f"ops-{rid}" / name)) == info["files"][name]
         assert stat.S_IMODE((bin_dir / f"ops-{rid}" / name).stat().st_mode) == 0o444
     # the installed launcher really starts the installed tool with the system Python
@@ -380,8 +382,8 @@ def test_install_tools_modes_do_not_depend_on_the_umask(tmp_path):
         os.umask(old)
     assert stat.S_IMODE((bin_dir / "TOOL.json").stat().st_mode) == 0o644
     info = json.loads((bin_dir / "TOOL.json").read_text())
-    assert info["release_id"] == rid and set(info["files"]) == set(ad.Tool.TOOL_FILES)
-    for name in ad.Tool.TOOL_FILES:
+    assert info["release_id"] == rid and set(info["files"]) == set(TOOL_NAMES)
+    for name in TOOL_NAMES:
         assert rc.sha256_file(str(bin_dir / f"ops-{rid}" / name)) == info["files"][name]
         assert stat.S_IMODE((bin_dir / f"ops-{rid}" / name).stat().st_mode) == 0o444
     assert stat.S_IMODE((bin_dir / f"ops-{rid}").stat().st_mode) == 0o555

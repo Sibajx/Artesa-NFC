@@ -28,6 +28,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import sys
 import time
 import urllib.error
@@ -48,6 +49,81 @@ import release_probe as rp  # noqa: E402
 MIN_FREE_BYTES = 300 * 1024 * 1024
 HEALTH_TIMEOUT = 45.0
 _PIP_IGNORED = frozenset({"pip", "setuptools", "wheel"})
+
+# --- the installed tool (bin/, #131) ------------------------------------------------
+
+TOOL_JSON_SCHEMA = 2
+TOOL_LAUNCHER = "ops/bin/artesa-deploy"
+# ops/*.py that never run on the server: the builder runs on the operator's machine.
+TOOL_EXCLUDED = frozenset({"build_release.py"})
+_STALE_TOOL_TMP = re.compile(r"\.ops-[0-9A-Za-z-]+\.tmp-\d+|\.ops\.tmp-\d+|\.artesa-deploy\.tmp-\d+|\.TOOL\.json\.tmp-\d+")
+_TOOL_VERSION_RE = re.compile(r'^TOOL_VERSION = "([^"\n]+)"$', re.M)
+
+
+def tool_files(entries: dict[str, str]) -> dict[str, str]:
+    """The installed tool = every top-level ``*.py`` of ``ops/`` except the
+    builder. ``entries`` maps names relative to ``ops/`` to SHA-256. A module
+    added in a future release is installed without the installer knowing it."""
+    return {name: sha for name, sha in entries.items() if "/" not in name and name.endswith(".py") and name not in TOOL_EXCLUDED}
+
+
+def target_tool_version(ops_dir: Path) -> str | None:
+    """TOOL_VERSION of a tool on disk, read as text (never imported)."""
+    try:
+        match = _TOOL_VERSION_RE.search((ops_dir / "release_common.py").read_text(encoding="utf-8"))
+    except OSError:
+        return None
+    return match.group(1) if match else None
+
+
+def read_tool_json(path: Path) -> dict | None:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def tool_state(layout: dl.Layout) -> dict:
+    """Read-only consistency of bin/: bin/ops vs TOOL.json (v1 or v2) vs the
+    files on disk. Reports problems; never repairs anything."""
+    ops_link, info_path = layout.bin / "ops", layout.bin / "TOOL.json"
+    state: dict = {"installed": os.path.islink(ops_link) or info_path.exists(), "ops": None, "release_id": None,
+                   "schema_version": None, "installer_matches_target": None, "problems": []}
+    if not state["installed"]:
+        return state
+    problems = state["problems"]
+    target = os.readlink(ops_link) if os.path.islink(ops_link) else None
+    state["ops"] = target
+    info = read_tool_json(info_path)
+    if target is None:
+        problems.append("bin/ops is missing or not a symlink")
+    if info is None:
+        problems.append("bin/TOOL.json is missing or unreadable")
+        return state
+    state["release_id"] = info.get("release_id")
+    state["schema_version"] = info.get("schema_version", 1)
+    installer = info.get("installer")
+    if isinstance(installer, dict):
+        state["installer_matches_target"] = installer.get("matches_target")
+    if target is not None and target != f"ops-{info.get('release_id')}":
+        problems.append(f"bin/ops -> {target} but TOOL.json describes ops-{info.get('release_id')} (partial install?)")
+    files = info.get("files") if isinstance(info.get("files"), dict) else {}
+    directory = layout.bin / target if target else None
+    if directory is not None and directory.is_dir():
+        present = {e.name for e in os.scandir(directory) if e.name.endswith(".py")}
+        for name in sorted(set(files) - present):
+            problems.append(f"TOOL.json lists {name}, missing from bin/{target}")
+        for name in sorted(present - set(files)):
+            problems.append(f"bin/{target}/{name} is not listed in TOOL.json")
+        for name in sorted(set(files) & present):
+            if rc.sha256_file(str(directory / name)) != files[name]:
+                problems.append(f"bin/{target}/{name} differs from TOOL.json")
+    elif target is not None:
+        problems.append(f"bin/ops points to a missing directory ({target})")
+    if stat.S_IMODE(info_path.stat().st_mode) != 0o644:
+        problems.append(f"bin/TOOL.json mode {stat.S_IMODE(info_path.stat().st_mode):o} (expected 644)")
+    return state
 
 
 # --- context (everything with a side effect is injectable for tests) -------------
@@ -246,6 +322,7 @@ class Context:
     health_timeout: float = HEALTH_TIMEOUT
     pg_bindir: str | None = None
     restart_mode: str = "sudo"
+    executor: Path | None = None   # the running artesa_deploy.py (tests); default: this file
 
     def __post_init__(self) -> None:
         self.root = Path(self.root)
@@ -456,6 +533,7 @@ class Tool:
         report["unit_points_at_current"] = {"ok": ok, "detail": detail}
         report["lock_held"] = dl.lock_is_held(self.layout)
         report["unresolved_activation"] = dl.read_activation_marker(self.layout) is not None
+        report["tooling"] = tooling = tool_state(self.layout)  # read-only; warnings only (#131)
         report["problems"] = problems
         if as_json:
             self.ctx.say(json.dumps(report, indent=2, sort_keys=True))
@@ -472,6 +550,12 @@ class Tool:
             for entry in report["releases"]:  # type: ignore[union-attr]
                 tags = ("current " if entry["id"] == report.get("current") else "") + ("previous" if entry["id"] == report.get("previous") else "")
                 self.ctx.say(f"  {entry['id']}  {entry['status']:<10} {entry['channel'] or '-':<10} {entry['commit'] or '-':<12} {tags} {entry['detail']}")
+            if tooling["installed"]:
+                matches = {True: "yes", False: "NO", None: "n/a (TOOL.json v1)"}[tooling["installer_matches_target"]]
+                self.ctx.say(f"tooling         bin/ops -> {tooling['ops'] or '-'}  TOOL.json {tooling['release_id'] or '-'} (schema {tooling['schema_version'] or '-'})  "
+                             f"installer matched target: {matches}")
+                for warning in tooling["problems"]:
+                    self.ctx.say(f"TOOLING WARNING: {warning} -- re-run install-tools (see docs/DEPLOYMENT.md §11.7)")
             for problem in problems:
                 self.ctx.say(f"PROBLEM: {problem}")
         return 0 if not problems else int(rc.Exit.PREFLIGHT)
@@ -1500,40 +1584,162 @@ class Tool:
 
     # -- install-tools (bin/) -------------------------------------------------------------------------------------------------
 
-    TOOL_FILES = ("artesa_deploy.py", "deploy_db.py", "deploy_layout.py", "release_artifact.py", "release_common.py", "release_probe.py")
+    def _target_tool(self, release_id: str) -> tuple[dict[str, str], str]:
+        """#131: the tool files to install come from the TARGET release -- its
+        MANIFEST, already verified against the tree by prepared_problems() --
+        never from a list compiled into the (possibly older) running tool."""
+        try:
+            manifest = rc.parse_manifest((self.layout.release_dir(release_id) / "MANIFEST.sha256").read_bytes())
+        except OSError:
+            raise rc.OpsError(rc.Exit.PREFLIGHT, f"release {release_id} has no readable MANIFEST.sha256") from None
+        files = tool_files({rel[len("ops/"):]: sha for rel, sha in manifest.items() if rel.startswith("ops/")})
+        missing = [n for n in ("artesa_deploy.py",) if n not in files] + ([] if TOOL_LAUNCHER in manifest else ["bin/artesa-deploy"])
+        if missing:
+            raise rc.OpsError(rc.Exit.PREFLIGHT, "release does not carry the deploy tool: " + ", ".join(missing))
+        return files, manifest[TOOL_LAUNCHER]
+
+    def _installed_dir_problems(self, directory: Path, expected: dict[str, str]) -> list[str]:
+        """An existing bin/ops-<id> is reused only if it is exactly the target's
+        tool: same names, same SHA-256, read-only modes, nothing extra."""
+        problems: list[str] = []
+        if os.path.islink(directory) or not directory.is_dir():
+            return ["is not a real directory"]
+        if stat.S_IMODE(directory.stat().st_mode) != 0o555:
+            problems.append(f"directory mode {stat.S_IMODE(directory.stat().st_mode):o} (expected 555)")
+        present = {e.name for e in os.scandir(directory)}
+        problems += [f"missing file: {n}" for n in sorted(set(expected) - present)]
+        problems += [f"unexpected entry: {n}" for n in sorted(present - set(expected))]
+        for name in sorted(set(expected) & present):
+            st = os.lstat(directory / name)
+            if not stat.S_ISREG(st.st_mode):
+                problems.append(f"not a regular file: {name}")
+                continue
+            if stat.S_IMODE(st.st_mode) != 0o444:
+                problems.append(f"mode {stat.S_IMODE(st.st_mode):o}: {name} (expected 444)")
+            if rc.sha256_file(str(directory / name)) != expected[name]:
+                problems.append(f"content differs from the target release: {name}")
+        return problems
+
+    def _executor_identity(self, target_files: dict[str, str]) -> dict:
+        """Which code is running this install-tools, measured -- not assumed."""
+        me = Path(self.ctx.executor or __file__).resolve()
+        here = me.parent
+        mine = tool_files({e.name: rc.sha256_file(e.path) for e in os.scandir(here) if e.is_file()})
+        installer_release = None
+        candidate = here.name[len("ops-"):] if here.name.startswith("ops-") and here.parent.name == "bin" else (
+            here.parent.name if here.name == "ops" and here.parent.parent.name == "releases" else None)
+        if candidate:
+            try:
+                installer_release = rc.validate_release_id(candidate)
+            except rc.OpsError:
+                installer_release = None
+        commit = None
+        if installer_release:
+            commit = self._commit_of(installer_release) if (self.layout.release_dir(installer_release) / "RELEASE.json").exists() else None
+            if commit is None:
+                previous = read_tool_json(self.layout.bin / "TOOL.json")
+                if previous and previous.get("release_id") == installer_release:
+                    commit = previous.get("git_commit")
+        return {"path": str(me), "release_id": installer_release, "git_commit": commit,
+                "artesa_deploy_sha256": mine.get("artesa_deploy.py") or rc.sha256_file(str(me)),
+                "tool_version": rc.TOOL_VERSION, "matches_target": mine == target_files}
+
+    def canonical_install_command(self, release_id: str) -> str:
+        extra = f" --root {self.layout.root} --rehearsal" if self.ctx.rehearsal else ""
+        return f"/usr/bin/python3 -I -B {self.layout.release_dir(release_id)}/ops/artesa_deploy.py{extra} install-tools {release_id}"
+
+    def _remove_stale_temporaries(self) -> list[str]:
+        """Leftovers of an interrupted install-tools (only names this command
+        creates). Safe: the caller holds the deployment lock."""
+        removed = []
+        for entry in os.scandir(self.layout.bin):
+            if not _STALE_TOOL_TMP.fullmatch(entry.name):
+                continue
+            path = Path(entry.path)
+            if entry.is_dir(follow_symlinks=False):
+                for sub, dirs, _files in os.walk(path):
+                    os.chmod(sub, 0o700)
+                shutil.rmtree(path)
+            else:
+                os.unlink(path)
+            removed.append(entry.name)
+        return removed
+
+    def _stage_tool(self, source: Path, dest: Path, files: dict[str, str]) -> None:
+        staging = self.layout.bin / f".ops-{dest.name[len('ops-'):]}.tmp-{os.getpid()}"
+        os.mkdir(staging, 0o755)
+        try:
+            for name, sha in sorted(files.items()):
+                shutil.copyfile(source / name, staging / name)
+                if rc.sha256_file(str(staging / name)) != sha:
+                    raise rc.OpsError(rc.Exit.PREFLIGHT, f"copied {name} does not match the target MANIFEST")
+                os.chmod(staging / name, 0o444)
+            os.chmod(staging, 0o555)
+            os.rename(staging, dest)
+        except BaseException:
+            if staging.exists():
+                os.chmod(staging, 0o700)
+                shutil.rmtree(staging, ignore_errors=True)
+            raise
+
+    def _write_tool_json(self, info: dict) -> None:
+        tmp_info = self.layout.bin / f".TOOL.json.tmp-{os.getpid()}"
+        tmp_info.write_text(json.dumps(info, indent=2, sort_keys=True) + "\n", encoding="ascii")
+        os.chmod(tmp_info, 0o644)  # explicit, like the files above: never the operator's umask (#124)
+        os.replace(tmp_info, self.layout.bin / "TOOL.json")
 
     def cmd_install_tools(self, release_id: str, dry_run: bool) -> int:
-        """Install this tool into <root>/bin from a verified, prepared release:
-        bin/ops-<release-id>/ (read-only copy), bin/ops -> ops-<id> (atomic),
-        bin/artesa-deploy (launcher) and bin/TOOL.json (provenance)."""
+        """Install the target release's tool into <root>/bin: bin/ops-<id>/
+        (read-only copy of the target's ops/*.py, verified against its
+        MANIFEST), bin/ops -> ops-<id> (atomic), bin/artesa-deploy (launcher)
+        and bin/TOOL.json v2 (installed target + the installer that ran).
+        The whole invocation runs with the code already loaded; the canonical
+        way to install a release's tool is therefore to run that release's
+        own copy: python3 -I -B <root>/releases/<id>/ops/artesa_deploy.py
+        install-tools <id> (#131). No self-exec, no second phase."""
         self.require_tty(dry_run)
         self.check_root()
         rc.validate_release_id(release_id)
         problems = self.prepared_problems(release_id)
         if problems:
             raise rc.OpsError(rc.Exit.PREFLIGHT, "source release failed verification: " + "; ".join(problems[:3]))
+        files, _launcher_sha = self._target_tool(release_id)
         source = self.layout.release_dir(release_id) / "ops"
         launcher = source / "bin" / "artesa-deploy"
-        missing = [n for n in self.TOOL_FILES if not (source / n).is_file()] + ([] if launcher.is_file() else ["bin/artesa-deploy"])
-        if missing:
-            raise rc.OpsError(rc.Exit.PREFLIGHT, "release does not carry the deploy tool: " + ", ".join(missing))
         release = self.load_release(release_id)
+        installer = self._executor_identity(files)
+        dest = self.layout.bin / f"ops-{release_id}"
+        existing = None
+        if dest.exists() or os.path.islink(dest):
+            existing = self._installed_dir_problems(dest, files)
         self.ctx.say(f"install-tools from {release_id} (commit {release['git']['commit'][:12]}) into {self.layout.bin}")
+        self.ctx.say(f"  tool files from the target MANIFEST: {', '.join(sorted(files))}")
+        self.ctx.say(f"  bin/ops-{release_id}: " + ("absent (will be staged)" if existing is None else ("present and identical (reused)" if not existing else "PRESENT BUT DIFFERENT")))
+        self.ctx.say(f"  installer: {installer['path']} (release {installer['release_id'] or 'unknown'}, tool {installer['tool_version']}); "
+                     f"matches target: {'yes' if installer['matches_target'] else 'NO'}")
+        if not installer["matches_target"]:
+            self.ctx.say("WARNING: the running installer is not the target's tool. This install is governed by the installer's code; changes to install-tools")
+            self.ctx.say("  itself in the target take effect only from the next invocation. Canonical (runs the target's own tool):")
+            self.ctx.say(f"    {self.canonical_install_command(release_id)}")
+        if existing:
+            for item in existing[:5]:
+                self.ctx.say(f"  problem: bin/ops-{release_id}: {item}")
+            raise rc.OpsError(rc.Exit.PREFLIGHT, f"bin/ops-{release_id} exists but differs from the target release ({len(existing)} problem(s)); it is NOT reused "
+                                                 "and nothing was changed. Inspect it, then remove it by hand (chmod -R u+w, rm -r) to reinstall")
         if dry_run:
             self.ctx.say("(dry run: nothing was written)")
             return 0
         self.confirm(release_id)
         dl.ensure_layout(self.layout)
         with dl.deploy_lock(self.layout):
-            dest = self.layout.bin / f"ops-{release_id}"
+            removed = self._remove_stale_temporaries()
+            if removed:
+                self.ctx.say(f"  removed leftovers of an interrupted install: {', '.join(removed)}")
+            previous_state = tool_state(self.layout)
+            if previous_state["problems"]:
+                self.ctx.say(f"  the previous installation was inconsistent ({previous_state['problems'][0]}); this install replaces it")
             if not dest.exists():
-                staging = self.layout.bin / f".ops-{release_id}.tmp-{os.getpid()}"
-                os.mkdir(staging, 0o755)
-                for name in self.TOOL_FILES:
-                    shutil.copyfile(source / name, staging / name)
-                    os.chmod(staging / name, 0o444)
-                os.chmod(staging, 0o555)
-                os.rename(staging, dest)
+                self._stage_tool(source, dest, files)
             tmp = self.layout.bin / f".ops.tmp-{os.getpid()}"
             os.symlink(dest.name, tmp)
             os.replace(tmp, self.layout.bin / "ops")
@@ -1541,14 +1747,14 @@ class Tool:
             shutil.copyfile(launcher, tmp_launcher)
             os.chmod(tmp_launcher, 0o755)
             os.replace(tmp_launcher, self.layout.bin / "artesa-deploy")
-            info = {"release_id": release_id, "git_commit": release["git"]["commit"], "tool_version": rc.TOOL_VERSION,
-                    "installed_at": rc.utc_iso(self.ctx.clock()), "files": {n: rc.sha256_file(str(dest / n)) for n in self.TOOL_FILES}}
-            tmp_info = self.layout.bin / f".TOOL.json.tmp-{os.getpid()}"
-            tmp_info.write_text(json.dumps(info, indent=2, sort_keys=True) + "\n", encoding="ascii")
-            os.chmod(tmp_info, 0o644)  # explicit, like the files above: never the operator's umask (#124)
-            os.replace(tmp_info, self.layout.bin / "TOOL.json")
-            self.log().event("install_tools", command="install-tools", target_release=release_id, git_sha=release["git"]["commit"][:12], exit_code=0)
-        self.ctx.say(f"installed: {self.layout.bin / 'artesa-deploy'} -> ops-{release_id}")
+            info = {"schema_version": TOOL_JSON_SCHEMA, "release_id": release_id, "git_commit": release["git"]["commit"],
+                    "tool_version": target_tool_version(source), "installed_at": rc.utc_iso(self.ctx.clock()),
+                    "files": {n: rc.sha256_file(str(dest / n)) for n in sorted(files)}, "installer": installer}
+            self._write_tool_json(info)
+            self.log().event("install_tools", command="install-tools", target_release=release_id, git_sha=release["git"]["commit"][:12], exit_code=0,
+                             detail=(f"installer={installer['release_id'] or 'unknown'} sha={installer['artesa_deploy_sha256'][:12]} "
+                                     f"matches_target={str(installer['matches_target']).lower()}" + (f" removed_tmp={len(removed)}" if removed else ""))[:200])
+        self.ctx.say(f"installed: {self.layout.bin / 'artesa-deploy'} -> ops-{release_id} (TOOL.json schema {TOOL_JSON_SCHEMA})")
         return 0
 
     # -- prune ---------------------------------------------------------------------------------------------------------------

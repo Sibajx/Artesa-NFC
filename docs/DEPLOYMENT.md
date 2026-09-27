@@ -73,7 +73,7 @@ Lo que N-08 cambia, punto por punto:
 ├── bin/
 │   ├── artesa-deploy            lanzador (/usr/bin/python3 -I -B bin/ops/artesa_deploy.py)
 │   ├── ops -> ops-<release-id>  copia de solo lectura de la herramienta, de un release verificado
-│   └── TOOL.json                de qué release/commit viene la herramienta instalada (+ SHA-256)
+│   └── TOOL.json                v2: release/commit instalado (+ SHA-256) y el instalador que lo ejecutó (§11.7)
 ├── incoming/                    artifacts + .sha256 copiados desde la máquina de build
 ├── releases/
 │   └── <YYYYMMDDTHHMMSSZ>-<commit12>/   inmutable
@@ -446,7 +446,13 @@ bin/artesa-deploy deploy  <id> --expect-commit <sha12+>            # CODE_ONLY
 bin/artesa-deploy deploy  <id> --expect-commit <sha12+> --allow-migration   # MIGRATION_DEPLOY
 ```
 
-Si `ops/` cambió en el release: `bin/artesa-deploy install-tools <id>` después.
+Si `ops/` cambió en el release, instalar la herramienta **con la copia del propio
+release** (camino canónico, §11.7), después del deploy:
+
+```bash
+/usr/bin/python3 -I -B /home/energias/artesa-nfc/releases/<id>/ops/artesa_deploy.py install-tools <id>
+bin/artesa-deploy status        # línea "tooling": bin/ops, TOOL.json, installer matched target: yes
+```
 
 ### 11.3 Rollback
 
@@ -480,6 +486,68 @@ Si `ops/` cambió en el release: `bin/artesa-deploy install-tools <id>` después
 entorno compuesto desde `shared/.env`: no hace falta `source` ni pegar
 `DATABASE_URL`. La salida va solo al terminal. Las migraciones nunca pasan por
 aquí.
+
+### 11.7 Herramienta instalada (`install-tools`, #131)
+
+Un proceso Python no cambia de código porque cambie un symlink: toda la invocación de
+`install-tools` la gobierna el código que la **ejecuta**. Con `bin/artesa-deploy
+install-tools <id>` ese código es la herramienta *ya instalada* (el release anterior): el
+2026-09-27 la de R2 instaló la de R3 y `TOOL.json` salió con las reglas de R2 (0664).
+
+**Camino canónico:** ejecutar la herramienta del release destino desde su directorio
+inmutable y ya verificado:
+
+```bash
+/usr/bin/python3 -I -B <root>/releases/<id>/ops/artesa_deploy.py install-tools <id>
+```
+
+No hay self-exec ni un comando en dos fases. Lo que hace `install-tools`:
+
+- Los archivos a instalar salen del **MANIFEST del destino**: todos los `ops/*.py` de
+  primer nivel salvo `build_release.py` (el builder no corre en el servidor), más el
+  lanzador `ops/bin/artesa-deploy`. Un módulo nuevo en un release futuro se instala
+  aunque el instalador no lo conozca.
+- Staging `bin/.ops-<id>.tmp-<pid>` → cada archivo comparado con el MANIFEST → 0444,
+  directorio 0555 → `rename` atómico a `bin/ops-<id>`; si falla, el staging propio se
+  borra y `bin/ops` no cambia.
+- Si `bin/ops-<id>` ya existe se **verifica** (nombres, SHA-256, modos 444/555, nada de
+  más): idéntico → se reutiliza (idempotente); distinto → exit 11, **no** se reutiliza ni
+  se borra; el operador lo inspecciona y lo retira a mano (`chmod -R u+w`, `rm -r`).
+- `bin/ops` → `ops-<id>` (symlink atómico), lanzador (0755), `TOOL.json` (tmp + 0644 +
+  `rename`). Con el lock tomado se borran restos de instalaciones interrumpidas
+  (`.ops-*.tmp-*`, `.ops.tmp-*`, `.artesa-deploy.tmp-*`, `.TOOL.json.tmp-*`).
+- Si el instalador no es la herramienta del destino (hashes distintos), avisa (`WARNING`)
+  y muestra el comando canónico. No bloquea: los archivos instalados son siempre los del
+  destino.
+
+**`TOOL.json` v2** (compatible: un archivo sin `schema_version` es v1, R1–R3):
+
+```json
+{
+  "schema_version": 2,
+  "release_id": "<destino>", "git_commit": "<destino>", "tool_version": "<TOOL_VERSION del destino>",
+  "installed_at": "...", "files": { "<nombre>": "<sha256>" },
+  "installer": {
+    "path": "<artesa_deploy.py que se ejecutó>", "release_id": "<o null>", "git_commit": "<o null>",
+    "artesa_deploy_sha256": "...", "tool_version": "<TOOL_VERSION del instalador>", "matches_target": true
+  }
+}
+```
+
+El primer nivel describe el **estado instalado**; `installer`, la **ejecución** (medida:
+hash del archivo en ejecución y de sus módulos hermanos; `matches_target` es la igualdad
+de esos hashes con los del destino). El deploy-log registra lo mismo en `detail`
+(`installer=<id> sha=<12> matches_target=<bool>`). `TOOL_VERSION` es `1.2.0` desde R4.
+
+**`bin/ops` y `TOOL.json` no coinciden.** `status` lo muestra como `TOOLING WARNING`
+(solo lectura, sin cambiar el código de salida): `bin/ops` apunta a otro release que
+`TOOL.json`, un archivo instalado difiere de `TOOL.json`, falta o sobra un módulo, o el
+modo de `TOOL.json` no es 0644. Es lo que deja un corte entre el cambio de `bin/ops` y la
+escritura de `TOOL.json`. Recuperación: volver a ejecutar el camino canónico para el
+release al que apunta `bin/ops` (o el que se quiera instalar); limpia los restos y
+reescribe `TOOL.json`. Si `bin/artesa-deploy` no arranca (herramienta rota), cualquier
+comando puede ejecutarse igual desde `releases/<id>/ops/artesa_deploy.py`, incluido
+`rollback`.
 
 ## 12. Códigos de salida
 
