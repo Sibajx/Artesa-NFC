@@ -124,10 +124,15 @@ def build(clone: Path, out: Path, tick: int) -> br.BuildResult:
 
 class ProcessService:
     """Starts the *real* production command line from <root>/current. Optionally
-    simulates a failed restart for chosen releases."""
+    simulates a failed restart (``fail_for``: the process is stopped and the
+    new one does not start), a privileged restart that never reaches systemd
+    (``fail_before_systemd``: sudo times out, the old process keeps serving --
+    the R3 activation of 2026-09-27) or a Ctrl-C (``interrupt_for``)."""
 
     def __init__(self, root: Path, guard_env: dict[str, str], fail_for: set[str]) -> None:
         self.root, self.env_values, self.fail_for = root, guard_env, fail_for
+        self.fail_before_systemd: set[str] = set()
+        self.interrupt_for: set[str] = set()
         self.proc: subprocess.Popen | None = None
         self.restarts = 0
 
@@ -140,10 +145,22 @@ class ProcessService:
                 os.killpg(self.proc.pid, signal.SIGKILL); self.proc.wait()
         self.proc = None
 
-    def restart(self) -> None:
+    def preflight(self) -> dict:
+        return {"mode": "rehearsal", "ok": True}
+
+    def identity(self) -> tuple[str, int] | None:
+        """systemd's InvocationID/ExecMainPID stand-in: changes on every real restart."""
+        return (f"inv{self.restarts}", self.proc.pid if self.proc else 0)
+
+    def restart(self, purpose: str = "activation") -> None:
+        current = os.path.basename(os.path.realpath(self.root / "current"))
+        if current in self.fail_before_systemd:
+            raise ad.RestartError(ad.RestartOutcome("sudo", purpose, "sudo-timeout", 124, 180.0, False),
+                                  "simulated: 'sudo systemctl restart' timed out after 180 s and systemd did NOT restart the unit")
+        if current in self.interrupt_for:
+            raise KeyboardInterrupt
         self.restarts += 1
         self.stop()
-        current = os.path.basename(os.path.realpath(self.root / "current"))
         if current in self.fail_for:
             raise rc.OpsError(rc.Exit.ACTIVATION_ROLLBACK_FAILED, "simulated: the service failed to restart")
         log = open(self.root / "shared" / "state" / "service.log", "ab")
@@ -156,6 +173,32 @@ class ProcessService:
         wd = str(self.root / "current")
         alive = self.proc is not None and self.proc.poll() is None
         return dl.ServiceInfo(True, "active" if alive else "inactive", "running" if alive else "dead", 0, wd, wd + "/venv/bin/python")
+
+
+def run_pty(argv: list[str], answer: str, timeout: float = 60) -> tuple[int, str]:
+    """Run a real CLI under a pseudo-terminal and type ``answer`` at the
+    typed-confirmation prompt."""
+    pid, fd = pty.fork()
+    if pid == 0:
+        os.execv(argv[0], argv)
+    buf = b""
+    deadline = time.time() + timeout
+    while time.time() < deadline and b"to continue" not in buf:
+        try:
+            buf += os.read(fd, 4096)
+        except OSError:
+            break
+    os.write(fd, f"{answer}\n".encode())
+    while True:
+        try:
+            chunk = os.read(fd, 4096)
+            if not chunk:
+                break
+            buf += chunk
+        except OSError:
+            break
+    _, status = os.waitpid(pid, 0)
+    return os.waitstatus_to_exitcode(status), buf.decode(errors="replace")
 
 
 def make_venv(path: Path) -> None:
@@ -270,12 +313,12 @@ def main() -> int:
         answers: list[str] = []
         service = ProcessService(root, env_values, set())
 
-        def cli(argv: list[str], *, tty: bool = True, answer=None) -> tuple[int, str]:
+        def cli(argv: list[str], *, tty: bool = True, answer=None, svc=None, prompt=None) -> tuple[int, str]:
             out: list[str] = []
             guard = rp.SecretGuard()
             answers_left = [answer] if isinstance(answer, str) or answer is None else list(answer)
-            ctx = ad.Context(root=root, rehearsal=True, prod_port=PROD_PORT, candidate_port=CAND_PORT, runner=rp.Runner(guard), service=service,
-                             is_tty=lambda: tty, prompt=lambda m: (answers_left.pop(0) if answers_left else "") or "", out=out.append,
+            ctx = ad.Context(root=root, rehearsal=True, prod_port=PROD_PORT, candidate_port=CAND_PORT, runner=rp.Runner(guard), service=svc or service,
+                             is_tty=lambda: tty, prompt=prompt or (lambda m: (answers_left.pop(0) if answers_left else "") or ""), out=out.append,
                              public_check=None, make_venv=make_venv, health_timeout=40.0, pg_bindir=str(pg_bindir))
             code = ad.main(["--root", str(root), "--rehearsal", "--prod-port", str(PROD_PORT), "--candidate-port", str(CAND_PORT), *argv], ctx)
             return code, "\n".join(out)
@@ -403,7 +446,63 @@ def main() -> int:
         code, out = cli(["deploy", ids["r6"]], answer=ids["r6"])
         step("R6: candidate ok, restart fails -> exit 50, automatically back on R3, service healthy",
              code == 50 and state() == current_before and service.proc and service.proc.poll() is None and rp.port_owner_state(PROD_PORT, root / "current").state == "expected", f"exit {code}")
+        rb = json.loads((sorted((root / "shared" / "state" / "deployments").iterdir())[-1] / "rollback.json").read_text())
+        step("R6 rollback evidence: R3 was down, so the rollback restarted it (strategy 'restart')", rb["strategy"] == "restart" and rb["ok"], rb["strategy"])
         service.fail_for = set()
+
+        print("\n== S10b privileged restart never reaches systemd (#130) -> health-first rollback, no second restart")
+        service.fail_before_systemd = {ids["r6"]}
+        pid_before, restarts_before = service.proc.pid, service.restarts
+        code, out = cli(["deploy", ids["r6"]], answer=ids["r6"])
+        evidence = sorted((root / "shared" / "state" / "deployments").iterdir())[-1]
+        rb = json.loads((evidence / "rollback.json").read_text())
+        smoke = json.loads((evidence / "final-smoke.json").read_text())
+        step("sudo timeout: exit 50, back on R3 without restarting (same pid), timeout named in the evidence",
+             code == 50 and state() == current_before and service.proc.pid == pid_before and service.restarts == restarts_before
+             and rb["strategy"] == "health-first" and smoke["restart"]["kind"] == "sudo-timeout" and "timed out" in out, f"exit {code}, strategy {rb['strategy']}")
+        step("privilege preflight ran and was recorded before the switch", (evidence / "privilege-preflight.json").exists())
+        service.fail_before_systemd = set()
+
+        print("\n== S10c interrupted activation (#130): current -> R6 while R3 still serves, then human resolution")
+        service.interrupt_for = {ids["r6"]}
+        code, out = cli(["deploy", ids["r6"]], answer=ids["r6"])
+        evidence = sorted((root / "shared" / "state" / "deployments").iterdir())[-1]
+        result = json.loads((evidence / "result.json").read_text())
+        step("Ctrl-C during the restart: exit 3, result 'interrupted', marker kept, STATE/NEXT printed",
+             code == 3 and result["status"] == "interrupted" and state() == (ids["r6"], ids["r3"]) and (root / "shared" / "state" / "activation.json").exists()
+             and "STATE:" in out and "is NOT what serves the port" in out, f"exit {code}, status {result['status']}")
+        step("the R3 process still holds the port (symlink says R6)", rp.port_owner_state(PROD_PORT, root / "releases" / ids["r3"]).state == "expected")
+        service.interrupt_for = set()
+        service.restart()  # the operator restarts the unit by hand
+        code, out = cli(["resolve-activation"], answer="resolve")
+        step("after a real restart, resolve-activation verifies R6 and clears the marker",
+             code == 0 and not (root / "shared" / "state" / "activation.json").exists() and rp.port_owner_state(PROD_PORT, root / "current").state == "expected", f"exit {code}")
+
+        print("\n== S10d manual restart is verified with systemd (#130): a premature 'restarted' is not accepted")
+
+        class RehearsalManual(ad.ManualRestartService):
+            def identity(self):
+                return service.identity()
+
+            def info(self):
+                return service.info()
+
+        confirmations = {"n": 0}
+
+        def operator(message: str) -> str:
+            if "restart has completed" in message:
+                confirmations["n"] += 1
+                if confirmations["n"] == 2:
+                    service.restart()  # only now does the operator really run it in the second session
+                return "restarted"
+            return ids["r3"]
+
+        manual_out: list[str] = []
+        manual = RehearsalManual(rp.Runner(rp.SecretGuard()), operator, manual_out.append)
+        code, out = cli(["rollback"], svc=manual, prompt=operator)
+        step("manual rollback: first 'restarted' rejected (InvocationID unchanged), second accepted; current=R3, previous=R6",
+             code == 0 and state() == (ids["r3"], ids["r6"]) and confirmations["n"] == 2
+             and any("NOT restarted" in line for line in manual_out) and any("ROLLBACK RESTART" in line for line in manual_out), f"exit {code}")
 
         print("\n== S11 an alien process on the production port fails closed")
         service.stop()
@@ -455,16 +554,26 @@ def main() -> int:
         step("real pty: prune --delete asks for typed confirmation and deletes only the listed releases, never current/previous",
              os.waitstatus_to_exitcode(status) == 0 and len(left) == 3 and state()[0] in left and (state()[1] in left), f"{len(left)} releases left")
 
-        print("\n== S14b install-tools + the real bin/ launcher")
+        print("\n== S14b install-tools, canonical path (#131): the target release's own tool, real pty, then the bin/ launcher")
         (clone / "backend" / "app" / "r7_marker.py").write_text('MARK = "r7"\n'); git(clone, "add", "-A"); git(clone, "commit", "-q", "-m", "r7 tools")
         r7 = build(clone, root / "incoming", 7)
         step("prepare R7 (carries ops/ + ops/bin/artesa-deploy)", cli(["prepare", r7.release_id])[0] == 0)
-        code, out = cli(["install-tools", r7.release_id], answer=r7.release_id)
+        target_tool = root / "releases" / r7.release_id / "ops" / "artesa_deploy.py"
+        code, out = run_pty(["/usr/bin/python3", "-I", "-B", str(target_tool), "--root", str(root), "--rehearsal", "install-tools", r7.release_id], r7.release_id)
+        info = json.loads((root / "bin" / "TOOL.json").read_text())
+        manifest = rc.parse_manifest((root / "releases" / r7.release_id / "MANIFEST.sha256").read_bytes())
+        step("canonical install from releases/<id>/ops: bin/ops -> ops-<id>, TOOL.json v2, installer == target, 0644, hashes == MANIFEST",
+             code == 0 and os.readlink(root / "bin" / "ops") == f"ops-{r7.release_id}" and info.get("schema_version") == 2
+             and info["installer"]["release_id"] == r7.release_id and info["installer"]["matches_target"] is True and info["tool_version"] == rc.TOOL_VERSION
+             and (os.stat(root / "bin" / "TOOL.json").st_mode & 0o777) == 0o644
+             and all(manifest[f"ops/{name}"] == sha for name, sha in info["files"].items()) and "build_release.py" not in info["files"],
+             f"exit {code}, schema {info.get('schema_version')}, matches_target {info.get('installer', {}).get('matches_target')}")
         launched = subprocess.run([str(root / "bin" / "artesa-deploy"), "--root", str(root), "--rehearsal", "--prod-port", str(PROD_PORT), "status", "--json"],
                                   stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=120)
-        step("install-tools: bin/ops -> ops-<id>, launcher runs the installed tool with /usr/bin/python3 -I",
-             code == 0 and os.readlink(root / "bin" / "ops") == f"ops-{r7.release_id}" and launched.returncode == 0 and '"current"' in launched.stdout,
-             f"exit {code}/{launched.returncode}")
+        tooling = json.loads(launched.stdout)["tooling"] if launched.returncode == 0 else {}
+        step("launcher runs the installed tool with /usr/bin/python3 -I; status reports a consistent installation",
+             launched.returncode == 0 and '"current"' in launched.stdout and tooling.get("problems") == [] and tooling.get("installer_matches_target") is True,
+             f"exit {launched.returncode}, tooling problems {tooling.get('problems')}")
         step("every deployment left an evidence directory", len(list((root / "shared" / "state" / "deployments").iterdir())) >= 5)
 
         print("\n== S14 secret scan over everything the rehearsal produced")
