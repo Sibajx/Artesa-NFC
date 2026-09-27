@@ -117,6 +117,28 @@ def test_a_second_backup_in_the_same_second_does_not_overwrite(env):
         backup(env)
 
 
+@pytest.mark.parametrize("pg_dump_fault, expected", [("older", "older than the server"), ("missing", "not available")])
+def test_pg_dump_check_runs_before_the_name_collision_check(env, pg_dump_fault, expected):
+    # Legacy order (pre-D10.1): pg_dump is checked before the backup name is
+    # even computed, so with both faults the pg_dump error wins.
+    sc, runner, *_ = env
+    backup(env)
+    if pg_dump_fault == "older":
+        sc.world.pg_major = 17
+    else:
+        runner.handlers = [lambda argv, e, c: rp.RunResult(127, "", "command not found") if argv[0] == "pg_dump" else None]
+    with pytest.raises(rc.OpsError, match=expected) as caught:
+        backup(env)
+    assert caught.value.code == rc.Exit.BACKUP
+
+
+def test_create_backup_asks_pg_dump_for_its_version_once(env):
+    sc, *_ = env
+    backup(env)
+    assert [a for a in sc.world.argv_log if a[0] == "pg_dump"][0] == ["pg_dump", "--version"]
+    assert sum(1 for a in sc.world.argv_log if a == ["pg_dump", "--version"]) == 1
+
+
 # --- restore-check ----------------------------------------------------------------------------
 
 def probe_dir(sc):

@@ -135,16 +135,26 @@ def verify_dump(runner: rp.Runner, dump: Path, tables: set[str], *, expect_sha: 
     return digest
 
 
-def dump_verified(runner: rp.Runner, database_url: str, state: DbState, partial: Path, *, timeout: float = 1800) -> tuple[str, str]:
+def checked_pg_dump(runner: rp.Runner, state: DbState) -> str:
+    """The pg_dump version line, refusing a pg_dump older than the server."""
+    dump_major, dump_text = pg_dump_major(runner)
+    if dump_major < state.server_major:
+        raise rc.OpsError(rc.Exit.BACKUP, f"pg_dump {dump_major} is older than the server ({state.server_major}); refusing a backup that may not restore")
+    return dump_text
+
+
+def dump_verified(
+    runner: rp.Runner, database_url: str, state: DbState, partial: Path, *, timeout: float = 1800, dump_text: str | None = None,
+) -> tuple[str, str]:
     """``pg_dump -Fc --no-owner --no-privileges`` into ``partial`` (0600),
     then verified: non-empty, readable TOC with ``alembic_version`` and every
     live table. Credentials travel in PG* environment variables only. On any
     failure ``partial`` is removed. Returns (sha256, pg_dump version line).
     Shared by the pre-migration backup (``create_backup``) and the scheduled
-    encrypted backup (``artesa_backup``)."""
-    dump_major, dump_text = pg_dump_major(runner)
-    if dump_major < state.server_major:
-        raise rc.OpsError(rc.Exit.BACKUP, f"pg_dump {dump_major} is older than the server ({state.server_major}); refusing a backup that may not restore")
+    encrypted backup (``artesa_backup``). ``dump_text`` is the result of an
+    earlier ``checked_pg_dump``; without it the check runs here."""
+    if dump_text is None:
+        dump_text = checked_pg_dump(runner, state)
     env = _tool_env(rp.pg_env(database_url))
     result = runner.run(["pg_dump", "-Fc", "--no-owner", "--no-privileges", f"--file={partial}"], env=env, timeout=timeout)
     if result.returncode != 0:
@@ -168,6 +178,7 @@ def create_backup(
     Credentials travel in PG* environment variables only. The dump is 0600,
     verified (non-empty, readable TOC with every live table) and accompanied
     by ``<dump>.json`` (metadata) and ``<dump>.sha256`` (``sha256sum -c``)."""
+    dump_text = checked_pg_dump(runner, state)
     stamp = clock().strftime("%Y%m%dT%H%M%SZ")
     revision = state.revision
     suffix = f"-{active_commit[:12]}" if active_commit else ""
@@ -176,7 +187,7 @@ def create_backup(
     for path in (final, partial):
         if path.exists():
             raise rc.OpsError(rc.Exit.BACKUP, "a backup with this name already exists")
-    digest, dump_text = dump_verified(runner, env_file.values["DATABASE_URL"], state, partial)
+    digest, dump_text = dump_verified(runner, env_file.values["DATABASE_URL"], state, partial, dump_text=dump_text)
     try:
         os.rename(partial, final)
     except BaseException:
