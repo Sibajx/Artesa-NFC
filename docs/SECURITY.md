@@ -1090,6 +1090,12 @@ Requisitos mínimos para el MVP:
 - **Sin secretos embebidos en scripts de backup**: credenciales de
   conexión usadas por scripts de backup se leen de variables de
   entorno/secretos (sección 8), nunca hardcodeadas en el script.
+- **Backups programados y cifrados (D10, #126):** `artesa-backup` cifra cada
+  backup con `age` para dos destinatarios públicos (K1, K2) cuyas claves
+  privadas **nunca** están en el servidor; no se conserva ningún dump en claro;
+  cada backup se restaura en un PostgreSQL desechable antes de cifrarse.
+  Detalle, límites y Definition of Done: `docs/BACKUP.md`. Fuera del host y
+  simulacros con la clave offline: fases D10.2 y D10.3 (pendientes).
 
 ## 16. Servidor y despliegue
 
