@@ -341,8 +341,10 @@ def main() -> int:
              and dump[0].with_name(dump[0].name + ".sha256").read_text().split()[0] == hashlib.sha256(dump[0].read_bytes()).hexdigest(),
              out.strip().splitlines()[-1][:90] if out else "")
         meta = json.loads(dump[0].with_name(dump[0].name + ".json").read_text())
+        r1_commit = json.loads((root / "releases" / ids["r1"] / "RELEASE.json").read_text())["git"]["commit"]  # R1 is active after S6
         step("sidecar: sha256, size, revision, row counts, commit; no host/user/password",
-             meta["alembic_revision"] == base_rev and meta["row_counts"]["artisan"] > 0 and not ({"host", "user", "password"} & set(meta)) and APP_USER not in json.dumps(meta))
+             meta["alembic_revision"] == base_rev and meta["row_counts"]["artisan"] > 0 and not ({"host", "user", "password"} & set(meta)) and APP_USER not in json.dumps(meta)
+             and meta["active_release"] == ids["r1"] and meta["active_commit"] == r1_commit and dump[0].name.endswith(f"-{r1_commit[:12]}.dump"))
         code, out = cli(["restore-check", str(dump[0]), "--ephemeral", "--candidate-release", ids["r3"]], tty=False)
         step("restore-check --ephemeral: real initdb cluster, restore, counts identical, R3 migration rehearsed on the copy, cluster destroyed",
              code == 0 and "migration rehearsal ok" in out and not list((root / "shared" / "state" / "restore-tmp").iterdir()), out.strip().splitlines()[-1][:120])

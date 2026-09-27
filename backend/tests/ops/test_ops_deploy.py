@@ -237,6 +237,8 @@ def test_additive_migration_takes_a_backup_of_this_run_migrates_then_activates(m
     assert len(backups) == 3 and backups[0].endswith(".dump") and backups[1].endswith(".dump.json") and backups[2].endswith(".dump.sha256")
     meta = json.loads((mig.root / "shared" / "backups" / backups[1]).read_text())
     assert meta["alembic_revision"] == "bbb222" and meta["active_release"] == mig.ids["r1"] and meta["row_counts"] == {"artisan": 2, "piece": 5}
+    commit = json.loads((mig.root / "releases" / mig.ids["r1"] / "RELEASE.json").read_text())["git"]["commit"]
+    assert meta["active_commit"] == commit and backups[0].endswith(f"-{commit[:12]}.dump")
     assert set(meta) >= {"sha256", "size_bytes", "pg_dump_version"} and not {"host", "user", "username", "password"} & set(meta)
     assert mig.world.db_revision == "ccc333"
     assert mig.current() == mig.ids["r_add"] and mig.previous() == mig.ids["r1"]
