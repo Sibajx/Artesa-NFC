@@ -192,3 +192,12 @@ jobs:
       - name: Rehearsal (deploy dry-runs, code-only, migration, rollback, refusals)
         working-directory: backend
         run: python tests/ops/rehearsal/run_rehearsal.py --pg-bindir /usr/lib/postgresql/18/bin
+
+      - name: Backup rehearsal (D10.1 -- artesa-backup, throw-away age keys, no provider)
+        working-directory: backend
+        run: |
+          sudo apt-get install -y --no-install-recommends age
+          age --version
+          # the rehearsal's release uses this interpreter as its venv: give it the production lock
+          python -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: --no-deps -r requirements-prod.lock
+          python tests/ops/rehearsal/run_backup_rehearsal.py --pg-bindir /usr/lib/postgresql/18/bin
