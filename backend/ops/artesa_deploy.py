@@ -565,11 +565,19 @@ class Tool:
         current = self.current_id()
         if not current:
             raise rc.OpsError(rc.Exit.PREFLIGHT, "there is no current release to run the database probe with")
+        # Same source as the deploy-path backup: the active release's validated RELEASE.json (#123).
+        # A backup matters most when something is already broken, so an unreadable commit warns, never blocks.
+        commit = self._commit_of(current)
+        missing = "" if commit else f"cannot determine the commit of the active release {current} (RELEASE.json missing or invalid); the backup continues with active_commit unset"
+        if missing:
+            self.show_gates([Gate("active release commit", "warn", missing)])
         dl.ensure_layout(self.layout)
         with dl.deploy_lock(self.layout):
             state = self.db_state(current, env)
-            result = ddb.create_backup(runner=self.ctx.runner, layout=self.layout, env_file=env, state=state, active_release=current, clock=self.ctx.clock)
-            self.log().event("backup", command="backup", source_release=current, alembic_from=state.revision, backup=result.path.name, backup_sha256=result.sha256, exit_code=0)
+            result = ddb.create_backup(runner=self.ctx.runner, layout=self.layout, env_file=env, state=state, active_release=current, clock=self.ctx.clock,
+                                       active_commit=commit)
+            self.log().event("backup", command="backup", source_release=current, alembic_from=state.revision, backup=result.path.name, backup_sha256=result.sha256,
+                             exit_code=0, **({"detail": "active commit unknown"} if missing else {}))
         self.ctx.say(f"backup {result.path.name}  {result.size} bytes  sha256 {result.sha256[:16]}...  alembic {result.alembic_revision or 'none'}")
         return 0
 
@@ -715,6 +723,17 @@ class Tool:
         if plan:
             kind = rc.deploy_type(plan.deployment_class)
             self.ctx.say(f"  plan: source={current or 'none'} target={release_id} type={kind} class={plan.deployment_class} alembic {plan.db_revision or 'empty'} -> {plan.head}")
+        if plan and current == release_id:
+            # No-op: the run returns right after the gates (below), so nothing of a
+            # deployment is planned; "none" must not read as a first deployment (#125).
+            try:
+                previous = self.previous_id()
+            except rc.OpsError:
+                previous = None
+            self.ctx.say("  deployment action: none (target is already the active release): no backup, migration, candidate or activation")
+            self.ctx.say(f"  rollback target: n/a (no activation will occur)   previous release: {previous or 'none'}")
+            self.ctx.say("  auto-rollback on activation failure: n/a (no activation will occur)")
+        elif plan:
             self.ctx.say(f"  backup: {'REQUIRED (this run), then restore-check on a disposable cluster' if plan.pending else 'not required (code-only)'}   migration: {'yes, alembic upgrade head (forward-only)' if plan.pending else 'no'}")
             self.ctx.say(f"  candidate: 127.0.0.1:{self.ctx.candidate_port} smoke, then activate ({'manual' if self.ctx.restart_mode == 'manual' else 'interactive sudo'} restart); rollback target: {rollback_target or 'none (first deployment)'}")
             # Same conditions, in the same order, as _activate: a migration, --no-auto-rollback
@@ -1231,6 +1250,7 @@ class Tool:
                     "installed_at": rc.utc_iso(self.ctx.clock()), "files": {n: rc.sha256_file(str(dest / n)) for n in self.TOOL_FILES}}
             tmp_info = self.layout.bin / f".TOOL.json.tmp-{os.getpid()}"
             tmp_info.write_text(json.dumps(info, indent=2, sort_keys=True) + "\n", encoding="ascii")
+            os.chmod(tmp_info, 0o644)  # explicit, like the files above: never the operator's umask (#124)
             os.replace(tmp_info, self.layout.bin / "TOOL.json")
             self.log().event("install_tools", command="install-tools", target_release=release_id, git_sha=release["git"]["commit"][:12], exit_code=0)
         self.ctx.say(f"installed: {self.layout.bin / 'artesa-deploy'} -> ops-{release_id}")

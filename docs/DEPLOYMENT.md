@@ -319,6 +319,10 @@ bajo demanda.
     servidor, revisión, release y commit activos, release destino, `deploy_id`,
     conteo de filas por tabla. Sin host, usuario ni contraseña.
   - `….dump.sha256` (formato `sha256sum -c`).
+- El commit activo sale del `RELEASE.json` validado de `current`. Si no se puede
+  leer o validar, `backup` avisa (`[WARN] active release commit`, y `detail` en
+  el evento del log) y **continúa** con `active_commit` vacío y sin sufijo: un
+  backup nunca se bloquea por metadatos dañados.
 
 Backups programados, fuera del host y cifrados: **issue separado**, obligatorio
 antes del lanzamiento final (D10).
