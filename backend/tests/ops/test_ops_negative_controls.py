@@ -117,18 +117,19 @@ def test_nc12_failed_restart_simulation_rolls_back_code_only_and_not_after_a_mig
     calls = {"n": 0}
     ctx = s.ctx(answers=[s.ids["r2"]])
     good = ctx.service.restart
-    def flaky():
+    def flaky(purpose="activation"):
         calls["n"] += 1
         if calls["n"] == 1:
             raise rc.OpsError(rc.Exit.ACTIVATION_ROLLBACK_FAILED, "systemctl restart failed")
         good()
     ctx.service.restart = flaky
     assert ad.main(["--root", str(s.root), "--rehearsal", "--prod-port", "18000", "--candidate-port", "18001", "deploy", s.ids["r2"]], ctx) == rc.Exit.ACTIVATION_ROLLED_BACK
-    assert s.current() == s.ids["r1"] and calls["n"] == 2
+    # #130 health-first: r1 never stopped serving, so the rollback needs no second restart
+    assert s.current() == s.ids["r1"] and calls["n"] == 1
     m = Scenario(tmp_path / "m"); m.release("r1"); m.activate("r1"); m.release("r_add", migration_files("ccc333", "bbb222", "additive")); m.record_rehearsal()
     ctx = m.ctx(answers=[m.ids["r_add"]]); calls["n"] = 0
     good2 = ctx.service.restart
-    def always_fails():
+    def always_fails(purpose="activation"):
         calls["n"] += 1
         raise rc.OpsError(rc.Exit.ACTIVATION_ROLLBACK_FAILED, "systemctl restart failed")
     ctx.service.restart = always_fails

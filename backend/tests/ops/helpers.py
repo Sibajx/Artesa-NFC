@@ -192,6 +192,7 @@ class World:
     broken: set = field(default_factory=set)   # release ids that fail after restart
     alien_on_port: bool = False
     restarts: int = 0
+    preflights: int = 0
     argv_log: list = field(default_factory=list)
     envs_log: list = field(default_factory=list)
     migrate_ok: bool = True
@@ -248,7 +249,8 @@ class FakeRunner(rp.Runner):
         if name == "systemctl":
             return rp.RunResult(0, "ActiveState=active\nSubState=running\nNRestarts=0\n"
                                    f"WorkingDirectory={w.root / 'current'}\n"
-                                   f"ExecStart={{ path={w.root / 'current' / 'venv' / 'bin' / 'python'} ; argv[]=x ; }}\n")
+                                   f"ExecStart={{ path={w.root / 'current' / 'venv' / 'bin' / 'python'} ; argv[]=x ; }}\n"
+                                   f"InvocationID=inv{w.restarts:04d}\nExecMainPID={4000 + w.restarts}\n")
         scratch_url = "artesa_restore_test_" in (env or {}).get("DATABASE_URL", "")
         if "downgrade" in joined:
             raise AssertionError("alembic downgrade must never be run")
@@ -327,7 +329,11 @@ class FakeService:
     def __init__(self, world: World) -> None:
         self.world = world
 
-    def restart(self) -> None:
+    def preflight(self) -> dict:
+        self.world.preflights += 1
+        return {"mode": "fake", "ok": True}
+
+    def restart(self, purpose: str = "activation") -> None:
         w = self.world
         w.restarts += 1
         try:
