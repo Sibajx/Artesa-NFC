@@ -399,13 +399,23 @@ class ServiceInfo:
     n_restarts: int = 0
     working_directory: str = ""
     exec_path: str = ""
+    invocation_id: str = ""   # changes on every (re)start of the unit
+    main_pid: int = 0
+
+    @property
+    def identity(self) -> tuple[str, int] | None:
+        """What changes when systemd really (re)starts the unit; None when the
+        unit could not be read or systemd did not report an invocation."""
+        if not self.available or not self.invocation_id:
+            return None
+        return (self.invocation_id, self.main_pid)
 
     @property
     def crash_looping(self) -> bool:
         return self.available and (self.sub_state == "auto-restart" or (self.active_state != "active" and self.n_restarts >= 20))
 
 
-_SHOW_PROPS = ("ActiveState", "SubState", "NRestarts", "WorkingDirectory", "ExecStart")
+_SHOW_PROPS = ("ActiveState", "SubState", "NRestarts", "WorkingDirectory", "ExecStart", "InvocationID", "ExecMainPID")
 
 
 def read_service_info(runner: rp.Runner, service: str = rc.SERVICE_NAME) -> ServiceInfo:
@@ -419,7 +429,12 @@ def read_service_info(runner: rp.Runner, service: str = rc.SERVICE_NAME) -> Serv
         restarts = int(props.get("NRestarts", "0") or 0)
     except ValueError:
         restarts = 0
-    return ServiceInfo(True, props.get("ActiveState", ""), props.get("SubState", ""), restarts, props.get("WorkingDirectory", ""), match.group(1) if match else "")
+    try:
+        main_pid = int(props.get("ExecMainPID", "0") or 0)
+    except ValueError:
+        main_pid = 0
+    return ServiceInfo(True, props.get("ActiveState", ""), props.get("SubState", ""), restarts, props.get("WorkingDirectory", ""), match.group(1) if match else "",
+                       props.get("InvocationID", "").strip(), main_pid)
 
 
 def unit_points_at_current(layout: Layout, info: ServiceInfo) -> tuple[bool, str]:

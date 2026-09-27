@@ -140,7 +140,10 @@ class ProcessService:
                 os.killpg(self.proc.pid, signal.SIGKILL); self.proc.wait()
         self.proc = None
 
-    def restart(self) -> None:
+    def preflight(self) -> dict:
+        return {"mode": "rehearsal", "ok": True}
+
+    def restart(self, purpose: str = "activation") -> None:
         self.restarts += 1
         self.stop()
         current = os.path.basename(os.path.realpath(self.root / "current"))

@@ -52,37 +52,161 @@ _PIP_IGNORED = frozenset({"pip", "setuptools", "wheel"})
 
 # --- context (everything with a side effect is injectable for tests) -------------
 
+SUDO_PREFLIGHT_TIMEOUT = 120.0
+RESTART_TIMEOUT = 180.0
+MANUAL_CONFIRM_ATTEMPTS = 3
+
+
+@dataclass
+class RestartOutcome:
+    """What one privileged restart attempt did (#130). ``restarted`` is what
+    systemd reports (InvocationID/ExecMainPID before vs after), not what the
+    command returned; None when the unit could not be inspected."""
+    mode: str                      # sudo | manual
+    purpose: str                   # activation | rollback
+    kind: str                      # ok | sudo-timeout | command-not-found | not-restarted | systemctl-failed | systemctl-timeout | unknown | confirmed | confirmed-unverified
+    returncode: int | None = None
+    duration_s: float = 0.0
+    restarted: bool | None = None
+
+    @property
+    def structural(self) -> bool:
+        """The privileged mechanism itself never reached systemd: repeating
+        it blindly would fail the same way (the R3 activation, 2026-09-27)."""
+        return self.kind in ("sudo-timeout", "command-not-found", "not-restarted")
+
+    def as_dict(self) -> dict:
+        return {"mode": self.mode, "purpose": self.purpose, "kind": self.kind, "returncode": self.returncode,
+                "duration_s": round(self.duration_s, 1), "systemd_restarted": self.restarted}
+
+
+class RestartError(rc.OpsError):
+    def __init__(self, outcome: RestartOutcome, message: str) -> None:
+        super().__init__(rc.Exit.ACTIVATION_ROLLBACK_FAILED, message)
+        self.outcome = outcome
+
+
+class PreflightError(rc.OpsError):
+    def __init__(self, record: dict, message: str) -> None:
+        super().__init__(rc.Exit.PREFLIGHT, message)
+        self.record = record
+
+
+def _identity_changed(before: tuple[str, int] | None, after: tuple[str, int] | None) -> bool | None:
+    if before is None or after is None:
+        return None
+    return before != after
+
+
 class SystemdService:
     """Restarts/inspects the production unit. ``sudo`` prompts on the real
-    terminal, which is why state-changing commands require a TTY."""
+    terminal, which is why state-changing commands require a TTY. Never
+    ``sudo -n`` and never NOPASSWD (D14): ``preflight`` runs an interactive
+    ``sudo -v`` *before* any symlink changes, so the restart that follows uses
+    the cached credentials instead of prompting mid-activation (#130)."""
 
-    def __init__(self, runner: rp.Runner, name: str = rc.SERVICE_NAME) -> None:
+    mode = "sudo"
+
+    def __init__(self, runner: rp.Runner, name: str = rc.SERVICE_NAME, out: Callable[[str], None] | None = None,
+                 monotonic: Callable[[], float] = time.monotonic) -> None:
         self.runner, self.name = runner, name
-
-    def restart(self) -> None:
-        result = self.runner.run(["sudo", "systemctl", "restart", self.name], inherit_tty=True, timeout=180)
-        if result.returncode != 0:
-            raise rc.OpsError(rc.Exit.ACTIVATION_ROLLBACK_FAILED, f"systemctl restart {self.name} failed")
+        self.out = out or (lambda text="": None)
+        self.monotonic = monotonic
 
     def info(self) -> dl.ServiceInfo:
         return dl.read_service_info(self.runner, self.name)
 
+    def identity(self) -> tuple[str, int] | None:
+        return self.info().identity
+
+    def preflight(self) -> dict:
+        self.out(f"PRIVILEGED STEP: validating sudo credentials now ('sudo -v', {SUDO_PREFLIGHT_TIMEOUT:.0f} s to answer), BEFORE any symlink changes.")
+        self.out("  Enter your sudo password if asked; the restart after the switch will then not prompt.")
+        started = self.monotonic()
+        result = self.runner.run(["sudo", "-v"], inherit_tty=True, timeout=SUDO_PREFLIGHT_TIMEOUT)
+        took = self.monotonic() - started
+        record = {"mode": self.mode, "command": "sudo -v", "returncode": result.returncode, "duration_s": round(took, 1), "ok": result.returncode == 0}
+        if result.returncode == 0:
+            return record
+        if result.returncode == 124:
+            why = f"'sudo -v' timed out after {SUDO_PREFLIGHT_TIMEOUT:.0f} s (password not entered?)"
+        elif result.returncode == 127:
+            why = "'sudo' was not found (rc 127)"
+        else:
+            why = f"'sudo -v' failed (rc {result.returncode})"
+        record["detail"] = why
+        raise PreflightError(record, f"{why}: the service cannot be restarted with sudo. Nothing was changed (no symlink, no marker). "
+                                     "Re-run, or use --restart-mode manual with a second SSH session.")
+
+    def restart(self, purpose: str = "activation") -> RestartOutcome:
+        before = self.identity()
+        started = self.monotonic()
+        result = self.runner.run(["sudo", "systemctl", "restart", self.name], inherit_tty=True, timeout=RESTART_TIMEOUT)
+        took = self.monotonic() - started
+        changed = _identity_changed(before, self.identity())
+        rc_ = result.returncode
+        if rc_ == 0:
+            return RestartOutcome(self.mode, purpose, "ok", 0, took, changed)
+        cmd = f"sudo systemctl restart {self.name}"
+        if rc_ == 127:
+            kind, text = "command-not-found", f"{cmd} could not start: command not found (rc 127)"
+        elif rc_ == 124 and changed:
+            kind, text = "systemctl-timeout", f"{cmd} timed out after {RESTART_TIMEOUT:.0f} s although systemd restarted the unit (check 'journalctl -u {self.name}')"
+        elif rc_ == 124:
+            kind = "sudo-timeout" if changed is False else "unknown"
+            text = (f"{cmd} timed out after {RESTART_TIMEOUT:.0f} s" +
+                    (" and systemd did NOT restart the unit (sudo was most likely waiting for a password)" if changed is False else "; systemd state could not be read"))
+        elif changed:
+            kind, text = "systemctl-failed", f"{cmd} exited {rc_} after {took:.1f} s: systemd restarted the unit but reported a failure (check 'journalctl -u {self.name}')"
+        elif changed is False:
+            kind, text = "not-restarted", f"{cmd} exited {rc_} after {took:.1f} s and systemd did NOT restart the unit (sudo refused or failed before systemctl ran)"
+        else:
+            kind, text = "unknown", f"{cmd} exited {rc_} after {took:.1f} s; systemd state could not be read to tell whether the unit restarted"
+        raise RestartError(RestartOutcome(self.mode, purpose, kind, rc_, took, changed), text)
+
 
 class ManualRestartService(SystemdService):
-    """The privileged step is performed by the operator, by hand, in another
-    terminal: the tool prints the exact command and waits for a typed
-    confirmation. For operators who do not want the tool to call sudo."""
+    """The privileged step is performed by the operator, by hand, in a SECOND
+    SSH session: the tool prints the exact command, waits for a typed
+    confirmation and then checks with systemd (InvocationID/ExecMainPID) that
+    the unit really restarted: the word 'restarted' alone is never trusted
+    (#130: on 2026-09-27 it was typed before the restart)."""
 
-    def __init__(self, runner: rp.Runner, prompt: Callable[[str], str], out: Callable[[str], None], name: str = rc.SERVICE_NAME) -> None:
-        super().__init__(runner, name)
-        self.prompt, self.out = prompt, out
+    mode = "manual"
 
-    def restart(self) -> None:
-        self.out("PRIVILEGED STEP (run it yourself in another terminal):")
+    def __init__(self, runner: rp.Runner, prompt: Callable[[str], str], out: Callable[[str], None], name: str = rc.SERVICE_NAME,
+                 monotonic: Callable[[], float] = time.monotonic) -> None:
+        super().__init__(runner, name, out, monotonic)
+        self.prompt = prompt
+
+    def preflight(self) -> dict:
+        self.out("PRIVILEGED STEP AHEAD (--restart-mode manual): open a SECOND SSH session to this server NOW and keep this one running;")
+        self.out(f"  you will be asked to run 'sudo systemctl restart {self.name}' there. Tip: 'sudo -v' in that session first.")
+        return {"mode": self.mode, "ok": True, "detail": "operator instructed to open a second SSH session"}
+
+    def restart(self, purpose: str = "activation") -> RestartOutcome:
+        label = "ROLLBACK" if purpose == "rollback" else "ACTIVATION"
+        before = self.identity()
+        started = self.monotonic()
+        self.out(f"PRIVILEGED STEP -- {label} RESTART. In your SECOND SSH session (not this one) run:")
         self.out(f"    sudo systemctl restart {self.name}")
-        answer = self.prompt("Type 'restarted' once the command has completed (anything else aborts the activation): ")
-        if answer.strip() != "restarted":
-            raise rc.OpsError(rc.Exit.ACTIVATION_ROLLBACK_FAILED, "the operator did not confirm the service restart")
+        if before is None:
+            self.out("  (systemd state is unreadable here: the restart cannot be verified by the tool)")
+        for attempt in range(1, MANUAL_CONFIRM_ATTEMPTS + 1):
+            answer = self.prompt(f"Type 'restarted' once the {label.lower()} restart has completed ('abort' aborts): ")
+            if answer.strip() != "restarted":
+                raise RestartError(RestartOutcome(self.mode, purpose, "aborted", None, self.monotonic() - started, None),
+                                   f"the operator did not confirm the {label.lower()} restart")
+            if before is None:
+                self.out("  WARNING: could not verify the restart with systemd; relying on the health checks that follow")
+                return RestartOutcome(self.mode, purpose, "confirmed-unverified", None, self.monotonic() - started, None)
+            if _identity_changed(before, self.identity()):
+                return RestartOutcome(self.mode, purpose, "confirmed", None, self.monotonic() - started, True)
+            if attempt < MANUAL_CONFIRM_ATTEMPTS:
+                self.out(f"  systemd reports the unit was NOT restarted (InvocationID/ExecMainPID unchanged). Run the command in the second session, "
+                         f"then confirm again ({MANUAL_CONFIRM_ATTEMPTS - attempt} attempt(s) left).")
+        raise RestartError(RestartOutcome(self.mode, purpose, "not-restarted", None, self.monotonic() - started, False),
+                           f"the {label.lower()} restart was confirmed {MANUAL_CONFIRM_ATTEMPTS} times but systemd never restarted the unit")
 
 
 def _default_public_check(url: str) -> tuple[bool, str]:
@@ -133,7 +257,7 @@ class Context:
             if self.restart_mode == "manual":
                 self.service = ManualRestartService(self.runner, self.prompt, self.say)
             else:
-                self.service = SystemdService(self.runner)
+                self.service = SystemdService(self.runner, out=self.say)
 
     def say(self, text: str = "") -> None:
         self.out(self.guard.scrub(text))
@@ -747,6 +871,10 @@ class Tool:
             else:
                 auto = "yes (code-only)"
             self.ctx.say(f"  auto-rollback on activation failure: {auto}   retention: keep {keep_releases} releases")
+            if self.ctx.restart_mode == "manual":
+                self.ctx.say("  privileged restart: manual, in a SECOND SSH session; the tool verifies with systemd (InvocationID/ExecMainPID) that it happened")
+            else:
+                self.ctx.say("  privileged restart: interactive 'sudo -v' preflight BEFORE any symlink change, then 'sudo systemctl restart' (verified with systemd)")
         if failure:
             return failure.code
         if dry_run:
@@ -820,6 +948,8 @@ class Tool:
                 log.event("deploy_failed", command="deploy", target_release=release_id, exit_code=exc.code, detail=exc.message[:200])
                 self._finish(result, "failed", exc.code, detail=exc.message[:300], alembic=alembic, env=env, release_id=release_id)
                 raise
+            except (KeyboardInterrupt, EOFError) as exc:
+                return self._interrupted("deploy", release_id, exc, result, alembic=alembic, env=env)
             if code != 0:
                 log.event("deploy_failed", command="deploy", target_release=release_id, exit_code=code)
                 status = {int(rc.Exit.ACTIVATION_ROLLED_BACK): "rolled-back", int(rc.Exit.ACTIVATION_NO_AUTO_ROLLBACK): "failed-no-auto-rollback"}.get(code, "failed")
@@ -869,6 +999,30 @@ class Tool:
         except rc.OpsError:
             result["current_after"] = result["previous_after"] = "unreadable"
         ev.write("result.json", result)
+
+    def _interrupted(self, command: str, release_id: str, exc: BaseException, result: dict, *, alembic: dict | None = None, env: rp.EnvFile | None = None) -> int:
+        """#130: Ctrl-C or end of input during a deploy/rollback. Nothing is
+        undone behind the operator's back: the real state is recorded
+        (result.json 'interrupted', deploy-log event) and printed with the
+        next safe command. The activation marker, if any, stays."""
+        what = "end of input (EOF)" if isinstance(exc, EOFError) else "interrupted (Ctrl-C)"
+        self.ctx.say(f"INTERRUPTED: {what} during '{command}' of {release_id}")
+        state = self._say_state()
+        code = int(rc.Exit.NO_TTY_OR_ABORT)
+        try:
+            self.log().event(f"{command}_interrupted", command=command, target_release=release_id, exit_code=code,
+                             detail=f"{what}; marker={'present' if state['activation_marker'] else 'absent'}; serving={state['serving']}"[:200])
+        except (rc.OpsError, OSError):
+            pass
+        if self.evidence:
+            result["interruption"] = {"reason": what, **state}
+            if alembic is not None and env is not None:
+                self._finish(result, "interrupted", code, alembic=alembic, env=env, release_id=release_id)
+            else:
+                result.update({"status": "interrupted", "exit_code": code, "finished_at": rc.utc_iso(self.ctx.clock()),
+                               "current_after": state["current"], "previous_after": state["previous"]})
+                self.evidence.write("result.json", result)
+        return code
 
     def _retention(self, keep: int) -> dict:
         """Step 21: keep the newest ``keep`` releases (always current and
@@ -922,24 +1076,48 @@ class Tool:
             dl.atomic_symlink(self.layout, self.layout.previous, new_previous)
         dl.atomic_symlink(self.layout, self.layout.current, new_current)
 
+    def _privilege_preflight(self) -> None:
+        """#130: validate the privileged restart path BEFORE any symlink or
+        marker changes. A failure leaves the active release untouched."""
+        preflight = getattr(self.ctx.service, "preflight", None)
+        if preflight is None:
+            return
+        try:
+            record = preflight()
+        except PreflightError as exc:
+            if self.evidence:
+                self.evidence.write("privilege-preflight.json", exc.record)
+            raise
+        if self.evidence and isinstance(record, dict):
+            self.evidence.write("privilege-preflight.json", record)
+
+    def _restart(self, purpose: str, service: object | None = None) -> RestartOutcome | None:
+        outcome = (service or self.ctx.service).restart(purpose=purpose)
+        return outcome if isinstance(outcome, RestartOutcome) else None
+
     def _activate(self, release_id: str, release: dict, env: rp.EnvFile, plan: ddb.MigrationPlan, current: str | None, auto_rollback: bool, migrated: bool) -> int:
         old_previous = self.previous_id()
+        self._privilege_preflight()
         dl.write_activation_marker(self.layout, {"deploy_id": self.deploy_id, "from": current, "to": release_id, "started_at": rc.utc_iso(self.ctx.clock()),
                                                  "deploy_type": rc.deploy_type(plan.deployment_class), "migrated": migrated,
                                                  "evidence": self.evidence.directory.name if self.evidence else None})
         failure = ""
         checks: list[rp.Check] = []
+        outcome: RestartOutcome | None = None
         try:
             self._switch(release_id, current)
-            self.ctx.service.restart()
+            outcome = self._restart("activation")
             checks = self._wait_healthy(release_id)
             bad = [c for c in checks if not c.ok]
             if bad:
                 failure = "; ".join(f"{c.name}" for c in bad[:3])
+        except RestartError as exc:
+            failure, outcome = exc.message, exc.outcome
         except rc.OpsError as exc:
             failure = exc.message
         if self.evidence:
-            self.evidence.write("final-smoke.json", self._checks_evidence(checks, ok=not failure, port=self.ctx.prod_port, release=release_id, failure=failure))
+            self.evidence.write("final-smoke.json", self._checks_evidence(checks, ok=not failure, port=self.ctx.prod_port, release=release_id, failure=failure,
+                                                                           restart=outcome.as_dict() if outcome else None))
         if not failure:
             dl.clear_activation_marker(self.layout)
             self.ctx.say(f"ACTIVE {release_id} (previous {current or 'none'}); service healthy and smoke checks passed")
@@ -948,15 +1126,38 @@ class Tool:
         if migrated or not auto_rollback or not current:
             why = "a migration ran" if migrated else ("--no-auto-rollback was given" if not auto_rollback else "there is no previous release to return to")
             if self.evidence:
-                self.evidence.write("rollback.json", {"attempted": False, "reason": why, "policy": "automatic rollback only for CODE_ONLY deployments"})
+                self.evidence.write("rollback.json", {"attempted": False, "reason": why, "policy": "automatic rollback only for CODE_ONLY deployments",
+                                                      "activation_failure": failure, "activation_restart": outcome.as_dict() if outcome else None})
             self.ctx.say(f"NOT rolling back automatically ({why}). State: current -> {release_id}, previous -> {current or 'none'}. Decide by hand: 'artesa-deploy rollback' (checked against the migration ledger) or fix forward, then 'artesa-deploy resolve-activation'. Activation marker left in shared/state/activation.json.")
             return int(rc.Exit.ACTIVATION_NO_AUTO_ROLLBACK)
-        return self._auto_rollback(current, old_previous)
+        return self._auto_rollback(current, old_previous, failed_restart=outcome, failure=failure)
 
-    def _auto_rollback(self, current: str, old_previous: str | None) -> int:
+    def _serving_healthy(self, release_id: str) -> bool:
+        """One probe, no waiting: is ``release_id`` the process on the
+        production port, and does it answer /health?"""
+        state = self.ctx.port_state(self.ctx.prod_port, self.layout.release_dir(release_id))
+        if state.state != "expected":
+            return False
+        try:
+            return self.ctx.fetch(self.ctx.prod_port, "GET", "/health", timeout=3).status == 200
+        except OSError:
+            return False
+
+    def _manual_fallback_service(self) -> ManualRestartService:
+        return ManualRestartService(self.ctx.runner, self.ctx.prompt, self.ctx.say)
+
+    def _auto_rollback(self, current: str, old_previous: str | None, failed_restart: RestartOutcome | None = None, failure: str = "") -> int:
+        """#130, health-first: restore the symlinks, then check whether
+        ``current`` is still the healthy process on the port (the restart never
+        happened). Only if it is not, restart -- and never by repeating a sudo
+        mechanism that already failed structurally: that falls back to a
+        manual restart in a second SSH session."""
         self.ctx.say(f"returning to {current}")
         checks: list[rp.Check] = []
         code = int(rc.Exit.ACTIVATION_ROLLBACK_FAILED)
+        strategy = "health-first"
+        outcome: RestartOutcome | None = None
+        error = ""
         try:
             self._switch(current, old_previous)
             if old_previous is None:
@@ -964,20 +1165,67 @@ class Tool:
                     os.unlink(self.layout.previous)
                 except FileNotFoundError:
                     pass
-            self.ctx.service.restart()
-            checks = self._wait_healthy(current)
-            if all(c.ok for c in checks):
+            if self._serving_healthy(current):
+                checks = self._wait_healthy(current)
+            if checks and all(c.ok for c in checks):
+                self.ctx.say(f"{current} is still serving and healthy: no restart was needed (systemd never switched to the failed release)")
+            else:
+                service = self.ctx.service
+                if failed_restart is not None and failed_restart.structural and failed_restart.mode == "sudo":
+                    strategy = "manual-fallback"
+                    self.ctx.say(f"the sudo restart already failed ({failed_restart.kind}); not repeating it. Falling back to a MANUAL restart.")
+                    service = self._manual_fallback_service()
+                else:
+                    strategy = "restart"
+                outcome = self._restart("rollback", service)
+                checks = self._wait_healthy(current)
+            if checks and all(c.ok for c in checks):
                 dl.clear_activation_marker(self.layout)
                 self.ctx.say(f"ROLLED BACK to {current}; service healthy")
                 code = int(rc.Exit.ACTIVATION_ROLLED_BACK)
-        except rc.OpsError:
-            pass
+            else:
+                error = "; ".join(c.name for c in checks if not c.ok)[:300] or "health checks did not pass"
+        except RestartError as exc:
+            outcome, error = exc.outcome, exc.message
+        except rc.OpsError as exc:
+            error = exc.message
         if self.evidence:
-            self.evidence.write("rollback.json", self._checks_evidence(checks, attempted=True, automatic=True, to=current,
-                                                                      ok=code == int(rc.Exit.ACTIVATION_ROLLED_BACK)))
+            self.evidence.write("rollback.json", self._checks_evidence(
+                checks, attempted=True, automatic=True, to=current, ok=code == int(rc.Exit.ACTIVATION_ROLLED_BACK), strategy=strategy,
+                activation_failure=failure or None, activation_restart=failed_restart.as_dict() if failed_restart else None,
+                restart=outcome.as_dict() if outcome else None, error=error or None))
         if code != int(rc.Exit.ACTIVATION_ROLLED_BACK):
-            self.ctx.say("AUTOMATIC ROLLBACK DID NOT RESTORE A HEALTHY SERVICE. Manual intervention required.")
+            self.ctx.say(f"AUTOMATIC ROLLBACK DID NOT RESTORE A HEALTHY SERVICE ({error}). Manual intervention required.")
+            self._say_state()
         return code
+
+    def _say_state(self) -> dict:
+        """Print (and return) the real state: symlinks, what actually holds the
+        production port, the marker, and the next safe command."""
+        try:
+            current, previous = self.current_id(), self.previous_id()
+        except rc.OpsError:
+            current = previous = None
+        serving = "unknown"
+        for name, rid in (("current", current), ("previous", previous)):
+            if rid and self.ctx.port_state(self.ctx.prod_port, self.layout.release_dir(rid)).state == "expected":
+                serving = f"{rid} ({name})"
+                break
+        else:
+            probe = self.ctx.port_state(self.ctx.prod_port, None)
+            serving = "nothing" if probe.state == "free" else "a process that is neither current nor previous"
+        marker = dl.read_activation_marker(self.layout) is not None
+        self.ctx.say(f"  STATE: current -> {current or 'none'}; previous -> {previous or 'none'}; port {self.ctx.prod_port} served by {serving}; "
+                     f"activation marker {'PRESENT' if marker else 'absent'}")
+        if marker and current and serving.startswith(current):
+            nxt = "the active release is serving: verify it, then 'artesa-deploy resolve-activation --dry-run' and 'artesa-deploy resolve-activation'"
+        elif marker:
+            nxt = (f"current -> {current or 'none'} is NOT what serves the port: either restart the service (sudo systemctl restart {rc.SERVICE_NAME}) "
+                   "so it runs current, or 'artesa-deploy rollback'; then 'artesa-deploy resolve-activation'")
+        else:
+            nxt = "no activation is pending; 'artesa-deploy status' to confirm"
+        self.ctx.say(f"  NEXT: {nxt}")
+        return {"current": current, "previous": previous, "serving": serving, "activation_marker": marker, "next": nxt}
 
     def _public_check(self, release_id: str) -> int:
         url = f"{rc.PUBLIC_API_BASE}/api/v1/artisans"
@@ -1070,34 +1318,48 @@ class Tool:
             self.log().event("rollback_start", command="rollback", source_release=current, target_release=target_id, detail=f"evidence {ev.directory.name}")
             unresolved = dl.read_activation_marker(self.layout)
             if unresolved:
-                result["resolves_activation"] = {k: unresolved.get(k) for k in ("deploy_id", "from", "to", "deploy_type", "migrated")}
+                result["resolves_activation"] = {k: unresolved.get(k) for k in ("deploy_id", "from", "to", "deploy_type", "migrated", "evidence")}
                 ev.write("result.json", result)
-            dl.write_activation_marker(self.layout, {"deploy_id": self.deploy_id, "from": current, "to": target_id, "started_at": rc.utc_iso(self.ctx.clock()), "evidence": ev.directory.name})
-            old_previous = previous
-            failure_text = ""
-            checks: list[rp.Check] = []
             try:
-                self._switch(target_id, current)
-                self.ctx.service.restart()
-                checks = self._wait_healthy(target_id)
-                bad = [c for c in checks if not c.ok]
-                failure_text = "; ".join(c.name for c in bad[:3])
-            except rc.OpsError as exc:
-                failure_text = exc.message
-            ev.write("final-smoke.json", self._checks_evidence(checks, ok=not failure_text, port=self.ctx.prod_port, release=target_id, failure=failure_text))
-            if not failure_text:
-                dl.clear_activation_marker(self.layout)
-                self.log().event("rollback_ok", command="rollback", source_release=current, target_release=target_id, exit_code=0)
-                result.update({"status": "ok", "exit_code": 0, "finished_at": rc.utc_iso(self.ctx.clock())})
+                try:
+                    self._privilege_preflight()
+                except PreflightError as exc:
+                    self.log().event("rollback_failed", command="rollback", target_release=target_id, exit_code=exc.code, detail=exc.message[:200])
+                    result.update({"status": "failed", "exit_code": exc.code, "finished_at": rc.utc_iso(self.ctx.clock()), "detail": exc.message[:300]})
+                    ev.write("result.json", result)
+                    raise
+                dl.write_activation_marker(self.layout, {"deploy_id": self.deploy_id, "from": current, "to": target_id, "started_at": rc.utc_iso(self.ctx.clock()), "evidence": ev.directory.name})
+                old_previous = previous
+                failure_text = ""
+                checks: list[rp.Check] = []
+                outcome: RestartOutcome | None = None
+                try:
+                    self._switch(target_id, current)
+                    outcome = self._restart("rollback")
+                    checks = self._wait_healthy(target_id)
+                    bad = [c for c in checks if not c.ok]
+                    failure_text = "; ".join(c.name for c in bad[:3])
+                except RestartError as exc:
+                    failure_text, outcome = exc.message, exc.outcome
+                except rc.OpsError as exc:
+                    failure_text = exc.message
+                ev.write("final-smoke.json", self._checks_evidence(checks, ok=not failure_text, port=self.ctx.prod_port, release=target_id, failure=failure_text,
+                                                                    restart=outcome.as_dict() if outcome else None))
+                if not failure_text:
+                    dl.clear_activation_marker(self.layout)
+                    self.log().event("rollback_ok", command="rollback", source_release=current, target_release=target_id, exit_code=0)
+                    result.update({"status": "ok", "exit_code": 0, "finished_at": rc.utc_iso(self.ctx.clock())})
+                    ev.write("result.json", result)
+                    self.ctx.say(f"ROLLED BACK: current is now {target_id}; previous is {current}")
+                    return 0
+                self.ctx.say(f"ROLLBACK FAILED: {failure_text}. Returning to {current}.")
+                code = self._auto_rollback(current, old_previous, failed_restart=outcome, failure=failure_text)
+                self.log().event("rollback_failed", command="rollback", target_release=target_id, exit_code=code, detail=failure_text[:200])
+                result.update({"status": "failed", "exit_code": code, "finished_at": rc.utc_iso(self.ctx.clock()), "detail": failure_text[:300]})
                 ev.write("result.json", result)
-                self.ctx.say(f"ROLLED BACK: current is now {target_id}; previous is {current}")
-                return 0
-            self.ctx.say(f"ROLLBACK FAILED HEALTH: {failure_text}. Returning to {current}.")
-            code = self._auto_rollback(current, old_previous)
-            self.log().event("rollback_failed", command="rollback", target_release=target_id, exit_code=code)
-            result.update({"status": "failed", "exit_code": code, "finished_at": rc.utc_iso(self.ctx.clock())})
-            ev.write("result.json", result)
-            return code
+                return code
+            except (KeyboardInterrupt, EOFError) as exc:
+                return self._interrupted("rollback", target_id, exc, result)
 
     # -- resolve-activation ------------------------------------------------------------------------------------------------
 
@@ -1124,11 +1386,44 @@ class Tool:
             return 0
         self.confirm("resolve")
         with dl.deploy_lock(self.layout):
+            closed = self._close_pending_evidence(marker, current)
             self.log().event("activation_resolved", command="resolve-activation", source_release=marker.get("from"),
-                             target_release=marker.get("to"), detail=f"current={current}", exit_code=0)
+                             target_release=marker.get("to"), detail=f"current={current}" + (f"; evidence {closed} closed" if closed else ""), exit_code=0)
             dl.clear_activation_marker(self.layout)
         self.ctx.say("activation marker cleared; deploys are unblocked")
+        if closed:
+            self.ctx.say(f"evidence shared/state/deployments/{closed}/ was left 'in-progress'; it now records this resolution (status 'resolved-by-operator')")
         return 0
+
+    _EVIDENCE_NAME = re.compile(r"[0-9A-Za-z][0-9A-Za-z.\-]{0,120}")
+
+    def _close_pending_evidence(self, marker: dict, current: str | None) -> str | None:
+        """#130: an interrupted or crashed deploy/rollback leaves its
+        result.json 'in-progress' forever. Record the resolution there --
+        additively: nothing earlier is rewritten and no 'ok' is invented."""
+        name = marker.get("evidence")
+        if not isinstance(name, str) or not self._EVIDENCE_NAME.fullmatch(name):
+            return None
+        directory = self.layout.evidence_root / name
+        if os.path.islink(directory) or not directory.is_dir():
+            return None
+        try:
+            result = json.loads((directory / "result.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        if not isinstance(result, dict) or result.get("status") != "in-progress":
+            return None
+        try:
+            previous = self.previous_id()
+        except rc.OpsError:
+            previous = None
+        result["status"] = "resolved-by-operator"
+        result["resolution"] = {"command": "resolve-activation", "deploy_id": self.deploy_id, "resolved_at": rc.utc_iso(self.ctx.clock()),
+                                "operator": dl.operator_name(), "current_after": current, "previous_after": previous,
+                                "health": "ok (active release verified before resolving)",
+                                "note": "the original run never finished; this is not a normal completion"}
+        dl.Evidence(directory, self.ctx.guard).write("result.json", result)
+        return name
 
     # -- restore-check ---------------------------------------------------------------------------------------------------
 
@@ -1378,6 +1673,9 @@ def main(argv: list[str] | None = None, ctx: Context | None = None) -> int:
         return exc.code
     except KeyboardInterrupt:
         ctx.say("interrupted")
+        return int(rc.Exit.NO_TTY_OR_ABORT)
+    except EOFError:
+        ctx.say("aborted: end of input")
         return int(rc.Exit.NO_TTY_OR_ABORT)
     except Exception as exc:  # noqa: BLE001 -- never print a traceback: messages/locals can carry secrets
         ctx.say(f"internal error: {type(exc).__name__} (details suppressed on purpose)")

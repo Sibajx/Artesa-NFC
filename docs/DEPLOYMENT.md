@@ -142,10 +142,11 @@ Pasos de `deploy` (todos fail-closed; `--dry-run` ejecuta solo los de lectura):
 | 13 | Restore-check del dump + migración ensayada sobre la copia | 31 |
 | 14 | `alembic upgrade head` (forward-only) | 32 |
 | 15 | Candidato en `127.0.0.1:8001` + smoke | 40 |
+| 15b | Preflight de privilegios, **antes** de tocar symlinks o el marcador: `sudo -v` interactivo (modo sudo) o aviso de abrir una segunda sesión SSH (modo manual). Si falla, nada cambia (§13) | 11 |
 | 16 | `previous` → activo actual; `current` → nuevo (cada uno un `rename(2)` atómico) | — |
-| 17 | Reinicio: `sudo systemctl restart artesa-nfc.service` interactivo, o `--restart-mode manual` | — |
-| 18 | Smoke final en el puerto 8000 (incluye que el puerto lo tenga el nuevo release) | 50/51/54 |
-| 19 | Evidencia cerrada (`result.json`) | — |
+| 17 | Reinicio: `sudo systemctl restart artesa-nfc.service` interactivo, o `--restart-mode manual`; en ambos casos se verifica con systemd (`InvocationID`/`ExecMainPID`) si la unit se reinició de verdad | — |
+| 18 | Smoke final en el puerto 8000 (incluye que el puerto lo tenga el nuevo release); si falla y es code-only: rollback automático *health-first* (§13) | 50/51/54 |
+| 19 | Evidencia cerrada (`result.json`; `interrupted` si hubo Ctrl-C/EOF) | 3 |
 | 20-21 | Retención: se conservan los 5 releases más nuevos (siempre `current` y `previous`) | — |
 | — | Comprobación pública `https://api.artesanfc.com/api/v1/artisans` (JSON) | 53 (sin rollback) |
 
@@ -354,7 +355,10 @@ junto al servidor.
 `shared/state/deployments/<UTC YYYYMMDDTHHMMSSZ>-<commit12>/` (0700; archivos
 0600; `-rollback` para rollbacks manuales). Se escribe a medida que avanza: un
 despliegue interrumpido deja evidencia de hasta dónde llegó (`result.json` con
-`status: in-progress`).
+`status: in-progress`, o `interrupted` si la interrupción fue un Ctrl-C/EOF que la
+herramienta pudo registrar). `resolve-activation` cierra un `in-progress` pendiente
+como `resolved-by-operator`, con un bloque `resolution` aditivo: nunca lo presenta
+como un despliegue normal terminado.
 
 | Archivo | Contenido |
 |---|---|
@@ -365,8 +369,9 @@ despliegue interrumpido deja evidencia de hasta dónde llegó (`result.json` con
 | `preflight.json` | todas las compuertas y su resultado |
 | `alembic.json` | before / target / after, pendientes, clase |
 | `backup.json`, `restore-check.json` | solo con migración: dump, sha256, resultado del restore-check, cluster destruido |
-| `candidate-smoke.json`, `final-smoke.json` | cada check |
-| `rollback.json` | automático (resultado) o no intentado (razón) |
+| `privilege-preflight.json` | modo, `sudo -v` (código de retorno, duración) o instrucciones del modo manual |
+| `candidate-smoke.json`, `final-smoke.json` | cada check; `final-smoke.json` incluye `restart`: modo, propósito, `kind` (`ok`, `sudo-timeout`, `command-not-found`, `not-restarted`, `systemctl-failed`, `systemctl-timeout`, `unknown`, `confirmed`…), código de retorno, duración y si systemd reinició la unit |
+| `rollback.json` | automático: resultado, `strategy` (`health-first`, `restart`, `manual-fallback`), causa del fallo de activación y del restart; o no intentado (razón) |
 | `retention.json` | conservados / borrados / ignorados |
 
 Además `shared/state/deploy-log.jsonl` (append-only, 0600, claves en allowlist).
@@ -450,10 +455,13 @@ Si `ops/` cambió en el release: `bin/artesa-deploy install-tools <id>` después
 
 ### 11.4 Activación fallida o interrumpida
 
-- Exit 50: ya volvió solo al release anterior (code-only). Revisar la evidencia.
-- Exit 51: el rollback automático tampoco quedó sano → `status`, logs de la unit, `rollback --to <id>` a un release conocido bueno.
+- Exit 50: ya volvió solo al release anterior (code-only). Revisar la evidencia: `rollback.json` dice si hizo falta reiniciar (`strategy`).
+- Exit 51: el rollback automático tampoco quedó sano. La herramienta imprime `STATE:` (symlinks, qué proceso sirve el puerto, marcador) y `NEXT:`. → `status`, logs de la unit, `rollback --to <id>` a un release conocido bueno.
 - Exit 54 (migración aplicada, sin rollback automático): decidir. Si el ledger lo permite, `rollback`; si no, fix forward o §11.5.
-- Herramienta interrumpida (corte, Ctrl-C): `status` muestra `unresolved activation`. Si el release activo está sano: `resolve-activation` (comprueba salud, pide `resolve`); si no: `rollback`.
+- Exit 11 con `privilege-preflight.json` en fallo: `sudo -v` no se completó; **nada cambió**. Repetir (introduciendo la contraseña) o usar `--restart-mode manual`.
+- Herramienta interrumpida (Ctrl-C o EOF): exit 3, `result.json` `interrupted`, evento `deploy_interrupted`/`rollback_interrupted`, y la salida muestra `STATE:`/`NEXT:`. El marcador se conserva. Si `current` **no** es lo que sirve el puerto (p. ej. `current` → nuevo con el proceso antiguo aún vivo), reiniciar el servicio o `rollback` antes de resolver.
+- Corte sin registro (kill, apagado): `status` muestra `unresolved activation` y el `result.json` sigue `in-progress`.
+- En ambos casos, si el release activo está sano: `resolve-activation --dry-run` y `resolve-activation` (comprueba salud, pide `resolve`, cierra la evidencia pendiente); si no: `rollback`.
 
 ### 11.5 Recuperación desde backup (decisión humana, nunca automática)
 
@@ -504,10 +512,43 @@ privilegios y ambos pueden hacerse a mano:
 
 | Paso | Cuándo | Cómo |
 |---|---|---|
-| Reiniciar el servicio | cada `deploy`/`rollback` | por defecto la herramienta ejecuta `sudo systemctl restart artesa-nfc.service` en el TTY (sudo pide la contraseña). Con `--restart-mode manual` imprime el comando, el operador lo ejecuta en otra terminal y teclea `restarted`. |
+| Reiniciar el servicio | cada `deploy`/`rollback` | por defecto (`--restart-mode sudo`) la herramienta ejecuta `sudo -v` (preflight) y luego `sudo systemctl restart artesa-nfc.service` en el TTY. Con `--restart-mode manual` imprime el comando, el operador lo ejecuta en una **segunda sesión SSH** y teclea `restarted`. |
 | Instalar/cambiar la unit | adopción inicial o cambios de la unit | a mano: copiar la unit, `sudo systemctl daemon-reload`, `sudo systemctl restart artesa-nfc.service`. La herramienta solo **lee** la unit (`systemctl show`). |
 
 Parar el servicio para una restauración (§11.5) también es manual.
+
+### 13.1 Restart privilegiado (#130)
+
+Motivo: en la activación de R3 (2026-09-27) los dos `sudo systemctl restart` (activación
+y auto-rollback) esperaron la contraseña hasta el timeout de 180 s; `systemctl` nunca se
+ejecutó, la herramienta solo dijo `systemctl restart … failed` y el rollback terminó en
+exit 51 aunque el release anterior seguía sirviendo.
+
+- **Preflight `sudo -v`.** Después del candidato y **antes** de escribir el marcador o
+  cambiar symlinks, la herramienta ejecuta `sudo -v` en el TTY (120 s para contestar) y lo
+  anuncia. Si falla o expira: exit 11, sin marcador, sin symlinks cambiados,
+  `privilege-preflight.json` con el código de retorno. Con las credenciales ya en caché, el
+  restart posterior no pide contraseña (mismo TTY, dentro de `timestamp_timeout`).
+- **Diagnóstico.** El restart compara `InvocationID`/`ExecMainPID` (`systemctl show`, sin
+  privilegios) antes y después y conserva código de retorno y duración: distingue timeout
+  de sudo (124, sin reinicio), comando no encontrado (127), sudo rechazado antes de llegar
+  a systemd (`not-restarted`) y un fallo real de `systemctl` (la unit sí se reinició).
+- **Auto-rollback *health-first*.** Tras restaurar los symlinks, si el release de origen
+  sigue siendo el proceso del puerto y está sano, se verifica (smoke completo) y se cierra
+  con exit 50 **sin reiniciar**. Solo si no lo está se reinicia; y si el mecanismo sudo ya
+  falló de forma estructural (timeout, 127, `not-restarted`) **no se repite**: se pide un
+  restart manual en una segunda sesión SSH.
+- **Modo manual verificado.** El prompt dice si es el restart de **activación** o de
+  **rollback** y pide una segunda sesión SSH. `restarted` solo se acepta si systemd informa
+  de un `InvocationID`/`ExecMainPID` nuevo; si no cambió, se avisa y se puede confirmar de
+  nuevo (3 intentos) o `abort`. Si systemd no se puede leer, se avisa y deciden los checks
+  de salud.
+- **Interrupciones.** Ctrl-C o EOF durante `deploy`/`rollback`: `result.json`
+  `interrupted`, evento en el deploy-log, marcador conservado y salida `STATE:`/`NEXT:`
+  (§11.4). Nada se deshace a espaldas del operador.
+- El default de `--restart-mode` **no** cambia (`sudo`). Mitigación mientras la herramienta
+  instalada en `bin/` sea anterior a R4: `sudo -v` en la misma terminal justo antes, o modo
+  manual con una segunda sesión SSH.
 
 ## 14. Modelo de amenazas y fallos
 
@@ -524,7 +565,8 @@ Parar el servicio para una restauración (§11.5) también es manual.
 | Candidato sobre un puerto ajeno | 8000 y 8002 reservados | otros servicios futuros en 8001 (cambiar con `--candidate-port`) |
 | Migración mala | backup + restore-check + ensayo sobre la copia antes de producción; `breaking` rechazada | una migración `additive` mal clasificada en el ledger (revisión humana en PR) |
 | Rollback que rompe el esquema | ledger; sin downgrade | — |
-| Despliegue interrumpido | lock `flock`, marcador de activación, evidencia incremental, `resolve-activation` | — |
+| Despliegue interrumpido | lock `flock`, marcador de activación, evidencia incremental (`interrupted` en Ctrl-C/EOF), `STATE:`/`NEXT:`, `resolve-activation` que cierra la evidencia pendiente | un kill -9 o apagado no deja `interrupted` (queda `in-progress`) |
+| Restart privilegiado que no llega a systemd (sudo espera contraseña) | preflight `sudo -v` antes del switch; diagnóstico por `InvocationID`/`ExecMainPID`; rollback *health-first*; sin repetir sudo tras un fallo estructural (§13.1) | el operador sigue teniendo que introducir la contraseña (D14) |
 | Crash-loop sin límite | límites de reinicio recomendados en la unit | decisión pendiente (§15) |
 | Pérdida del host | backups pre-migración solo en el host | backups fuera del host: issue separado (D10) |
 | Wheels nuevos en PyPI para una versión ya fijada | el lock del repo no cambia y sigue instalando con sus hashes | `release-ci` puede fallar al regenerar el lock (riesgo conocido, §6) |

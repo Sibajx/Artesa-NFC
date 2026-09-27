@@ -124,7 +124,7 @@ def test_code_only_deploy_leaves_complete_evidence_without_secrets(sc):
     assert stat.S_IMODE(directory.stat().st_mode) == 0o700
     names = sorted(p.name for p in directory.iterdir())
     assert names == ["alembic.json", "artifact.json", "candidate-smoke.json", "dependencies.json", "final-smoke.json",
-                     "preflight.json", "release.json", "result.json", "retention.json"]
+                     "preflight.json", "privilege-preflight.json", "release.json", "result.json", "retention.json"]
     assert all(stat.S_IMODE((directory / n).stat().st_mode) == 0o600 for n in names)
     result = sc.evidence("result.json")
     assert result["status"] == "ok" and result["exit_code"] == 0 and result["deploy_type"] == "CODE_ONLY"
@@ -167,7 +167,8 @@ def test_migration_deploy_records_that_no_automatic_rollback_happened(mig):
     mig.world.broken.add(mig.ids["r_add"])
     assert deploy(mig, "r_add", "--allow-migration") == rc.Exit.ACTIVATION_NO_AUTO_ROLLBACK
     rb = mig.evidence("rollback.json")
-    assert rb == {"attempted": False, "reason": "a migration ran", "policy": "automatic rollback only for CODE_ONLY deployments"}
+    assert {k: rb[k] for k in ("attempted", "reason", "policy")} == {"attempted": False, "reason": "a migration ran", "policy": "automatic rollback only for CODE_ONLY deployments"}
+    assert rb["activation_failure"] and "activation_restart" in rb  # #130: the cause is kept
     assert mig.evidence("result.json")["status"] == "failed-no-auto-rollback"
     assert mig.world.db_revision == "ccc333"  # no downgrade, ever
 
@@ -202,7 +203,7 @@ def test_evidence_refuses_secret_values():
 
 def test_interrupted_activation_leaves_marker_evidence_and_blocks_until_resolved(sc):
     class Crashing(FakeService):
-        def restart(self):
+        def restart(self, purpose="activation"):
             super().restart()
             raise RuntimeError("power cut")  # the tool dies mid-activation
 
@@ -234,14 +235,16 @@ def test_resolve_activation_without_a_marker_is_a_no_op(sc):
 # --- privileged step (phase 5/10) -------------------------------------------------------------------------------------
 
 class ManualFake(ad.ManualRestartService):
-    """The operator 'runs' sudo in another terminal: the fake world restarts."""
-    def __init__(self, world, *a):
-        super().__init__(*a)
+    """The operator 'runs' sudo in the second session when confirming: the fake
+    world restarts, so systemd's InvocationID changes (the tool checks it)."""
+    def __init__(self, world, runner, prompt, out):
+        def operator(message):
+            answer = prompt(message)
+            if "restart has completed" in message and answer.strip() == "restarted":
+                FakeService(world).restart()
+            return answer
+        super().__init__(runner, operator, out)
         self.world = world
-
-    def restart(self):
-        super().restart()
-        FakeService(self.world).restart()
 
 
 def test_manual_restart_mode_prints_the_command_and_waits_for_confirmation(sc):
@@ -267,10 +270,13 @@ def test_sudo_is_interactive_never_noninteractive():
         def run(self, argv, **kw):
             self.calls.append((argv, kw)); import release_probe as rp; return rp.RunResult(0)
     rec = Recorder()
-    ad.SystemdService(rec).restart()
-    argv, kw = rec.calls[0]
-    assert argv == ["sudo", "systemctl", "restart", "artesa-nfc.service"] and kw["inherit_tty"] is True
-    assert "-n" not in argv and "--non-interactive" not in argv
+    service = ad.SystemdService(rec)
+    service.preflight()
+    service.restart()
+    sudo_calls = [(argv, kw) for argv, kw in rec.calls if argv[0] == "sudo"]
+    assert [argv for argv, _ in sudo_calls] == [["sudo", "-v"], ["sudo", "systemctl", "restart", "artesa-nfc.service"]]
+    assert all(kw["inherit_tty"] is True for _, kw in sudo_calls)
+    assert not any("-n" in argv or "--non-interactive" in argv for argv, _ in rec.calls)
 
 
 # --- retention (step 21) ------------------------------------------------------------------------------------------------
