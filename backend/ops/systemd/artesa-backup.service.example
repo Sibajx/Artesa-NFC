@@ -1,0 +1,68 @@
+# EXAMPLE ONLY -- not installed, not enabled. #126 / D10.1, docs/BACKUP.md.
+#
+# Runs one scheduled, encrypted backup (artesa-backup run): pg_dump ->
+# restore-check on a disposable PostgreSQL 18 -> age encryption to the two
+# PUBLIC recipients K1/K2 -> plaintext unlinked -> local retention (7).
+# Started by artesa-backup.timer. Installing it is a privileged, manual step
+# (D14): copy both files to /etc/systemd/system/, `sudo systemctl daemon-reload`,
+# `sudo systemctl enable --now artesa-backup.timer`.
+#
+# D10.1 is NOT D10: there are no off-host copies yet (D10.2). `artesa-backup
+# status` says so ("OFFSITE: NOT CONFIGURED", "D10: INCOMPLETE").
+
+[Unit]
+Description=ArtesaNFC encrypted database backup (artesa-backup)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=energias
+Group=energias
+UMask=0077
+WorkingDirectory=/home/energias/artesa-nfc
+# No EnvironmentFile: the tool reads shared/.env (DATABASE_URL) and
+# shared/backup/backup.env (public age recipients) itself, like artesa-deploy,
+# so the credentials never become environment of the whole unit.
+Environment=PYTHONDONTWRITEBYTECODE=1
+# The installed tool (bin/ops -> ops-<release>, a verified read-only copy);
+# system Python in isolated mode, as the bin/artesa-deploy launcher does.
+ExecStart=/usr/bin/python3 -I -B /home/energias/artesa-nfc/bin/ops/artesa_backup.py run --scheduled
+# pg_dump + restore-check + encryption take seconds today; waiting for a
+# deploy lock can add up to 10 minutes.
+TimeoutStartSec=45min
+
+# Low priority: never compete with the API or PostgreSQL.
+Nice=10
+IOSchedulingClass=idle
+CPUSchedulingPolicy=batch
+
+# --- hardening ------------------------------------------------------------------------------
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=read-only
+# Writes: shared/ only (backup tree, state, the deploy lock, restore-check cluster).
+ReadWritePaths=/home/energias/artesa-nfc/shared
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+# AF_UNIX: the restore-check cluster is socket-only; AF_INET/6: PostgreSQL on
+# 127.0.0.1:5433 (and, from D10.2, the off-host upload).
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+# Not set on purpose: MemoryDenyWriteExecute (can break Python/ctypes; not
+# needed for a threat that NoNewPrivileges + ProtectSystem already cover).
+
+[Install]
+# Enabled through the timer, not on its own.
