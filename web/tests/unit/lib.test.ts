@@ -17,6 +17,7 @@ describe("api-config (same allowlist as frontend/assets/js/api-config.js)", () =
     ["127.0.0.1", "http://127.0.0.1:8000/api/v1"],
     ["artesanfc.com", "https://api.artesanfc.com/api/v1"],
     ["ARTESANFC.COM", "https://api.artesanfc.com/api/v1"],
+    ["staging.artesanfc.com", "https://api.artesanfc.com/api/v1"],
   ])("%s → %s", (host, base) => expect(resolveApiBase(host)).toBe(base));
 
   it.each([
