@@ -1,0 +1,518 @@
+/* ArtesaNFC web — styles of the API-driven views (React islands). Plain global
+   CSS keyed by component class names; tokens come from global.css. */
+
+/* API-driven pages reserve a full viewport for their island: the footer
+   stays below the fold while the state changes loading → content, so the
+   swap causes no layout shift above it. */
+.page-top {
+  padding-top: calc(64px + var(--space-lg));
+  min-height: 100svh;
+}
+
+.page-header {
+  display: grid;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-lg);
+}
+
+/* --- Status views ------------------------------------------------------ */
+
+.status-view {
+  display: grid;
+  gap: var(--space-sm);
+  justify-items: start;
+  padding-block: var(--space-lg);
+  max-width: 44rem;
+}
+
+.page-top > .status-view,
+.certificate-page > .status-view {
+  padding-inline: var(--gutter);
+  margin-inline: auto;
+  max-width: calc(44rem + 2 * var(--gutter));
+  min-height: 50svh;
+  align-content: center;
+}
+
+.status-view h1:focus,
+.status-view h2:focus {
+  outline: none;
+}
+
+.status-view__pulse {
+  width: 48px;
+  height: 2px;
+  background: var(--color-clay);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scaleX(0.4);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+/* --- Piece grid and cards --------------------------------------------- */
+
+.collection-count {
+  font-size: var(--text-small);
+  margin-bottom: var(--space-sm);
+}
+
+.piece-grid {
+  list-style: none;
+  margin: 0;
+  margin-block-start: var(--space-md);
+  padding: 0;
+  display: grid;
+  gap: var(--space-lg) var(--space-md);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+}
+
+.piece-card {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+.piece-card__link {
+  display: grid;
+  gap: var(--space-sm);
+  text-decoration: none;
+}
+
+.piece-card__media {
+  aspect-ratio: 4 / 5;
+}
+
+.piece-card__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform var(--duration-scene) var(--ease-out);
+}
+
+.piece-card__link:hover .piece-card__media img,
+.piece-card__link:focus-visible .piece-card__media img {
+  transform: scale(1.025);
+}
+
+.piece-card__title {
+  font-size: 1.75rem;
+  line-height: 1.1;
+}
+
+.piece-card__link:hover .piece-card__title {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+}
+
+.piece-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+}
+
+.piece-card__code {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+}
+
+.piece-card__badge {
+  position: absolute;
+  top: var(--space-xs);
+  right: var(--space-xs);
+  padding: 0.3em 0.6em;
+  background: var(--color-surface-dark);
+  color: var(--color-text-inverse);
+  font-size: var(--text-micro);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+}
+
+.piece-card__3d {
+  justify-self: start;
+}
+
+/* --- 3D viewer --------------------------------------------------------- */
+
+.piece-viewer {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+.piece-viewer__stage {
+  aspect-ratio: 4 / 5;
+  background: radial-gradient(circle at 50% 40%, #f3eee4, var(--color-paper));
+}
+
+.piece-viewer__stage > img,
+.piece-viewer__stage > picture img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.piece-viewer__model {
+  display: block;
+  width: 100%;
+  height: 100%;
+  --poster-color: transparent;
+  --progress-bar-color: var(--color-clay);
+}
+
+.piece-viewer .piece-viewer__launch {
+  position: absolute;
+  left: 50%;
+  bottom: var(--space-md);
+  transform: translateX(-50%);
+  background: var(--color-surface-dark);
+  color: var(--color-text-inverse);
+  border-color: var(--color-surface-dark);
+  white-space: nowrap;
+}
+
+.piece-viewer .piece-viewer__launch:hover {
+  background: var(--color-text-inverse);
+  color: var(--color-surface-dark);
+}
+
+.piece-viewer__badge {
+  font-size: var(--text-micro);
+  border: 1px solid currentColor;
+  padding: 0.1em 0.4em;
+  letter-spacing: 0.1em;
+}
+
+.piece-viewer__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-xs) var(--space-sm);
+  min-height: var(--touch-target-min);
+}
+
+.piece-viewer__status {
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+}
+
+.viewer-dialog {
+  width: min(960px, 100vw - 2 * var(--gutter));
+  max-height: calc(100svh - 2 * var(--space-sm));
+  padding: var(--space-md);
+  border: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  display: none;
+  gap: var(--space-sm);
+}
+
+.viewer-dialog[open] {
+  display: grid;
+}
+
+.viewer-dialog::backdrop {
+  background: rgb(17 17 17 / 0.72);
+}
+
+.viewer-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.viewer-dialog .piece-viewer__stage {
+  aspect-ratio: 4 / 3;
+  max-height: 65svh;
+}
+
+/* --- Piece page -------------------------------------------------------- */
+
+.piece__intro {
+  display: grid;
+  gap: var(--space-md);
+  align-items: start;
+}
+
+.piece__photo {
+  aspect-ratio: 4 / 5;
+}
+
+.piece__heading {
+  display: grid;
+  gap: var(--space-sm);
+  justify-items: start;
+}
+
+.piece__passport {
+  padding-block: var(--space-lg) 0;
+}
+
+.piece__story {
+  background: var(--color-paper);
+}
+
+.piece__story-grid {
+  display: grid;
+  gap: var(--space-md);
+}
+
+.piece__story-body {
+  display: grid;
+  gap: var(--space-md);
+}
+
+@media (min-width: 900px) {
+  .piece__intro {
+    grid-template-columns: 7fr 5fr;
+    gap: var(--space-lg);
+  }
+
+  .piece__heading {
+    position: sticky;
+    top: calc(64px + var(--space-md));
+    padding-top: var(--space-md);
+  }
+
+  .piece__story-grid {
+    grid-template-columns: 4fr 8fr;
+  }
+}
+
+.photo-grid {
+  list-style: none;
+  margin: var(--space-md) 0 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-sm);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+}
+
+.photo-grid > li {
+  aspect-ratio: 1;
+}
+
+.photo-grid img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.artisan-strip {
+  display: grid;
+  gap: var(--space-md);
+  align-items: center;
+}
+
+.artisan-strip__portrait {
+  aspect-ratio: 4 / 5;
+  max-width: 420px;
+}
+
+.artisan-strip__text {
+  display: grid;
+  gap: var(--space-sm);
+  justify-items: start;
+}
+
+@media (min-width: 900px) {
+  .artisan-strip {
+    grid-template-columns: 5fr 7fr;
+    gap: var(--space-lg);
+  }
+}
+
+/* --- Passport ---------------------------------------------------------- */
+
+.passport {
+  display: grid;
+  gap: var(--space-md);
+  padding: clamp(1.25rem, 4vw, 3rem);
+  background: var(--color-soft-white);
+  border: 1px solid var(--color-rule);
+  border-top: 3px solid var(--piece-accent);
+}
+
+.passport__status {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  font-weight: 600;
+}
+
+.passport__status-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 1.75em;
+  height: 1.75em;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  font-size: 0.85em;
+}
+
+.passport__status[data-status="authentic"] {
+  color: #235c34;
+}
+
+.passport__rows {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+  gap: 0 var(--space-md);
+}
+
+.passport__row {
+  display: grid;
+  gap: 0.15rem;
+  padding-block: 0.8rem;
+  border-top: 1px solid var(--color-rule);
+}
+
+.passport__row dt {
+  font-size: var(--text-micro);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.passport__row dd {
+  font-size: 1.05rem;
+}
+
+.passport__code {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+}
+
+.passport__notes {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  line-height: 1.3;
+}
+
+.passport__footnote {
+  font-size: var(--text-small);
+  max-width: 60ch;
+}
+
+/* --- Artisans ---------------------------------------------------------- */
+
+.artisan-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--color-rule);
+}
+
+.artisan-list__link {
+  display: grid;
+  gap: var(--space-xs);
+  padding-block: var(--space-md);
+  border-bottom: 1px solid var(--color-rule);
+  text-decoration: none;
+}
+
+.artisan-list__link:hover h2 {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+}
+
+.artisan__intro {
+  display: grid;
+  gap: var(--space-md);
+  align-items: start;
+}
+
+.artisan__portrait {
+  aspect-ratio: 4 / 5;
+}
+
+.artisan__heading {
+  display: grid;
+  gap: var(--space-sm);
+}
+
+@media (min-width: 900px) {
+  .artisan__intro {
+    grid-template-columns: 5fr 7fr;
+    gap: var(--space-lg);
+  }
+}
+
+.facts {
+  display: grid;
+  gap: var(--space-xs);
+  border-top: 1px solid var(--color-rule);
+  padding-top: var(--space-sm);
+}
+
+.facts dt {
+  font-size: var(--text-micro);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+/* --- Certificate ------------------------------------------------------- */
+
+.certificate-page {
+  padding-bottom: var(--space-lg);
+}
+
+.certificate {
+  display: grid;
+  gap: var(--space-lg);
+  padding-block: var(--space-md);
+}
+
+.certificate__intro {
+  display: grid;
+  gap: var(--space-md);
+  align-items: end;
+}
+
+.certificate__media {
+  aspect-ratio: 4 / 5;
+  max-width: 480px;
+}
+
+.certificate__heading {
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.certificate__seal {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  font-size: var(--text-small);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #235c34;
+}
+
+.certificate__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+}
+
+@media (min-width: 900px) {
+  .certificate__intro {
+    grid-template-columns: 5fr 7fr;
+    gap: var(--space-lg);
+  }
+}

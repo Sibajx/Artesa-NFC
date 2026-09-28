@@ -1,0 +1,22 @@
+---
+// F-08 neutral shell for /piezas/{slug} (see public/_redirects). Carries no
+// entity content; noindex until the island confirms a published piece.
+import "@/styles/islands.css";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import NoScript from "@/components/ui/NoScript.astro";
+import PieceDetail from "@/components/islands/PieceDetail";
+---
+
+<BaseLayout
+  title="Pieza"
+  description="Pieza artesanal, su artesano y su historia en ArtesaNFC."
+  noindex
+>
+  <div class="page-top">
+    <NoScript>
+      Esta página necesita JavaScript para mostrar la pieza.{" "}
+      <a href="/piezas/">Ver todas las piezas</a>.
+    </NoScript>
+    <PieceDetail client:only="react" />
+  </div>
+</BaseLayout>
