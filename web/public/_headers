@@ -20,3 +20,10 @@
   Cache-Control: no-store
   X-Robots-Tag: noindex, nofollow
   Referrer-Policy: no-referrer
+
+# Staging and preview hosts must never be indexed (duplicate of production).
+https://staging.artesanfc.com/*
+  X-Robots-Tag: noindex, nofollow
+
+https://:project.pages.dev/*
+  X-Robots-Tag: noindex, nofollow

@@ -112,6 +112,32 @@ Nada de esta app está desplegado. Producción sigue sirviendo `frontend/`.
    _rollback_ al deployment anterior en el dashboard de Pages. `frontend/` no se
    elimina hasta que la nueva versión lleve un periodo estable en producción.
 
+## Staging paso a paso
+
+Objetivo: `https://staging.artesanfc.com` sirviendo `web/` con los datos reales
+de la API de producción (solo lectura), sin tocar `artesanfc.com`.
+
+1. **Cloudflare Pages (dashboard):** _Create project → Connect to Git →
+   Sibajx/Artesa-NFC_. Nombre `artesanfc-web`. _Production branch_: `develop`.
+   _Root directory_: `web`. _Build command_: `npm ci && npm run build`.
+   _Build output_: `dist`. Variable `NODE_VERSION=22`.
+2. **Dominio:** en el proyecto → _Custom domains_ → `staging.artesanfc.com`
+   (Cloudflare crea el DNS). El hostname ya está en `src/lib/api-config.ts`.
+3. **CORS del backend (servidor, gate humano):** en
+   `/home/energias/artesa-nfc/shared/.env`,
+   `CORS_ALLOWED_ORIGINS=https://artesanfc.com,https://staging.artesanfc.com`
+   y reiniciar con la herramienta de despliegue (`docs/DEPLOYMENT.md`). La
+   validación de producción solo exige que siga presente `https://artesanfc.com`.
+4. **Comprobar:** `https://staging.artesanfc.com/piezas/` lista las piezas
+   publicadas; una pieza inexistente muestra "Pieza no disponible"; los
+   previews `*.pages.dev` muestran "servicio no disponible" (sin API, a
+   propósito).
+5. **Indexación:** `public/_headers` ya manda `X-Robots-Tag: noindex, nofollow`
+   en `staging.artesanfc.com` y en `*.pages.dev`. Opcional: Cloudflare Access
+   (gratis hasta 50 usuarios) para que solo el equipo lo vea.
+
+Sin el paso 3, staging carga pero muestra "No pudimos cargar…": nunca datos falsos.
+
 ## Assets pendientes (todo lo visible hoy es PROVISIONAL)
 
 Los archivos de `public/media/placeholders/` son texturas abstractas generadas
