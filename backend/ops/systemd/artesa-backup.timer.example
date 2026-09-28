@@ -1,0 +1,17 @@
+# EXAMPLE ONLY -- not installed, not enabled. #126 / D10.1, docs/BACKUP.md.
+#
+# Daily backup around 03:30 America/Mexico_City (RPO 24 h, D10 decision 1).
+# Persistent=true runs a missed backup as soon as the host is up again.
+
+[Unit]
+Description=Daily ArtesaNFC encrypted database backup
+
+[Timer]
+OnCalendar=*-*-* 03:30:00 America/Mexico_City
+RandomizedDelaySec=15min
+AccuracySec=1min
+Persistent=true
+Unit=artesa-backup.service
+
+[Install]
+WantedBy=timers.target
