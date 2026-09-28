@@ -226,3 +226,40 @@ despliegue automático desde CI, downgrade automático, un venv compartido.
 `backend/ops/systemd/artesa-nfc.service.example`. Quedan abiertos: la firma del
 artifact, los backups programados/fuera del host/cifrados (issue aparte, antes
 del lanzamiento final) y la política de reinicio de la unit.
+
+## ADR-028 — Frontend público en Astro, migración incremental
+
+**Estado:** Aceptado para implementación en `web/`; **no desplegado**. La
+adopción en producción requiere staging, aprobación visual y assets reales
+autorizados (gate humano).
+
+**Fecha:** 2026-09-28
+
+**Contexto:** el frontend estático sin build (`frontend/`) no escala a la
+experiencia prevista (hero de video, galería, visor 3D, pasaporte digital) sin
+un sistema de componentes, tipado del contrato y control del peso de JS.
+
+**Decisión:** nueva app en `web/` con Astro (salida estática, sin runtime de
+servidor), TypeScript estricto, React **solo en islas** interactivas y
+`@google/model-viewer` cargado **bajo demanda** como visor 3D (three.js nunca
+global; three.js directo solo si model-viewer muestra una limitación concreta).
+Se conservan sin cambios: la API y su contrato, el backend, la base de la API
+por hostname exacto (`api-config`), el modelo de shells neutros de F-08 (la API
+es la única autoridad de publicación; sin pre-renderizado de entidades), la
+ruta privada `/c/{token}` con sus garantías (token solo en el path y en el
+cuerpo del POST, `noindex`, `no-referrer`, `no-store`) y el único estado
+público `unavailable` del certificado (no se muestra "revocado"). Rutas
+desconocidas responden `404.html` con estado 404. `frontend/` permanece como
+producción, referencia y rollback hasta que la nueva versión esté estable.
+
+**Alternativas descartadas:** SSR en Cloudflare Pages Functions (nuevo runtime;
+la resolución del certificado desde el borde rompería el rate limiting por IP
+del visitante); pre-renderizar entidades en el build (segunda copia de los
+datos, contra F-08/ADR-019); Three.js directo (más peso y código sin
+necesidad demostrada); reescritura big-bang.
+
+**Consecuencias:** `web/README.md` documenta arquitectura, estados, despliegue,
+staging y rollback; CI propio (`.github/workflows/web-ci.yml`). Pendientes: capa
+de media/CDN (PEND-033), assets reales autorizados, staging con su hostname en
+`api-config` y CORS, y el cambio de configuración de build del proyecto de
+Pages (dashboard, no versionado).
