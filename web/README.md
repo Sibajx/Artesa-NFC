@@ -96,45 +96,52 @@ LIVE_API=1 npx playwright test tests/e2e/live-api.spec.ts
 
 ## Despliegue (gate humano)
 
-Nada de esta app está desplegado. Producción sigue sirviendo `frontend/`.
+Producción sigue sirviendo `frontend/`. `web/` solo está en staging.
 
-1. **Staging** (requisito antes de producción): proyecto de Cloudflare Pages
-   separado (p. ej. `artesanfc-web`, gratuito) o preview del proyecto actual con
-   un hostname propio (p. ej. `staging.artesanfc.com`).
-   Build: _root_ `web`, comando `npm ci && npm run build`, salida `dist`,
-   `NODE_VERSION=22`. Para que tenga datos: añadir ese hostname a
-   `src/lib/api-config.ts` y a `CORS_ALLOWED_ORIGINS` del backend de producción
-   (cambio de configuración del backend → gate humano).
+| Proyecto de Pages                    | Dominio                 | Qué sirve                      | Cómo se publica                                   |
+| ------------------------------------ | ----------------------- | ------------------------------ | ------------------------------------------------- |
+| **`artesanfc-web`** = **PRODUCCIÓN** | `artesanfc.com`         | `frontend/` (`main` `b449f58`) | Subida directa (`wrangler pages deploy`), sin Git |
+| `artesanfc-staging`                  | `staging.artesanfc.com` | `web/` de `develop`            | `web/scripts/deploy-staging.sh`                   |
+
+1. **Staging:** ver "Staging paso a paso".
 2. **Aprobación visual** sobre staging y sustitución de los assets provisionales.
-3. **Producción**: cambiar la configuración de build del proyecto de Pages de
-   `artesanfc.com` de `frontend/` a `web/` (dashboard; no versionado).
-4. **Rollback**: volver a apuntar el proyecto a `frontend/` (sin build) o hacer
-   _rollback_ al deployment anterior en el dashboard de Pages. `frontend/` no se
-   elimina hasta que la nueva versión lleve un periodo estable en producción.
+3. **Producción (gate humano):** desplegar `web/dist` construido desde `main` en
+   el proyecto `artesanfc-web` (`wrangler pages deploy dist --project-name
+artesanfc-web --branch main`).
+4. **Rollback:** en el dashboard de Pages, _Rollback_ al deployment anterior
+   (el de `frontend/`), o volver a subir `frontend/` desde `main`. `frontend/` no
+   se elimina hasta que la nueva versión lleve un periodo estable en producción.
 
 ## Staging paso a paso
 
-Objetivo: `https://staging.artesanfc.com` sirviendo `web/` con los datos reales
-de la API de producción (solo lectura), sin tocar `artesanfc.com`.
+Estado (2026-09-28): proyecto de Pages **`artesanfc-staging`** creado y con
+`develop` `4ccdc37` desplegado (`https://artesanfc-staging.pages.dev`,
+verificado en Cloudflare real: shells, 404, cabeceras de `/c/*`, `noindex`).
+Dominio `staging.artesanfc.com` agregado al proyecto; **falta su registro DNS**.
 
-1. **Cloudflare Pages (dashboard):** _Create project → Connect to Git →
-   Sibajx/Artesa-NFC_. Nombre `artesanfc-web`. _Production branch_: `develop`.
-   _Root directory_: `web`. _Build command_: `npm ci && npm run build`.
-   _Build output_: `dist`. Variable `NODE_VERSION=22`.
-2. **Dominio:** en el proyecto → _Custom domains_ → `staging.artesanfc.com`
-   (Cloudflare crea el DNS). El hostname ya está en `src/lib/api-config.ts`.
+> **Cuidado con los nombres:** el proyecto de Pages **`artesanfc-web` es
+> PRODUCCIÓN** (`artesanfc.com`, sirve `frontend/` por subida directa desde
+> `main`, sin conexión a Git). Nunca desplegar `web/` ahí sin el gate humano de
+> producción.
+
+1. **Desplegar staging:** en un checkout limpio de `origin/develop`,
+   `web/scripts/deploy-staging.sh` (verifica, construye y publica solo en
+   `artesanfc-staging`; se niega a cualquier otro proyecto).
+2. **DNS (una vez, dashboard):** zona `artesanfc.com` → _DNS_ → registro
+   `CNAME staging → artesanfc-staging.pages.dev`, **proxied**. O en el proyecto
+   `artesanfc-staging` → _Custom domains_ → `staging.artesanfc.com` →
+   _Activate domain_ (lo crea solo).
 3. **CORS del backend (servidor, gate humano):** en
    `/home/energias/artesa-nfc/shared/.env`,
    `CORS_ALLOWED_ORIGINS=https://artesanfc.com,https://staging.artesanfc.com`
    y reiniciar con la herramienta de despliegue (`docs/DEPLOYMENT.md`). La
    validación de producción solo exige que siga presente `https://artesanfc.com`.
 4. **Comprobar:** `https://staging.artesanfc.com/piezas/` lista las piezas
-   publicadas; una pieza inexistente muestra "Pieza no disponible"; los
-   previews `*.pages.dev` muestran "servicio no disponible" (sin API, a
-   propósito).
-5. **Indexación:** `public/_headers` ya manda `X-Robots-Tag: noindex, nofollow`
-   en `staging.artesanfc.com` y en `*.pages.dev`. Opcional: Cloudflare Access
-   (gratis hasta 50 usuarios) para que solo el equipo lo vea.
+   publicadas; una pieza inexistente muestra "Pieza no disponible". En
+   `*.pages.dev` no hay API a propósito ("servicio no disponible").
+5. **Indexación:** `public/_headers` manda `X-Robots-Tag: noindex, nofollow` en
+   `staging.artesanfc.com` y en `*.pages.dev` (verificado en `pages.dev`).
+   Opcional: Cloudflare Access para que solo el equipo lo vea.
 
 Sin el paso 3, staging carga pero muestra "No pudimos cargar…": nunca datos falsos.
 
