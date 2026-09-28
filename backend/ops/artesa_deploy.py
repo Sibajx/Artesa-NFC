@@ -52,11 +52,16 @@ _PIP_IGNORED = frozenset({"pip", "setuptools", "wheel"})
 
 # --- the installed tool (bin/, #131) ------------------------------------------------
 
-TOOL_JSON_SCHEMA = 2
-TOOL_LAUNCHER = "ops/bin/artesa-deploy"
+TOOL_JSON_SCHEMA = 2  # "launchers" (#137) is an additive key: v2 readers ignore it
 # ops/*.py that never run on the server: the builder runs on the operator's machine.
 TOOL_EXCLUDED = frozenset({"build_release.py"})
-_STALE_TOOL_TMP = re.compile(r"\.ops-[0-9A-Za-z-]+\.tmp-\d+|\.ops\.tmp-\d+|\.artesa-deploy\.tmp-\d+|\.TOOL\.json\.tmp-\d+")
+# Launchers (#137): ops/bin/artesa-<name> runs exactly ops/artesa_<name>.py, and
+# every artesa_<name>.py of the tool is a command with its launcher. Both sides
+# come from the target MANIFEST; artesa-deploy is the one launcher always required.
+REQUIRED_LAUNCHERS = ("artesa-deploy",)
+_LAUNCHER_NAME_RE = re.compile(r"artesa-[a-z0-9]+(?:-[a-z0-9]+)*")
+_LAUNCHER_EXEC_RE = re.compile(r'^exec /usr/bin/python3 -I -B "\$here/ops/([A-Za-z0-9_]+\.py)" "\$@"$', re.M)
+_STALE_TOOL_TMP = re.compile(r"\.ops-[0-9A-Za-z-]+\.tmp-\d+|\.ops\.tmp-\d+|\.artesa-[a-z0-9-]+\.tmp-\d+|\.TOOL\.json\.tmp-\d+")
 _TOOL_VERSION_RE = re.compile(r'^TOOL_VERSION = "([^"\n]+)"$', re.M)
 
 
@@ -65,6 +70,22 @@ def tool_files(entries: dict[str, str]) -> dict[str, str]:
     builder. ``entries`` maps names relative to ``ops/`` to SHA-256. A module
     added in a future release is installed without the installer knowing it."""
     return {name: sha for name, sha in entries.items() if "/" not in name and name.endswith(".py") and name not in TOOL_EXCLUDED}
+
+
+def launcher_module(name: str) -> str:
+    """artesa-backup -> artesa_backup.py: the one module a launcher may run."""
+    return name.replace("-", "_") + ".py"
+
+
+def expected_launchers(modules) -> set[str]:
+    """Launchers a tool with these modules must have: one per artesa_*.py."""
+    return {name[:-3].replace("_", "-") for name in modules if name.startswith("artesa_") and name.endswith(".py")}
+
+
+def launcher_target(text: str) -> str | None:
+    """The module a launcher runs: its single ``exec`` line, or None."""
+    found = _LAUNCHER_EXEC_RE.findall(text)
+    return found[0] if len(found) == 1 else None
 
 
 def target_tool_version(ops_dir: Path) -> str | None:
@@ -121,9 +142,43 @@ def tool_state(layout: dl.Layout) -> dict:
                 problems.append(f"bin/{target}/{name} differs from TOOL.json")
     elif target is not None:
         problems.append(f"bin/ops points to a missing directory ({target})")
+    problems += _launcher_problems(layout, info, directory if directory is not None and directory.is_dir() else None)
     if stat.S_IMODE(info_path.stat().st_mode) != 0o644:
         problems.append(f"bin/TOOL.json mode {stat.S_IMODE(info_path.stat().st_mode):o} (expected 644)")
     return state
+
+
+def _launcher_problems(layout: dl.Layout, info: dict, directory: Path | None) -> list[str]:
+    """#137: the launchers the installed tool needs (one per artesa_*.py in
+    bin/ops, plus those TOOL.json records) exist, are 0755, match TOOL.json
+    when it has their hashes (installs before #137 do not), and run a module
+    that bin/ops has. A launcher-shaped file nobody expects is reported too."""
+    problems: list[str] = []
+    recorded = info.get("launchers") if isinstance(info.get("launchers"), dict) else {}
+    modules = {e.name for e in os.scandir(directory) if e.name.endswith(".py")} if directory is not None else set()
+    expected = expected_launchers(modules) | set(recorded)
+    present = {e.name for e in os.scandir(layout.bin) if _LAUNCHER_NAME_RE.fullmatch(e.name)}
+    for name in sorted(expected | present):
+        path = layout.bin / name
+        if name not in expected:
+            problems.append(f"bin/{name} is not a launcher of the installed tool")
+            continue
+        if os.path.islink(path) or not path.is_file():
+            problems.append(f"missing launcher bin/{name}")
+            continue
+        if stat.S_IMODE(path.stat().st_mode) != 0o755:
+            problems.append(f"bin/{name} mode {stat.S_IMODE(path.stat().st_mode):o} (expected 755)")
+        if name in recorded and rc.sha256_file(str(path)) != recorded[name]:
+            problems.append(f"bin/{name} differs from TOOL.json")
+        try:
+            module = launcher_target(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError):
+            module = None
+        if module != launcher_module(name):
+            problems.append(f"bin/{name} does not run ops/{launcher_module(name)}")
+        elif directory is not None and module not in modules:
+            problems.append(f"bin/{name} runs ops/{module}, which is missing from bin/{directory.name}")
+    return problems
 
 
 # --- context (everything with a side effect is injectable for tests) -------------
@@ -1584,19 +1639,35 @@ class Tool:
 
     # -- install-tools (bin/) -------------------------------------------------------------------------------------------------
 
-    def _target_tool(self, release_id: str) -> tuple[dict[str, str], str]:
+    def _target_tool(self, release_id: str) -> tuple[dict[str, str], dict[str, str]]:
         """#131: the tool files to install come from the TARGET release -- its
         MANIFEST, already verified against the tree by prepared_problems() --
-        never from a list compiled into the (possibly older) running tool."""
+        never from a list compiled into the (possibly older) running tool.
+        #137: so do the launchers (ops/bin/*), each checked to run exactly its
+        own artesa_<name>.py; a command module without its launcher, or any
+        other file under ops/bin/, refuses the install."""
         try:
             manifest = rc.parse_manifest((self.layout.release_dir(release_id) / "MANIFEST.sha256").read_bytes())
         except OSError:
             raise rc.OpsError(rc.Exit.PREFLIGHT, f"release {release_id} has no readable MANIFEST.sha256") from None
-        files = tool_files({rel[len("ops/"):]: sha for rel, sha in manifest.items() if rel.startswith("ops/")})
-        missing = [n for n in ("artesa_deploy.py",) if n not in files] + ([] if TOOL_LAUNCHER in manifest else ["bin/artesa-deploy"])
+        entries = {rel[len("ops/"):]: sha for rel, sha in manifest.items() if rel.startswith("ops/")}
+        files = tool_files(entries)
+        launchers = {rel[len("bin/"):]: sha for rel, sha in entries.items() if rel.startswith("bin/")}
+        missing = [n for n in ("artesa_deploy.py",) if n not in files] + [f"bin/{n}" for n in REQUIRED_LAUNCHERS if n not in launchers]
         if missing:
             raise rc.OpsError(rc.Exit.PREFLIGHT, "release does not carry the deploy tool: " + ", ".join(missing))
-        return files, manifest[TOOL_LAUNCHER]
+        problems = [f"ops/bin/{n} is not a tool launcher (expected artesa-<name>)" for n in sorted(launchers) if not _LAUNCHER_NAME_RE.fullmatch(n)]
+        problems += [f"ops/bin/{n} is missing (the launcher of ops/{launcher_module(n)})" for n in sorted(expected_launchers(files) - set(launchers))]
+        for name in sorted(n for n in launchers if _LAUNCHER_NAME_RE.fullmatch(n)):
+            try:
+                module = launcher_target((self.layout.release_dir(release_id) / "ops" / "bin" / name).read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError):
+                module = None
+            if module != launcher_module(name) or module not in files:
+                problems.append(f"ops/bin/{name} must run ops/{launcher_module(name)} (a tool module of this release)")
+        if problems:
+            raise rc.OpsError(rc.Exit.PREFLIGHT, "release carries an inconsistent tool: " + "; ".join(problems[:3]))
+        return files, launchers
 
     def _installed_dir_problems(self, directory: Path, expected: dict[str, str]) -> list[str]:
         """An existing bin/ops-<id> is reused only if it is exactly the target's
@@ -1682,6 +1753,31 @@ class Tool:
                 shutil.rmtree(staging, ignore_errors=True)
             raise
 
+    def _install_launchers(self, source: Path, launchers: dict[str, str], obsolete: set[str]) -> None:
+        """Every launcher is staged next to its final name and checked against
+        the target MANIFEST before any is swapped in (os.replace, 0755); a
+        launcher a previous install recorded and the target no longer has is
+        removed. A failure removes the staged copies and changes nothing."""
+        staged: list[tuple[Path, Path]] = []
+        try:
+            for name, sha in sorted(launchers.items()):
+                tmp = self.layout.bin / f".{name}.tmp-{os.getpid()}"
+                staged.append((tmp, self.layout.bin / name))
+                shutil.copyfile(source / "bin" / name, tmp)
+                if rc.sha256_file(str(tmp)) != sha:
+                    raise rc.OpsError(rc.Exit.PREFLIGHT, f"copied launcher {name} does not match the target MANIFEST")
+                os.chmod(tmp, 0o755)
+        except BaseException:
+            for tmp, _final in staged:
+                if tmp.exists():
+                    os.unlink(tmp)
+            raise
+        for tmp, final in staged:
+            os.replace(tmp, final)
+        for name in sorted(obsolete - set(launchers)):
+            if _LAUNCHER_NAME_RE.fullmatch(name) and os.path.isfile(self.layout.bin / name):
+                os.unlink(self.layout.bin / name)
+
     def _write_tool_json(self, info: dict) -> None:
         tmp_info = self.layout.bin / f".TOOL.json.tmp-{os.getpid()}"
         tmp_info.write_text(json.dumps(info, indent=2, sort_keys=True) + "\n", encoding="ascii")
@@ -1691,8 +1787,9 @@ class Tool:
     def cmd_install_tools(self, release_id: str, dry_run: bool) -> int:
         """Install the target release's tool into <root>/bin: bin/ops-<id>/
         (read-only copy of the target's ops/*.py, verified against its
-        MANIFEST), bin/ops -> ops-<id> (atomic), bin/artesa-deploy (launcher)
-        and bin/TOOL.json v2 (installed target + the installer that ran).
+        MANIFEST), bin/ops -> ops-<id> (atomic), the target's launchers
+        (bin/artesa-deploy, bin/artesa-backup, ...: #137) and bin/TOOL.json v2
+        (installed target, its launchers, the installer that ran).
         The whole invocation runs with the code already loaded; the canonical
         way to install a release's tool is therefore to run that release's
         own copy: python3 -I -B <root>/releases/<id>/ops/artesa_deploy.py
@@ -1703,9 +1800,8 @@ class Tool:
         problems = self.prepared_problems(release_id)
         if problems:
             raise rc.OpsError(rc.Exit.PREFLIGHT, "source release failed verification: " + "; ".join(problems[:3]))
-        files, _launcher_sha = self._target_tool(release_id)
+        files, launchers = self._target_tool(release_id)
         source = self.layout.release_dir(release_id) / "ops"
-        launcher = source / "bin" / "artesa-deploy"
         release = self.load_release(release_id)
         installer = self._executor_identity(files)
         dest = self.layout.bin / f"ops-{release_id}"
@@ -1714,6 +1810,7 @@ class Tool:
             existing = self._installed_dir_problems(dest, files)
         self.ctx.say(f"install-tools from {release_id} (commit {release['git']['commit'][:12]}) into {self.layout.bin}")
         self.ctx.say(f"  tool files from the target MANIFEST: {', '.join(sorted(files))}")
+        self.ctx.say(f"  launchers from the target MANIFEST (bin/, mode 755): {', '.join(sorted(launchers))}")
         self.ctx.say(f"  bin/ops-{release_id}: " + ("absent (will be staged)" if existing is None else ("present and identical (reused)" if not existing else "PRESENT BUT DIFFERENT")))
         self.ctx.say(f"  installer: {installer['path']} (release {installer['release_id'] or 'unknown'}, tool {installer['tool_version']}); "
                      f"matches target: {'yes' if installer['matches_target'] else 'NO'}")
@@ -1743,18 +1840,17 @@ class Tool:
             tmp = self.layout.bin / f".ops.tmp-{os.getpid()}"
             os.symlink(dest.name, tmp)
             os.replace(tmp, self.layout.bin / "ops")
-            tmp_launcher = self.layout.bin / f".artesa-deploy.tmp-{os.getpid()}"
-            shutil.copyfile(launcher, tmp_launcher)
-            os.chmod(tmp_launcher, 0o755)
-            os.replace(tmp_launcher, self.layout.bin / "artesa-deploy")
+            recorded = (read_tool_json(self.layout.bin / "TOOL.json") or {}).get("launchers")
+            self._install_launchers(source, launchers, set(recorded) if isinstance(recorded, dict) else set())
             info = {"schema_version": TOOL_JSON_SCHEMA, "release_id": release_id, "git_commit": release["git"]["commit"],
                     "tool_version": target_tool_version(source), "installed_at": rc.utc_iso(self.ctx.clock()),
-                    "files": {n: rc.sha256_file(str(dest / n)) for n in sorted(files)}, "installer": installer}
+                    "files": {n: rc.sha256_file(str(dest / n)) for n in sorted(files)},
+                    "launchers": {n: rc.sha256_file(str(self.layout.bin / n)) for n in sorted(launchers)}, "installer": installer}
             self._write_tool_json(info)
             self.log().event("install_tools", command="install-tools", target_release=release_id, git_sha=release["git"]["commit"][:12], exit_code=0,
                              detail=(f"installer={installer['release_id'] or 'unknown'} sha={installer['artesa_deploy_sha256'][:12]} "
                                      f"matches_target={str(installer['matches_target']).lower()}" + (f" removed_tmp={len(removed)}" if removed else ""))[:200])
-        self.ctx.say(f"installed: {self.layout.bin / 'artesa-deploy'} -> ops-{release_id} (TOOL.json schema {TOOL_JSON_SCHEMA})")
+        self.ctx.say(f"installed: {', '.join(f'bin/{n}' for n in sorted(launchers))} -> ops-{release_id} in {self.layout.bin} (TOOL.json schema {TOOL_JSON_SCHEMA})")
         return 0
 
     # -- prune ---------------------------------------------------------------------------------------------------------------

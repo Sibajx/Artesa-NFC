@@ -137,9 +137,12 @@ copia en claro, cualquier restauración (también la local) necesita K1 o K2.
 | `artesa-backup verify [<id> \| --all]` | **Sin clave privada:** archivos, tamaño y sha256 frente a `meta.json`, cabecera age con 2 destinatarios, modos, coherencia con el estado. No prueba que el contenido descifre: eso solo lo demuestra una restauración (D10.3) |
 | `artesa-backup restore-test <ruta>` | restore-check sobre un plaintext **dado explícitamente**: un dump de `artesa-deploy` con su `.json`, o un bundle ya descifrado **fuera del servidor** y extraído (`database.dump` + `manifest.json`). **Nunca descifra**: el servidor no tiene claves privadas |
 
-En producción se ejecuta la copia instalada: `/usr/bin/python3 -I -B
-/home/energias/artesa-nfc/bin/ops/artesa_backup.py <comando>`. `install-tools` la instala
-con el resto del tool (#131: la lista de archivos sale del MANIFEST del release).
+En producción se ejecuta la copia instalada con su lanzador,
+`/home/energias/artesa-nfc/bin/artesa-backup <comando>`, que equivale a `/usr/bin/python3
+-I -B /home/energias/artesa-nfc/bin/ops/artesa_backup.py <comando>`. `install-tools` instala
+el módulo con el resto del tool (#131) y, desde `TOOL_VERSION` 1.3.1, también el lanzador
+`bin/artesa-backup` (#137). R5 (1.3.0) instaló el módulo pero **no** el lanzador: la
+activación de D10.1 necesita un release con 1.3.1 o posterior.
 
 ## 7. Claves (K1, K2): se generan **fuera** del servidor
 
