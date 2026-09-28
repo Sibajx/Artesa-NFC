@@ -557,7 +557,7 @@ def main() -> int:
         print("\n== S14b install-tools, canonical path (#131): the target release's own tool, real pty, then the bin/ launcher")
         (clone / "backend" / "app" / "r7_marker.py").write_text('MARK = "r7"\n'); git(clone, "add", "-A"); git(clone, "commit", "-q", "-m", "r7 tools")
         r7 = build(clone, root / "incoming", 7)
-        step("prepare R7 (carries ops/ + ops/bin/artesa-deploy)", cli(["prepare", r7.release_id])[0] == 0)
+        step("prepare R7 (carries ops/ + ops/bin/artesa-deploy + ops/bin/artesa-backup)", cli(["prepare", r7.release_id])[0] == 0)
         target_tool = root / "releases" / r7.release_id / "ops" / "artesa_deploy.py"
         code, out = run_pty(["/usr/bin/python3", "-I", "-B", str(target_tool), "--root", str(root), "--rehearsal", "install-tools", r7.release_id], r7.release_id)
         info = json.loads((root / "bin" / "TOOL.json").read_text())
@@ -574,6 +574,23 @@ def main() -> int:
         step("launcher runs the installed tool with /usr/bin/python3 -I; status reports a consistent installation",
              launched.returncode == 0 and '"current"' in launched.stdout and tooling.get("problems") == [] and tooling.get("installer_matches_target") is True,
              f"exit {launched.returncode}, tooling problems {tooling.get('problems')}")
+        # #137: R5 installed artesa_backup.py but never bin/artesa-backup; the real installed CLI must exist and work
+        launcher_ok = all((root / "bin" / n).is_file() and (os.stat(root / "bin" / n).st_mode & 0o777) == 0o755
+                          and info.get("launchers", {}).get(n) == manifest.get(f"ops/bin/{n}") == rc.sha256_file(str(root / "bin" / n))
+                          for n in ("artesa-deploy", "artesa-backup"))
+        step("install-tools installed every launcher of the target: bin/artesa-deploy + bin/artesa-backup, 0755, hashes == MANIFEST == TOOL.json",
+             launcher_ok and set(info.get("launchers", {})) == {"artesa-deploy", "artesa-backup"}, f"launchers {sorted(info.get('launchers', {}))}")
+        before = sorted(str(p.relative_to(root)) for p in root.rglob("*") if "venv" not in p.relative_to(root).parts)
+        helped = subprocess.run([str(root / "bin" / "artesa-backup"), "--help"], stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=120)
+        backup_status = subprocess.run([str(root / "bin" / "artesa-backup"), "--root", str(root), "--rehearsal", "status"],
+                                       stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=120)
+        traced = subprocess.run(["/bin/sh", "-x", str(root / "bin" / "artesa-backup"), "--help"], stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=120)
+        after = sorted(str(p.relative_to(root)) for p in root.rglob("*") if "venv" not in p.relative_to(root).parts)
+        step("bin/artesa-backup --help and status run bin/ops/artesa_backup.py; status is read-only (no backup, nothing written)",
+             helped.returncode == 0 and "artesa-backup" in helped.stdout and "OFFSITE: NOT CONFIGURED" in backup_status.stdout
+             and "D10: INCOMPLETE" in backup_status.stdout and f"{(root / 'bin').resolve()}/ops/artesa_backup.py --help" in traced.stderr
+             and before == after and not (root / "shared" / "backup").exists(),
+             f"--help exit {helped.returncode}, status exit {backup_status.returncode}")
         step("every deployment left an evidence directory", len(list((root / "shared" / "state" / "deployments").iterdir())) >= 5)
 
         print("\n== S14 secret scan over everything the rehearsal produced")
