@@ -25,7 +25,8 @@ OPS_DIR = Path(__file__).resolve().parents[2] / "ops"
 LAUNCHER = OPS_DIR / "bin" / "artesa-deploy"
 TOOL_NAMES = sorted(ad.tool_files({p.name: "" for p in OPS_DIR.iterdir() if p.is_file()}))
 TOOL_SOURCES = {f"backend/ops/{n}": (OPS_DIR / n).read_text() for n in TOOL_NAMES}
-TOOLS = {**TOOL_SOURCES, "backend/ops/bin/artesa-deploy": LAUNCHER.read_text(),
+LAUNCHERS = {f"backend/ops/bin/{p.name}": p.read_text() for p in sorted((OPS_DIR / "bin").iterdir())}
+TOOLS = {**TOOL_SOURCES, **LAUNCHERS,
          "backend/ops/build_release.py": (OPS_DIR / "build_release.py").read_text()}
 ARGS = ["--rehearsal", "--prod-port", "18000", "--candidate-port", "18001"]
 
@@ -61,9 +62,10 @@ def writable(path: Path) -> None:
         os.chmod(entry, 0o644)
 
 
-def test_tool_version_is_1_3_0():
-    # 1.2.0 = R4 (#130/#131); 1.3.0 = D10.1 adds artesa_backup.py to the installed tool
-    assert rc.TOOL_VERSION == "1.3.0"
+def test_tool_version_is_1_3_1():
+    # 1.2.0 = R4 (#130/#131); 1.3.0 = D10.1 adds artesa_backup.py to the installed tool;
+    # 1.3.1 = #137: install-tools installs every launcher of the target (bin/artesa-backup)
+    assert rc.TOOL_VERSION == "1.3.1"
     assert ad.target_tool_version(OPS_DIR) == rc.TOOL_VERSION
 
 
@@ -80,7 +82,7 @@ def test_install_from_the_target_release_is_the_canonical_path(s):
     me = release_ops(s, rid) / "artesa_deploy.py"
     assert install(s, rid, executor=me) == 0
     info = tool_json(s)
-    assert set(info) == {"schema_version", "release_id", "git_commit", "tool_version", "installed_at", "files", "installer"}
+    assert set(info) == {"schema_version", "release_id", "git_commit", "tool_version", "installed_at", "files", "launchers", "installer"}
     assert info["schema_version"] == 2 and info["release_id"] == rid and info["git_commit"] == commit_of(s, rid)
     assert info["tool_version"] == rc.TOOL_VERSION
     assert set(info["files"]) == set(TOOL_NAMES) and "build_release.py" not in info["files"]
@@ -310,3 +312,205 @@ def test_existing_ops_dir_without_artesa_backup_is_drift(s):
         os.chmod(entry, 0o444)
     os.chmod(installed, 0o555)
     assert install(s, rid) == rc.Exit.PREFLIGHT and "missing file: artesa_backup.py" in s.sink.text
+
+
+# --- #137: launchers are part of the target tool (bin/artesa-backup was never installed by R5) -------------------------
+
+LAUNCHER_NAMES = sorted(p.name for p in (OPS_DIR / "bin").iterdir())
+NO_BACKUP_LAUNCHER = {k: v for k, v in TOOLS.items() if k != "backend/ops/bin/artesa-backup"}  # what R5 shipped
+
+
+def release_without(s, name, paths):
+    """A later release of the fixture repository with ``paths`` deleted."""
+    for path in paths:
+        os.unlink(s.repo / path)
+    return s.release(name, {f"backend/app/{name}.py": "X = 1\n"})
+
+
+def launcher_sha(name):
+    return rc.sha256_file(str(OPS_DIR / "bin" / name))
+
+
+def test_repository_has_one_launcher_per_command_module():
+    # the bug of #137 in one line: artesa_backup.py shipped without ops/bin/artesa-backup
+    assert LAUNCHER_NAMES == ["artesa-backup", "artesa-deploy"]
+    assert set(LAUNCHER_NAMES) == ad.expected_launchers(TOOL_NAMES)
+    for name in LAUNCHER_NAMES:
+        path = OPS_DIR / "bin" / name
+        assert os.access(path, os.X_OK) and ad.launcher_target(path.read_text()) == ad.launcher_module(name)
+        assert "set -eu" in path.read_text() and 'here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)' in path.read_text()
+
+
+def test_install_tools_installs_every_launcher_of_the_target(s):
+    rid = s.release("tools", TOOLS)
+    assert install(s, rid, dry_run=True, tty=False) == 0
+    assert "launchers from the target MANIFEST (bin/, mode 755): artesa-backup, artesa-deploy" in s.sink.text
+    assert not (s.root / "bin" / "artesa-backup").exists()
+    assert install(s, rid) == 0
+    for name in LAUNCHER_NAMES:
+        path = s.root / "bin" / name
+        assert stat.S_IMODE(path.stat().st_mode) == 0o755 and rc.sha256_file(str(path)) == launcher_sha(name)
+    assert tool_json(s)["launchers"] == {n: launcher_sha(n) for n in LAUNCHER_NAMES}
+    assert "installed: bin/artesa-backup, bin/artesa-deploy" in s.sink.text
+
+
+def test_installed_launchers_run_the_modules_of_bin_ops(s):
+    rid = s.release("tools", TOOLS)
+    assert install(s, rid) == 0
+    bin_dir = (s.root / "bin").resolve()
+    for name in LAUNCHER_NAMES:
+        proc = subprocess.run([str(bin_dir / name), "--help"], capture_output=True, text=True, timeout=60)
+        assert proc.returncode == 0 and name in proc.stdout, proc.stderr
+        # sh -x shows the exec: always through bin/ops (the active tooling), never the release directory
+        trace = subprocess.run(["/bin/sh", "-x", str(bin_dir / name), "--help"], capture_output=True, text=True, timeout=60).stderr
+        assert f"exec /usr/bin/python3 -I -B {bin_dir}/ops/{ad.launcher_module(name)} --help" in trace
+
+
+def test_installed_artesa_backup_status_is_read_only(s):
+    rid = s.release("tools", TOOLS)
+    assert install(s, rid) == 0
+    before = sorted(str(p.relative_to(s.root)) for p in s.root.rglob("*"))
+    proc = subprocess.run([str(s.root / "bin" / "artesa-backup"), "--root", str(s.root), "--rehearsal", "status"],
+                          capture_output=True, text=True, timeout=60)
+    assert "OFFSITE: NOT CONFIGURED" in proc.stdout and "D10: INCOMPLETE" in proc.stdout, proc.stderr
+    assert proc.returncode == rc.Exit.PREFLIGHT  # never ran: stale, reported, not an error of the launcher
+    assert sorted(str(p.relative_to(s.root)) for p in s.root.rglob("*")) == before and not (s.root / "shared" / "backup").exists()
+
+
+def test_reinstall_keeps_launchers_identical(s):
+    rid = s.release("tools", TOOLS)
+    assert install(s, rid) == 0
+    first = tool_json(s)["launchers"]
+    assert install(s, rid, dry_run=True, tty=False) == 0 and "present and identical (reused)" in s.sink.text
+    assert install(s, rid) == 0
+    assert tool_json(s)["launchers"] == first
+    assert not [p for p in (s.root / "bin").iterdir() if p.name.startswith(".")]
+
+
+def test_target_with_a_command_module_but_no_launcher_is_refused(s):
+    rid = s.release("r5", NO_BACKUP_LAUNCHER)
+    assert install(s, rid, dry_run=True, tty=False) == rc.Exit.PREFLIGHT
+    assert "ops/bin/artesa-backup is missing (the launcher of ops/artesa_backup.py)" in s.sink.text
+    assert install(s, rid) == rc.Exit.PREFLIGHT and not (s.root / "bin" / "ops").exists()
+
+
+def test_launcher_that_runs_another_module_is_refused(s):
+    wrong = TOOLS["backend/ops/bin/artesa-backup"].replace("ops/artesa_backup.py", "ops/artesa_deploy.py")
+    rid = s.release("tools", {**TOOLS, "backend/ops/bin/artesa-backup": wrong})
+    assert install(s, rid) == rc.Exit.PREFLIGHT and "ops/bin/artesa-backup must run ops/artesa_backup.py" in s.sink.text
+    assert not (s.root / "bin" / "ops").exists()
+
+
+@pytest.mark.parametrize("name", ["helper.sh", "artesa-cleanup"])
+def test_other_files_under_ops_bin_are_refused(s, name):
+    # helper.sh: not a launcher name; artesa-cleanup: launcher-shaped, but ops/artesa_cleanup.py does not exist
+    rid = s.release("tools", {**TOOLS, f"backend/ops/bin/{name}": TOOLS["backend/ops/bin/artesa-deploy"]})
+    assert install(s, rid) == rc.Exit.PREFLIGHT and f"ops/bin/{name}" in s.sink.text
+    assert not (s.root / "bin" / "ops").exists()
+
+
+def test_launcher_modified_in_the_release_is_refused(s):
+    rid = s.release("tools", TOOLS)
+    (release_ops(s, rid) / "bin" / "artesa-backup").write_text("#!/bin/sh\nexec /bin/true\n")
+    assert install(s, rid) == rc.Exit.PREFLIGHT
+    assert not (s.root / "bin" / "ops").exists() and not (s.root / "bin" / "artesa-backup").exists()
+
+
+def test_failure_while_staging_launchers_leaves_no_temporaries(s, monkeypatch):
+    rid = s.release("tools", TOOLS)
+    real = ad.shutil.copyfile
+
+    def flaky(src, dst, *args, **kw):
+        if Path(dst).name.startswith(".artesa-deploy.tmp-"):  # after .artesa-backup.tmp-* was staged
+            raise OSError("disk full")
+        return real(src, dst, *args, **kw)
+
+    monkeypatch.setattr(ad.shutil, "copyfile", flaky)
+    assert install(s, rid) == rc.Exit.INTERNAL
+    assert not [p for p in (s.root / "bin").iterdir() if p.name.startswith(".")]
+    assert not (s.root / "bin" / "artesa-backup").exists() and not (s.root / "bin" / "artesa-deploy").exists()
+
+
+def test_stale_launcher_temporaries_are_removed(s):
+    rid = s.release("tools", TOOLS)
+    (s.root / "bin").mkdir(parents=True, exist_ok=True)
+    (s.root / "bin" / ".artesa-backup.tmp-424242").write_text("half")
+    assert install(s, rid) == 0
+    assert not (s.root / "bin" / ".artesa-backup.tmp-424242").exists() and ".artesa-backup.tmp-424242" in s.sink.text
+
+
+def test_r4_style_target_with_only_artesa_deploy_still_installs(s):
+    s.release("base", TOOLS)
+    rid = release_without(s, "r4", ["backend/ops/artesa_backup.py", "backend/ops/bin/artesa-backup"])
+    assert install(s, rid) == 0
+    assert tool_json(s)["launchers"] == {"artesa-deploy": launcher_sha("artesa-deploy")}
+    assert not (s.root / "bin" / "artesa-backup").exists()
+    assert s.run(["status"]) == 0 and "TOOLING WARNING" not in s.sink.text
+
+
+def test_launcher_the_new_target_no_longer_has_is_removed(s):
+    new = s.release("new", TOOLS)
+    assert install(s, new) == 0 and (s.root / "bin" / "artesa-backup").exists()
+    old = release_without(s, "old", ["backend/ops/artesa_backup.py", "backend/ops/bin/artesa-backup"])
+    assert install(s, old) == 0
+    assert not (s.root / "bin" / "artesa-backup").exists() and (s.root / "bin" / "artesa-deploy").exists()
+    assert s.run(["status"]) == 0 and "TOOLING WARNING" not in s.sink.text
+
+
+# --- #137: status reports launcher problems (read-only) ------------------------------------------------------------------
+
+def status_warnings(s) -> list[str]:
+    assert s.run(["status", "--json"]) == 0
+    return json.loads(s.sink.text)["tooling"]["problems"]
+
+
+def test_status_is_clean_with_both_launchers(s):
+    rid = s.release("tools", TOOLS)
+    assert install(s, rid) == 0
+    assert status_warnings(s) == []
+
+
+def test_status_reports_the_r5_state_missing_artesa_backup(s):
+    # production after R5: the 1.3.0 installer wrote no launcher and no "launchers" key
+    rid = s.release("tools", TOOLS)
+    assert install(s, rid) == 0
+    os.unlink(s.root / "bin" / "artesa-backup")
+    info = tool_json(s)
+    del info["launchers"]
+    (s.root / "bin" / "TOOL.json").write_text(json.dumps(info))
+    os.chmod(s.root / "bin" / "TOOL.json", 0o644)
+    assert status_warnings(s) == ["missing launcher bin/artesa-backup"]
+    assert s.run(["status"]) == 0
+    assert "TOOLING WARNING: missing launcher bin/artesa-backup -- re-run install-tools" in s.sink.text
+    assert install(s, rid) == 0 and status_warnings(s) == []  # the fixed install-tools repairs it
+
+
+def test_status_reports_a_modified_launcher_and_a_wrong_mode(s):
+    rid = s.release("tools", TOOLS)
+    assert install(s, rid) == 0
+    path = s.root / "bin" / "artesa-backup"
+    path.write_text(path.read_text() + "# edited by hand\n")
+    os.chmod(path, 0o775)
+    assert status_warnings(s) == ["bin/artesa-backup mode 775 (expected 755)", "bin/artesa-backup differs from TOOL.json"]
+
+
+def test_status_reports_a_launcher_whose_module_is_missing(s):
+    rid = s.release("tools", TOOLS)
+    assert install(s, rid) == 0
+    installed = s.root / "bin" / f"ops-{rid}"
+    writable(installed)
+    os.unlink(installed / "artesa_backup.py")
+    warnings = status_warnings(s)
+    assert f"bin/artesa-backup runs ops/artesa_backup.py, which is missing from bin/ops-{rid}" in warnings
+    assert f"TOOL.json lists artesa_backup.py, missing from bin/ops-{rid}" in warnings
+
+
+def test_status_reports_a_launcher_that_runs_another_module_and_a_stray_launcher(s):
+    rid = s.release("tools", TOOLS)
+    assert install(s, rid) == 0
+    path = s.root / "bin" / "artesa-backup"
+    path.write_text(path.read_text().replace("artesa_backup.py", "artesa_deploy.py"))
+    (s.root / "bin" / "artesa-cleanup").write_text("#!/bin/sh\n")
+    warnings = status_warnings(s)
+    assert "bin/artesa-backup does not run ops/artesa_backup.py" in warnings
+    assert "bin/artesa-cleanup is not a launcher of the installed tool" in warnings
