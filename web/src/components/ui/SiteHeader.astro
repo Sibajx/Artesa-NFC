@@ -1,0 +1,114 @@
+---
+// Header — DESIGN_SYSTEM.md §6 (ADR-015/016): visible on entry, hides while
+// scrolling down, reappears when scrolling up. Links are plain anchors that
+// work without JavaScript; the script only adds the scroll behaviour.
+interface Props {
+  tone: "light" | "dark";
+  minimal: boolean;
+}
+const { tone, minimal } = Astro.props;
+const path = Astro.url.pathname;
+const links = [
+  { href: "/piezas/", label: "Piezas" },
+  { href: "/artesanos/", label: "Artesanos" },
+  { href: "/#contacto", label: "Contacto" },
+];
+const isCurrent = (href: string) => href !== "/#contacto" && path.startsWith(href);
+---
+
+<header class="site-header" data-tone={tone} data-initial-tone={tone} data-hidden="false">
+  <div class="site-header__inner container">
+    <a class="site-header__logo" href="/" aria-label="ArtesaNFC, inicio">
+      ArtesaNFC
+    </a>
+    {!minimal && (
+      <nav aria-label="Principal">
+        <ul class="site-header__nav" role="list">
+          {links.map((link) => (
+            <li>
+              <a href={link.href} aria-current={isCurrent(link.href) ? "page" : undefined}>
+                {link.label}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+    )}
+  </div>
+</header>
+
+<style>
+  .site-header {
+    position: fixed;
+    inset: 0 0 auto 0;
+    z-index: 50;
+    color: var(--color-text);
+    background: color-mix(in srgb, var(--color-bg) 92%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--color-rule);
+    transition:
+      transform var(--duration-ui) var(--ease-out),
+      background-color var(--duration-ui) var(--ease-out),
+      color var(--duration-ui) var(--ease-out);
+  }
+
+  .site-header[data-tone="dark"] {
+    color: var(--color-text-inverse);
+    background: linear-gradient(to bottom, rgb(0 0 0 / 0.45), transparent);
+    backdrop-filter: none;
+    border-bottom-color: transparent;
+  }
+
+  .site-header[data-tone="dark"] :focus-visible {
+    outline-color: var(--color-text-inverse);
+  }
+
+  .site-header[data-hidden="true"] {
+    transform: translateY(-100%);
+  }
+
+  .site-header:focus-within {
+    transform: none;
+  }
+
+  .site-header__inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    min-height: 64px;
+  }
+
+  .site-header__logo {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    text-decoration: none;
+    min-height: var(--touch-target-min);
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .site-header__nav {
+    display: flex;
+    gap: clamp(0.75rem, 3vw, 2.25rem);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .site-header__nav a {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--touch-target-min);
+    font-size: var(--text-micro);
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    text-decoration: none;
+  }
+
+  .site-header__nav a:hover,
+  .site-header__nav a[aria-current="page"] {
+    text-decoration: underline;
+  }
+</style>

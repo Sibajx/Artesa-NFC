@@ -1,0 +1,18 @@
+# ArtesaNFC web (Astro) — Cloudflare Pages static routing.
+# Same contract as frontend/_redirects (F-08, Issue #72); only the shell
+# location differs: Astro ignores `_`-prefixed page directories, so the
+# neutral shells live under /shell/ instead of /_shell/. They are still
+# outside /piezas/ and /artesanos/, so no slug can collide with them.
+#
+# Private certificate route: one shell for any /c/{token}; the token is read
+# from location.pathname client-side and never leaves the page except in the
+# POST body to the API.
+/c/*  /c/  200
+
+# Public detail routes: one neutral shell per entity type; the public API is
+# the sole authority on publication. `:slug` (never `*`) so the lists
+# /piezas/ and /artesanos/ are not rewritten (docs/QA_PRIVATE_ROUTE.md §5).
+/piezas/:slug  /shell/pieza/  200
+/piezas/:slug/  /shell/pieza/  200
+/artesanos/:slug  /shell/artesano/  200
+/artesanos/:slug/  /shell/artesano/  200

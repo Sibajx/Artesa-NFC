@@ -1,0 +1,41 @@
+---
+// <picture> with AVIF/WebP/JPEG and an optional portrait source for narrow
+// screens. Width/height are always set so the layout never shifts.
+import type { ResponsiveImage } from "@/content/site";
+
+interface Props {
+  image: ResponsiveImage;
+  class?: string;
+  loading?: "eager" | "lazy";
+  fetchpriority?: "high" | "auto";
+  sizes?: string;
+  decorative?: boolean;
+}
+const {
+  image,
+  class: className,
+  loading = "lazy",
+  fetchpriority = "auto",
+  sizes = "100vw",
+  decorative = false,
+} = Astro.props;
+const { desktop, mobile } = image;
+const MOBILE_QUERY = "(max-width: 700px) and (orientation: portrait)";
+---
+
+<picture class={className}>
+  {mobile?.avif && <source media={MOBILE_QUERY} type="image/avif" srcset={mobile.avif} />}
+  {mobile?.webp && <source media={MOBILE_QUERY} type="image/webp" srcset={mobile.webp} />}
+  {mobile && <source media={MOBILE_QUERY} srcset={mobile.jpg} />}
+  {desktop.avif && <source type="image/avif" srcset={desktop.avif} sizes={sizes} />}
+  {desktop.webp && <source type="image/webp" srcset={desktop.webp} sizes={sizes} />}
+  <img
+    src={desktop.jpg}
+    width={desktop.width}
+    height={desktop.height}
+    alt={decorative ? "" : image.alt}
+    loading={loading}
+    decoding="async"
+    fetchpriority={fetchpriority}
+  />
+</picture>

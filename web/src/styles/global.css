@@ -1,0 +1,377 @@
+/* ArtesaNFC web — design tokens and base styles.
+   Source: docs/DESIGN_SYSTEM.md (§3 palette, §4 type, §5 layout, §14 motion,
+   §17 touch targets, §18 accessibility). Token names follow the shipped
+   frontend/assets/css/tokens.css (--color-*), so both apps stay comparable.
+   Material accents (clay, wood, pigment, fiber, paper) are an addition of the
+   Astro migration: they tint surfaces and rules only; colour itself should
+   come from the craft (photography), §3. */
+
+:root {
+  /* Base palette — DESIGN_SYSTEM.md §3 */
+  --color-bg: #f5f3ee; /* Warm White */
+  --color-surface-dark: #111111; /* Carbon */
+  --color-text: #171717; /* Ink */
+  --color-text-inverse: #f7f7f4; /* Soft White */
+  --color-text-muted: #5f5c57; /* Graphite, darkened from #66635E for AA on paper */
+  --color-soft-white: #f7f7f4;
+
+  /* Material accents — provisional (migration default) */
+  --color-paper: #ece6da;
+  --color-clay: #8a4b2f;
+  --color-wood: #5c3f28;
+  --color-pigment: #8f2a1d;
+  --color-fiber: #b9a37a;
+  --color-rule: #d8d1c3;
+  --color-rule-dark: #3a3631;
+  --color-focus: #8f2a1d;
+
+  /* Per-piece theming hooks — DESIGN_SYSTEM.md §2.5, §3 */
+  --piece-accent: var(--color-clay);
+  --piece-accent-secondary: var(--color-fiber);
+  --piece-bg: var(--color-bg);
+  --piece-text: var(--color-text);
+
+  /* Spacing — DESIGN_SYSTEM.md §20 */
+  --space-2xs: 0.25rem;
+  --space-xs: 0.5rem;
+  --space-sm: 1rem;
+  --space-md: 2rem;
+  --space-lg: 4rem;
+  --space-xl: 8rem;
+
+  /* Layout — DESIGN_SYSTEM.md §5 */
+  --gutter: clamp(18px, 5vw, 64px);
+  --section-space: clamp(72px, 12vw, 144px);
+  --container-max: 1440px;
+  --measure: 38rem;
+
+  /* Typography — DESIGN_SYSTEM.md §4 (ADR-025) */
+  --font-display: "Instrument Serif", "Iowan Old Style", Georgia, serif;
+  --font-ui: "Manrope Variable", "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --text-display-xl: clamp(3.25rem, 9vw, 8.5rem);
+  --text-display-l: clamp(2.6rem, 6vw, 5.5rem);
+  --text-heading-1: clamp(2.1rem, 4vw, 3.75rem);
+  --text-heading-2: clamp(1.6rem, 3vw, 2.6rem);
+  --text-body-l: clamp(1.1rem, 1.6vw, 1.3rem);
+  --text-body: 1rem;
+  --text-small: 0.875rem;
+  --text-micro: 0.75rem;
+
+  /* Motion — DESIGN_SYSTEM.md §14 */
+  --duration-micro: 180ms;
+  --duration-ui: 300ms;
+  --duration-editorial: 700ms;
+  --duration-scene: 1200ms;
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  /* Accessibility — DESIGN_SYSTEM.md §17 */
+  --touch-target-min: 44px;
+
+  color-scheme: light;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  line-height: 1.6;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: clip;
+}
+
+img,
+video,
+svg,
+picture {
+  display: block;
+  max-width: 100%;
+}
+
+img {
+  height: auto;
+}
+
+h1,
+h2,
+h3,
+p,
+dl,
+dd,
+figure,
+blockquote {
+  margin: 0;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+a {
+  color: inherit;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+.on-dark :focus-visible,
+.on-dark:focus-visible {
+  outline-color: var(--color-text-inverse);
+}
+
+::selection {
+  background: var(--color-fiber);
+  color: var(--color-text);
+}
+
+/* --- Utilities --------------------------------------------------------- */
+
+.container {
+  width: 100%;
+  max-width: var(--container-max);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+
+.section {
+  padding-block: var(--section-space);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: absolute;
+  left: var(--space-sm);
+  top: -100px;
+  z-index: 100;
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--color-surface-dark);
+  color: var(--color-text-inverse);
+  min-height: var(--touch-target-min);
+  display: inline-flex;
+  align-items: center;
+}
+
+.skip-link:focus {
+  top: var(--space-sm);
+}
+
+.eyebrow {
+  font-size: var(--text-micro);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.on-dark .eyebrow {
+  color: color-mix(in srgb, var(--color-text-inverse) 78%, transparent);
+}
+
+.display-xl {
+  font-size: var(--text-display-xl);
+}
+
+.display-l {
+  font-size: var(--text-display-l);
+}
+
+.heading-1 {
+  font-size: var(--text-heading-1);
+}
+
+.heading-2 {
+  font-size: var(--text-heading-2);
+}
+
+.lead {
+  font-size: var(--text-body-l);
+  line-height: 1.55;
+  max-width: var(--measure);
+}
+
+.muted {
+  color: var(--color-text-muted);
+}
+
+/* Editorial link — DESIGN_SYSTEM.md §8: "Explorar pieza →". */
+.editorial-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  min-height: var(--touch-target-min);
+  font-weight: 600;
+  font-size: var(--text-small);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-decoration: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.editorial-link::after {
+  content: "→";
+  transition: transform var(--duration-ui) var(--ease-out);
+}
+
+.editorial-link:hover::after,
+.editorial-link:focus-visible::after {
+  transform: translateX(4px);
+}
+
+.editorial-link:hover {
+  text-decoration: underline;
+}
+
+.editorial-link--plain::after {
+  content: none;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6em;
+  min-height: var(--touch-target-min);
+  padding: 0.7em 1.4em;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: transparent;
+  font-size: var(--text-small);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    background-color var(--duration-ui) var(--ease-out),
+    color var(--duration-ui) var(--ease-out);
+}
+
+.button:hover {
+  background: var(--color-text);
+  color: var(--color-bg);
+}
+
+.on-dark .button:hover {
+  background: var(--color-text-inverse);
+  color: var(--color-surface-dark);
+}
+
+/* Explicit marking of provisional media (never passed off as documentary). */
+.placeholder-note {
+  display: inline-block;
+  font-size: var(--text-micro);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 600;
+  padding: 0.35em 0.7em;
+  border: 1px dashed currentColor;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--color-bg) 85%, transparent);
+  color: var(--color-text);
+}
+
+.media-frame {
+  position: relative;
+  overflow: hidden;
+  background: var(--color-paper);
+}
+
+.media-frame > img,
+.media-frame > picture > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.media-frame .placeholder-note {
+  position: absolute;
+  left: var(--space-xs);
+  bottom: var(--space-xs);
+}
+
+.rule {
+  border: 0;
+  border-top: 1px solid var(--color-rule);
+  margin: 0;
+}
+
+/* Reveal on scroll: content is visible by default; the class is only added
+   by JS when motion is allowed, so no-JS and reduced motion show everything. */
+.reveal-ready [data-reveal] {
+  opacity: 0;
+  transform: translateY(16px);
+  transition:
+    opacity var(--duration-editorial) var(--ease-out),
+    transform var(--duration-editorial) var(--ease-out);
+}
+
+.reveal-ready [data-reveal].is-revealed {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .reveal-ready [data-reveal] {
+    opacity: 1;
+    transform: none;
+  }
+}

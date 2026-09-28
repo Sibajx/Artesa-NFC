@@ -1,0 +1,40 @@
+---
+// Served by Cloudflare Pages with HTTP 404 for any path with no file and no
+// rewrite (e.g. /piezas/a/b/, /inexistente). Replaces the SPA fallback to the
+// home that frontend/ has today.
+import BaseLayout from "@/layouts/BaseLayout.astro";
+---
+
+<BaseLayout title="Página no encontrada" description="Esta página no existe." noindex>
+  <section class="section container notfound">
+    <p class="eyebrow">Error 404</p>
+    <h1 class="display-l">Esta página no existe.</h1>
+    <p class="lead muted">Puede que el enlace esté incompleto o que la página se haya movido.</p>
+    <div class="notfound__links">
+      <a class="editorial-link" href="/piezas/">
+        Ver las piezas
+      </a>
+      <a class="editorial-link" href="/artesanos/">
+        Ver los artesanos
+      </a>
+      <a class="editorial-link" href="/">
+        Ir al inicio
+      </a>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .notfound {
+    padding-top: calc(64px + var(--section-space));
+    display: grid;
+    gap: var(--space-sm);
+    min-height: 70svh;
+  }
+
+  .notfound__links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-md);
+  }
+</style>
