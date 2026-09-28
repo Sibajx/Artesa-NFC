@@ -72,8 +72,9 @@ Lo que N-08 cambia, punto por punto:
 /home/energias/artesa-nfc/
 ├── bin/
 │   ├── artesa-deploy            lanzador (/usr/bin/python3 -I -B bin/ops/artesa_deploy.py)
+│   ├── artesa-backup            lanzador (/usr/bin/python3 -I -B bin/ops/artesa_backup.py), D10, desde 1.3.1 (#137)
 │   ├── ops -> ops-<release-id>  copia de solo lectura de la herramienta, de un release verificado
-│   └── TOOL.json                v2: release/commit instalado (+ SHA-256) y el instalador que lo ejecutó (§11.7)
+│   └── TOOL.json                v2: release/commit instalado (+ SHA-256 de módulos y lanzadores) y el instalador que lo ejecutó (§11.7)
 ├── incoming/                    artifacts + .sha256 copiados desde la máquina de build
 ├── releases/
 │   └── <YYYYMMDDTHHMMSSZ>-<commit12>/   inmutable
@@ -508,18 +509,29 @@ inmutable y ya verificado:
 No hay self-exec ni un comando en dos fases. Lo que hace `install-tools`:
 
 - Los archivos a instalar salen del **MANIFEST del destino**: todos los `ops/*.py` de
-  primer nivel salvo `build_release.py` (el builder no corre en el servidor), más el
-  lanzador `ops/bin/artesa-deploy`. Un módulo nuevo en un release futuro se instala
+  primer nivel salvo `build_release.py` (el builder no corre en el servidor), más los
+  **lanzadores** `ops/bin/*` (#137). Un módulo nuevo en un release futuro se instala
   aunque el instalador no lo conozca.
+- Lanzadores (#137): `ops/bin/artesa-<nombre>` ejecuta exactamente
+  `ops/artesa_<nombre>.py` (su única línea `exec /usr/bin/python3 -I -B
+  "$here/ops/artesa_<nombre>.py" "$@"`), y cada `artesa_<nombre>.py` es un comando que
+  **debe** traer su lanzador. `artesa-deploy` es obligatorio. Un módulo de comando sin
+  lanzador, un lanzador que ejecuta otro módulo o cualquier otro archivo en `ops/bin/`
+  → exit 11 y no se instala nada. Así un comando nuevo no puede quedar sin su entrada en
+  `bin/` (R5 instaló `artesa_backup.py` pero no `bin/artesa-backup`).
 - Staging `bin/.ops-<id>.tmp-<pid>` → cada archivo comparado con el MANIFEST → 0444,
   directorio 0555 → `rename` atómico a `bin/ops-<id>`; si falla, el staging propio se
   borra y `bin/ops` no cambia.
 - Si `bin/ops-<id>` ya existe se **verifica** (nombres, SHA-256, modos 444/555, nada de
   más): idéntico → se reutiliza (idempotente); distinto → exit 11, **no** se reutiliza ni
   se borra; el operador lo inspecciona y lo retira a mano (`chmod -R u+w`, `rm -r`).
-- `bin/ops` → `ops-<id>` (symlink atómico), lanzador (0755), `TOOL.json` (tmp + 0644 +
-  `rename`). Con el lock tomado se borran restos de instalaciones interrumpidas
-  (`.ops-*.tmp-*`, `.ops.tmp-*`, `.artesa-deploy.tmp-*`, `.TOOL.json.tmp-*`).
+- `bin/ops` → `ops-<id>` (symlink atómico); lanzadores: todos se copian a
+  `bin/.<nombre>.tmp-<pid>`, se comparan con el MANIFEST y pasan a 0755 **antes** de
+  sustituir ninguno (`os.replace`); si falla, se borran las copias y `bin/` no cambia. Un
+  lanzador que registraba el `TOOL.json` anterior y el destino ya no trae se retira.
+  `TOOL.json` (tmp + 0644 + `rename`). Con el lock tomado se borran restos de
+  instalaciones interrumpidas (`.ops-*.tmp-*`, `.ops.tmp-*`, `.artesa-*.tmp-*`,
+  `.TOOL.json.tmp-*`).
 - Si el instalador no es la herramienta del destino (hashes distintos), avisa (`WARNING`)
   y muestra el comando canónico. No bloquea: los archivos instalados son siempre los del
   destino.
@@ -531,6 +543,7 @@ No hay self-exec ni un comando en dos fases. Lo que hace `install-tools`:
   "schema_version": 2,
   "release_id": "<destino>", "git_commit": "<destino>", "tool_version": "<TOOL_VERSION del destino>",
   "installed_at": "...", "files": { "<nombre>": "<sha256>" },
+  "launchers": { "artesa-backup": "<sha256>", "artesa-deploy": "<sha256>" },
   "installer": {
     "path": "<artesa_deploy.py que se ejecutó>", "release_id": "<o null>", "git_commit": "<o null>",
     "artesa_deploy_sha256": "...", "tool_version": "<TOOL_VERSION del instalador>", "matches_target": true
@@ -541,12 +554,18 @@ No hay self-exec ni un comando en dos fases. Lo que hace `install-tools`:
 El primer nivel describe el **estado instalado**; `installer`, la **ejecución** (medida:
 hash del archivo en ejecución y de sus módulos hermanos; `matches_target` es la igualdad
 de esos hashes con los del destino). El deploy-log registra lo mismo en `detail`
-(`installer=<id> sha=<12> matches_target=<bool>`). `TOOL_VERSION` es `1.2.0` desde R4.
+(`installer=<id> sha=<12> matches_target=<bool>`). `launchers` (#137) es una clave
+**añadida** al schema 2: los lectores anteriores la ignoran y un `TOOL.json` sin ella
+(instalado por ≤ 1.3.0) sigue siendo válido. `TOOL_VERSION`: `1.2.0` en R4, `1.3.0` con
+D10.1 (R5), `1.3.1` con #137 (instalación de lanzadores).
 
 **`bin/ops` y `TOOL.json` no coinciden.** `status` lo muestra como `TOOLING WARNING`
 (solo lectura, sin cambiar el código de salida): `bin/ops` apunta a otro release que
-`TOOL.json`, un archivo instalado difiere de `TOOL.json`, falta o sobra un módulo, o el
-modo de `TOOL.json` no es 0644. Es lo que deja un corte entre el cambio de `bin/ops` y la
+`TOOL.json`, un archivo instalado difiere de `TOOL.json`, falta o sobra un módulo, el
+modo de `TOOL.json` no es 0644, o un **lanzador** (#137) falta (uno por cada
+`artesa_*.py` de `bin/ops` y los que registra `TOOL.json`), no es 0755, difiere de
+`TOOL.json`, no ejecuta su módulo, ese módulo falta en `bin/ops`, o sobra (p. ej.
+`TOOLING WARNING: missing launcher bin/artesa-backup`, el estado real tras R5). Es lo que deja un corte entre el cambio de `bin/ops` y la
 escritura de `TOOL.json`. Recuperación: volver a ejecutar el camino canónico para el
 release al que apunta `bin/ops` (o el que se quiera instalar); limpia los restos y
 reescribe `TOOL.json`. Si `bin/artesa-deploy` no arranca (herramienta rota), cualquier
