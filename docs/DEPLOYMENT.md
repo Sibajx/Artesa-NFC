@@ -83,7 +83,8 @@ Lo que N-08 cambia, punto por punto:
 │       └── .prepared            marcador (sha del artifact, del RELEASE.json, del contenido)
 ├── shared/                      0700 — el único lugar con estado y secretos
 │   ├── .env                     0600, dueño energias: APP_ENV, DATABASE_URL, DEBUG, CORS_ALLOWED_ORIGINS
-│   ├── backups/                 0700: *.dump + .json + .sha256 (0600)
+│   ├── backups/                 0700: *.dump + .json + .sha256 (0600) -- dumps previos a migraciones (artesa-deploy)
+│   ├── backup/                  0700: backups programados CIFRADOS de artesa-backup (docs/BACKUP.md, D10)
 │   └── state/                   0700: deploy-log.jsonl, activation.json, deploy.lock,
 │       └── deployments/<UTC>-<commit12>[-rollback]/   evidencia (§10)
 ├── current  -> releases/<id>    lo que sirve la unit
@@ -325,8 +326,11 @@ bajo demanda.
   el evento del log) y **continúa** con `active_commit` vacío y sin sufijo: un
   backup nunca se bloquea por metadatos dañados.
 
-Backups programados, fuera del host y cifrados: **issue separado**, obligatorio
-antes del lanzamiento final (D10).
+Backups programados, cifrados y fuera del host: **#126 (D10)**, obligatorio antes del
+lanzamiento final. D10.1 (base local cifrada, `artesa-backup`) está implementado: ver
+**`docs/BACKUP.md`**. Todavía **no** hay copia fuera del host (D10.2). El backup previo a
+una migración sigue siendo de `deploy` y no lo sustituye el programado; conviene lanzar
+además `artesa-backup run` antes de un deploy con migración.
 
 ## 9. Restore-check
 

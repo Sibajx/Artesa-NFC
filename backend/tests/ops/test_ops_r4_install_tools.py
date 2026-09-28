@@ -61,9 +61,10 @@ def writable(path: Path) -> None:
         os.chmod(entry, 0o644)
 
 
-def test_tool_version_is_1_2_0():
-    assert rc.TOOL_VERSION == "1.2.0"
-    assert ad.target_tool_version(OPS_DIR) == "1.2.0"
+def test_tool_version_is_1_3_0():
+    # 1.2.0 = R4 (#130/#131); 1.3.0 = D10.1 adds artesa_backup.py to the installed tool
+    assert rc.TOOL_VERSION == "1.3.0"
+    assert ad.target_tool_version(OPS_DIR) == rc.TOOL_VERSION
 
 
 def test_tool_files_rule():
@@ -81,7 +82,7 @@ def test_install_from_the_target_release_is_the_canonical_path(s):
     info = tool_json(s)
     assert set(info) == {"schema_version", "release_id", "git_commit", "tool_version", "installed_at", "files", "installer"}
     assert info["schema_version"] == 2 and info["release_id"] == rid and info["git_commit"] == commit_of(s, rid)
-    assert info["tool_version"] == "1.2.0"
+    assert info["tool_version"] == rc.TOOL_VERSION
     assert set(info["files"]) == set(TOOL_NAMES) and "build_release.py" not in info["files"]
     inst = info["installer"]
     assert set(inst) == {"path", "release_id", "git_commit", "artesa_deploy_sha256", "tool_version", "matches_target"}
@@ -142,7 +143,7 @@ def test_canonical_command_runs_from_releases_ops_in_a_real_interpreter(s):
     proc = subprocess.run([sys.executable, "-I", "-B", str(release_ops(s, rid) / "artesa_deploy.py"), "--root", str(s.root), "--rehearsal",
                            "install-tools", rid, "--dry-run"], capture_output=True, text=True, timeout=120, stdin=subprocess.DEVNULL)
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert f"(release {rid}, tool 1.2.0); matches target: yes" in proc.stdout
+    assert f"(release {rid}, tool {rc.TOOL_VERSION}); matches target: yes" in proc.stdout
     assert "dry run: nothing was written" in proc.stdout and not (s.root / "bin" / "ops").exists()
 
 
@@ -283,3 +284,29 @@ def test_status_without_installed_tool_is_silent(s):
     s.release("r1"); s.activate("r1")
     assert s.run(["status", "--json"]) == 0
     assert json.loads(s.sink.text)["tooling"]["installed"] is False
+
+
+# --- D10.1: artesa_backup.py is part of the installed tool ------------------------------------------------------------
+
+def test_target_tool_includes_artesa_backup_and_install_copies_it(s):
+    assert "artesa_backup.py" in TOOL_NAMES
+    rid = s.release("tools", TOOLS)
+    assert install(s, rid) == 0
+    installed = s.root / "bin" / f"ops-{rid}" / "artesa_backup.py"
+    assert installed.is_file() and stat.S_IMODE(installed.stat().st_mode) == 0o444
+    assert tool_json(s)["files"]["artesa_backup.py"] == rc.sha256_file(str(installed))
+    # the systemd unit runs the installed copy directly: it must start with the system Python, isolated
+    proc = subprocess.run([sys.executable, "-I", "-B", str(installed), "--help"], capture_output=True, text=True, timeout=60)
+    assert proc.returncode == 0 and "artesa-backup" in proc.stdout
+
+
+def test_existing_ops_dir_without_artesa_backup_is_drift(s):
+    rid = s.release("tools", TOOLS)
+    assert install(s, rid) == 0
+    installed = s.root / "bin" / f"ops-{rid}"
+    writable(installed)
+    os.unlink(installed / "artesa_backup.py")
+    for entry in installed.iterdir():
+        os.chmod(entry, 0o444)
+    os.chmod(installed, 0o555)
+    assert install(s, rid) == rc.Exit.PREFLIGHT and "missing file: artesa_backup.py" in s.sink.text
