@@ -1,0 +1,232 @@
+---
+// Home block 1 — video hero (DESIGN_SYSTEM.md §7, ADR-014).
+// The poster <picture> is the real content layer: the heading and message are
+// plain HTML over it and work with no JavaScript, no video, reduced motion or
+// Save-Data. The video is an enhancement added by the script below, never
+// the only carrier of information (it is aria-hidden and has no audio).
+import ResponsivePicture from "@/components/ui/ResponsivePicture.astro";
+import { heroMedia, homeCopy } from "@/content/site";
+
+const { hero } = homeCopy;
+const sources = JSON.stringify({
+  desktop: heroMedia.desktopVideo,
+  mobile: heroMedia.mobileVideo.length > 0 ? heroMedia.mobileVideo : heroMedia.desktopVideo,
+});
+const hasVideo = heroMedia.desktopVideo.length > 0;
+---
+
+<section class="hero on-dark" aria-labelledby="hero-title" data-header-dark-zone>
+  <div class="hero__media">
+    <ResponsivePicture
+      image={heroMedia.poster}
+      class="hero__poster"
+      loading="eager"
+      fetchpriority="high"
+      decorative
+    />
+    {hasVideo && (
+      <video
+        class="hero__video"
+        muted
+        loop
+        playsinline
+        preload="none"
+        disablepictureinpicture
+        aria-hidden="true"
+        tabindex="-1"
+        data-hero-video
+        data-sources={sources}
+      />
+    )}
+    <div class="hero__scrim"></div>
+  </div>
+
+  <div class="hero__content container">
+    <p class="eyebrow">{hero.eyebrow}</p>
+    <h1 id="hero-title" class="hero__title display-xl">
+      {hero.title}
+    </h1>
+    <p class="hero__subtitle lead">{hero.subtitle}</p>
+    <a class="button" href={hero.cta.href}>
+      {hero.cta.label}
+    </a>
+  </div>
+
+  <div class="hero__meta container">
+    {heroMedia.provisional && (
+      <p class="placeholder-note" data-provisional="hero">
+        Imagen y video provisionales
+      </p>
+    )}
+    {hasVideo && (
+      <button type="button" class="hero__toggle" data-hero-toggle hidden aria-pressed="false">
+        Pausar video
+      </button>
+    )}
+  </div>
+</section>
+
+<script>
+  // Plays the hero video only when motion and data use are acceptable:
+  // never with prefers-reduced-motion, Save-Data, or a 2G-class connection.
+  // Sources are attached here (preload="none" + no <source> in the HTML), so
+  // a visitor who does not get the video downloads none of it.
+  interface NetworkInformationLike {
+    saveData?: boolean;
+    effectiveType?: string;
+  }
+
+  const video = document.querySelector<HTMLVideoElement>("[data-hero-video]");
+  const toggle = document.querySelector<HTMLButtonElement>("[data-hero-toggle]");
+
+  function motionAllowed(): boolean {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return false;
+    const connection = (navigator as Navigator & { connection?: NetworkInformationLike })
+      .connection;
+    if (connection?.saveData) return false;
+    if (connection?.effectiveType && /(^|-)2g$/.test(connection.effectiveType)) return false;
+    return true;
+  }
+
+  function setToggle(playing: boolean): void {
+    if (!toggle) return;
+    toggle.hidden = false;
+    toggle.setAttribute("aria-pressed", String(!playing));
+    toggle.textContent = playing ? "Pausar video" : "Reproducir video";
+  }
+
+  if (video && motionAllowed()) {
+    const sources = JSON.parse(video.dataset.sources ?? "{}") as Record<
+      "desktop" | "mobile",
+      { src: string; type: string }[]
+    >;
+    const portrait = window.matchMedia("(max-width: 700px) and (orientation: portrait)").matches;
+    const chosen = (portrait ? sources.mobile : sources.desktop) ?? [];
+    const playable = chosen.filter((s) => video.canPlayType(s.type) !== "");
+
+    if (playable.length > 0) {
+      for (const source of playable) {
+        const el = document.createElement("source");
+        el.src = source.src;
+        el.type = source.type;
+        video.appendChild(el);
+      }
+      let userPaused = false;
+      video.addEventListener("playing", () => {
+        video.classList.add("is-playing");
+        setToggle(true);
+      });
+      video.addEventListener("pause", () => setToggle(false));
+      // Any decoding/network failure leaves the poster in place.
+      video.addEventListener("error", () => video.remove(), true);
+
+      toggle?.addEventListener("click", () => {
+        if (video.paused) {
+          userPaused = false;
+          void video.play();
+        } else {
+          userPaused = true;
+          video.pause();
+        }
+      });
+
+      // Play only while visible; never resume a video the visitor paused.
+      const observer = new IntersectionObserver(([entry]) => {
+        if (entry?.isIntersecting && !userPaused) {
+          video.play().catch(() => setToggle(false));
+        } else if (!entry?.isIntersecting && !video.paused) {
+          video.pause();
+        }
+      });
+      observer.observe(video);
+    }
+  }
+</script>
+
+<style>
+  .hero {
+    position: relative;
+    min-height: 100svh;
+    display: grid;
+    grid-template-rows: 1fr auto;
+    color: var(--color-text-inverse);
+    background: var(--color-surface-dark);
+    overflow: hidden;
+  }
+
+  .hero__media,
+  .hero__media :global(.hero__poster),
+  .hero__video,
+  .hero__scrim {
+    position: absolute;
+    inset: 0;
+  }
+
+  .hero__media :global(.hero__poster img),
+  .hero__video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .hero__video {
+    opacity: 0;
+    transition: opacity var(--duration-scene) var(--ease-out);
+  }
+
+  .hero__video:global(.is-playing) {
+    opacity: 1;
+  }
+
+  .hero__scrim {
+    background:
+      linear-gradient(to top, rgb(0 0 0 / 0.72) 0%, rgb(0 0 0 / 0.2) 55%, rgb(0 0 0 / 0.35) 100%),
+      linear-gradient(to right, rgb(0 0 0 / 0.4), transparent 70%);
+  }
+
+  .hero__content {
+    position: relative;
+    align-self: end;
+    display: grid;
+    justify-items: start;
+    gap: var(--space-sm);
+    padding-top: 120px;
+    padding-bottom: var(--space-md);
+  }
+
+  .hero__title {
+    max-width: 14ch;
+  }
+
+  .hero__subtitle {
+    color: color-mix(in srgb, var(--color-text-inverse) 88%, transparent);
+    margin-bottom: var(--space-xs);
+  }
+
+  .hero__meta {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-sm);
+    padding-bottom: var(--space-md);
+  }
+
+  .hero__meta .placeholder-note {
+    background: rgb(0 0 0 / 0.35);
+    color: var(--color-text-inverse);
+  }
+
+  .hero__toggle {
+    min-height: var(--touch-target-min);
+    padding: 0 1em;
+    border: 1px solid color-mix(in srgb, var(--color-text-inverse) 60%, transparent);
+    border-radius: 999px;
+    background: rgb(0 0 0 / 0.3);
+    font-size: var(--text-micro);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: 600;
+    cursor: pointer;
+  }
+</style>

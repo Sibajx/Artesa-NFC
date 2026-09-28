@@ -1,0 +1,62 @@
+---
+// Home block 4 — closing call for artisans, collectors and cultural projects.
+import { homeCopy } from "@/content/site";
+const { closing } = homeCopy;
+---
+
+<section id="contacto" class="closing section" aria-labelledby="closing-title">
+  <div class="container closing__grid">
+    <div data-reveal>
+      <p class="eyebrow">{closing.eyebrow}</p>
+      <h2 id="closing-title" class="heading-1">
+        {closing.title}
+      </h2>
+    </div>
+    <dl class="closing__audiences" data-reveal>
+      {closing.audiences.map((audience) => (
+        <div>
+          <dt>{audience.term}</dt>
+          <dd>{audience.description}</dd>
+        </div>
+      ))}
+    </dl>
+    <p class="closing__contact lead">{closing.contactNote}</p>
+  </div>
+</section>
+
+<style>
+  .closing {
+    background: var(--color-paper);
+  }
+
+  .closing__grid {
+    display: grid;
+    gap: var(--space-md);
+  }
+
+  .closing__audiences {
+    display: grid;
+    gap: var(--space-md);
+  }
+
+  .closing__audiences dt {
+    font-family: var(--font-display);
+    font-size: 1.6rem;
+  }
+
+  .closing__audiences dd {
+    color: var(--color-text-muted);
+    max-width: 30ch;
+  }
+
+  .closing__contact {
+    border-top: 1px solid var(--color-rule);
+    padding-top: var(--space-sm);
+  }
+
+  @media (min-width: 900px) {
+    .closing__audiences {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+</style>
