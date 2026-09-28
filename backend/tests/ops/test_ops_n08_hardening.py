@@ -344,11 +344,13 @@ LAUNCHER = Path(__file__).resolve().parents[2] / "ops" / "bin" / "artesa-deploy"
 OPS_DIR = Path(__file__).resolve().parents[2] / "ops"
 TOOL_NAMES = sorted(ad.tool_files({p.name: "" for p in OPS_DIR.iterdir() if p.is_file()}))
 TOOL_SOURCES = {f"backend/ops/{n}": (OPS_DIR / n).read_text() for n in TOOL_NAMES}
+# every launcher of the repository (#137: one per artesa_*.py)
+LAUNCHERS = {f"backend/ops/bin/{p.name}": p.read_text() for p in sorted((OPS_DIR / "bin").iterdir())}
 
 
 def test_install_tools_installs_a_verified_copy_and_a_launcher(tmp_path):
     s = Scenario(tmp_path)
-    files = {**TOOL_SOURCES, "backend/ops/bin/artesa-deploy": LAUNCHER.read_text()}
+    files = {**TOOL_SOURCES, **LAUNCHERS}
     s.release("tools", files)
     rid = s.ids["tools"]
     assert s.run(["install-tools", rid, "--dry-run"], tty=False) == 0 and not (s.root / "bin" / "ops").exists()
@@ -369,7 +371,7 @@ def test_install_tools_installs_a_verified_copy_and_a_launcher(tmp_path):
 def test_install_tools_modes_do_not_depend_on_the_umask(tmp_path):
     # #124: TOOL.json used to inherit the operator's umask (0664 in production with umask 002)
     s = Scenario(tmp_path)
-    s.release("tools", {**TOOL_SOURCES, "backend/ops/bin/artesa-deploy": LAUNCHER.read_text()})
+    s.release("tools", {**TOOL_SOURCES, **LAUNCHERS})
     rid = s.ids["tools"]
     bin_dir = s.root / "bin"
     bin_dir.mkdir(parents=True, exist_ok=True)
@@ -397,7 +399,7 @@ def test_install_tools_refuses_a_release_without_the_tool(sc):
 
 def test_install_tools_refuses_a_drifted_release(tmp_path):
     s = Scenario(tmp_path)
-    s.release("tools", {**TOOL_SOURCES, "backend/ops/bin/artesa-deploy": LAUNCHER.read_text()})
+    s.release("tools", {**TOOL_SOURCES, **LAUNCHERS})
     (s.root / "releases" / s.ids["tools"] / "ops" / "artesa_deploy.py").write_text("# patched\n")
     assert s.run(["install-tools", s.ids["tools"]], answers=[s.ids["tools"]]) == rc.Exit.PREFLIGHT
 
