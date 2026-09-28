@@ -1,0 +1,23 @@
+---
+// Private certificate route /c/{token} (Issue #72). Served for every /c/*
+// by public/_redirects. noindex + no-referrer here and in public/_headers;
+// no site navigation, no analytics, no third-party request of any kind.
+import "@/styles/islands.css";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import NoScript from "@/components/ui/NoScript.astro";
+import CertificateView from "@/components/islands/CertificateView";
+---
+
+<BaseLayout
+  title="Certificado"
+  description="Verificación de certificado de autenticidad."
+  noindex
+  privateRoute
+>
+  <div class="container page-top certificate-page">
+    <NoScript>
+      La verificación de certificados requiere JavaScript habilitado en tu navegador.
+    </NoScript>
+    <CertificateView client:only="react" />
+  </div>
+</BaseLayout>

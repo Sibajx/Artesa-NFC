@@ -1,0 +1,79 @@
+---
+// ArtesaNFC — base document for every page. Fonts are self-hosted
+// (@fontsource), so public pages make no third-party requests.
+import "@fontsource/instrument-serif/latin-400.css";
+import "@fontsource-variable/manrope/wght.css";
+import "@/styles/global.css";
+import SiteHeader from "@/components/ui/SiteHeader.astro";
+import SiteFooter from "@/components/ui/SiteFooter.astro";
+// Preload the two latin files every page renders with, so the swap from the
+// fallback font happens before first paint as often as possible (less CLS).
+import serifLatin from "@fontsource/instrument-serif/files/instrument-serif-latin-400-normal.woff2?url";
+import sansLatin from "@fontsource-variable/manrope/files/manrope-latin-wght-normal.woff2?url";
+
+interface Props {
+  title: string;
+  description: string;
+  /** Canonical path for pages with fixed content. Shells set it at runtime. */
+  canonicalPath?: string;
+  /** noindex for error pages, shells before a 200, and the private route. */
+  noindex?: boolean;
+  /** Private bearer route (/c/{token}): no-referrer, no site navigation. */
+  privateRoute?: boolean;
+  /** "dark" when the page opens on a dark full-bleed hero. */
+  headerTone?: "light" | "dark";
+  bodyClass?: string;
+}
+
+const {
+  title,
+  description,
+  canonicalPath,
+  noindex = false,
+  privateRoute = false,
+  headerTone = "light",
+  bodyClass,
+} = Astro.props;
+const fullTitle = title === "ArtesaNFC" ? title : `${title} — ArtesaNFC`;
+const canonical = canonicalPath ? new URL(canonicalPath, Astro.site).href : undefined;
+---
+
+<!doctype html>
+<html lang="es-MX">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
+    {privateRoute && <meta name="referrer" content="no-referrer" />}
+    {canonical && <link rel="canonical" href={canonical} />}
+    <meta name="theme-color" content="#111111" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preload" href={sansLatin} as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href={serifLatin} as="font" type="font/woff2" crossorigin />
+    {!privateRoute && (
+      <>
+        <meta property="og:site_name" content="ArtesaNFC" />
+        <meta property="og:title" content={fullTitle} />
+        <meta property="og:description" content={description} />
+        <meta property="og:locale" content="es_MX" />
+        {canonical && <meta property="og:url" content={canonical} />}
+      </>
+    )}
+    <slot name="head" />
+  </head>
+  <body class={bodyClass}>
+    <a class="skip-link" href="#contenido">
+      Saltar al contenido principal
+    </a>
+    <SiteHeader tone={headerTone} minimal={privateRoute} />
+    <main id="contenido" tabindex="-1">
+      <slot />
+    </main>
+    <SiteFooter minimal={privateRoute} />
+    <script>
+      import "@/scripts/site";
+    </script>
+  </body>
+</html>

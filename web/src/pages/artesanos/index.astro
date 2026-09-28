@@ -1,0 +1,25 @@
+---
+import "@/styles/islands.css";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import NoScript from "@/components/ui/NoScript.astro";
+import ArtisanList from "@/components/islands/ArtisanList";
+---
+
+<BaseLayout
+  title="Artesanos"
+  description="Artesanas y artesanos de Oaxaca cuyas piezas forman parte de ArtesaNFC."
+  canonicalPath="/artesanos/"
+>
+  <section class="section container page-top" aria-labelledby="artisans-title">
+    <header class="page-header">
+      <p class="eyebrow">Autoría</p>
+      <h1 id="artisans-title" class="display-l">
+        Artesanos
+      </h1>
+    </header>
+    <NoScript>
+      La lista de artesanos se carga con JavaScript desde el registro de ArtesaNFC.
+    </NoScript>
+    <ArtisanList client:only="react" />
+  </section>
+</BaseLayout>

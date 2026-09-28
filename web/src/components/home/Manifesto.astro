@@ -1,0 +1,75 @@
+---
+// Home block 2 — short manifesto on origin, craft and authorship.
+import { homeCopy } from "@/content/site";
+const { manifesto } = homeCopy;
+---
+
+<section class="manifesto section" aria-labelledby="manifesto-title">
+  <div class="container manifesto__grid">
+    <div data-reveal>
+      <p class="eyebrow">{manifesto.eyebrow}</p>
+      <h2 id="manifesto-title" class="display-l">
+        {manifesto.title}
+      </h2>
+    </div>
+    <div class="manifesto__body" data-reveal>
+      <p class="lead">{manifesto.body}</p>
+      <dl class="manifesto__points">
+        {manifesto.points.map((point) => (
+          <div>
+            <dt>{point.term}</dt>
+            <dd>{point.description}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  </div>
+</section>
+
+<style>
+  .manifesto__grid {
+    display: grid;
+    gap: var(--space-md);
+  }
+
+  .manifesto__grid h2 {
+    margin-top: var(--space-xs);
+  }
+
+  .manifesto__body {
+    display: grid;
+    gap: var(--space-md);
+  }
+
+  .manifesto__points {
+    display: grid;
+    gap: var(--space-sm);
+    border-top: 1px solid var(--color-rule);
+    padding-top: var(--space-sm);
+  }
+
+  .manifesto__points div {
+    display: grid;
+    grid-template-columns: 7.5rem 1fr;
+    gap: var(--space-sm);
+    padding-bottom: var(--space-sm);
+    border-bottom: 1px solid var(--color-rule);
+  }
+
+  .manifesto__points dt {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    line-height: 1.2;
+  }
+
+  .manifesto__points dd {
+    color: var(--color-text-muted);
+  }
+
+  @media (min-width: 900px) {
+    .manifesto__grid {
+      grid-template-columns: 5fr 6fr;
+      gap: var(--space-lg);
+    }
+  }
+</style>

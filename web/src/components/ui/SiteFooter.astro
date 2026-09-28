@@ -1,0 +1,67 @@
+---
+interface Props {
+  minimal: boolean;
+}
+const { minimal } = Astro.props;
+---
+
+<footer class="site-footer on-dark">
+  <div class="container site-footer__inner">
+    <p class="site-footer__mark">ArtesaNFC</p>
+    <p class="site-footer__line">Piezas artesanales de Oaxaca, con su origen y su autor.</p>
+    {!minimal && (
+      <nav aria-label="Pie de página">
+        <ul class="site-footer__nav" role="list">
+          <li>
+            <a href="/piezas/">Piezas</a>
+          </li>
+          <li>
+            <a href="/artesanos/">Artesanos</a>
+          </li>
+          <li>
+            <a href="/#contacto">Contacto</a>
+          </li>
+        </ul>
+      </nav>
+    )}
+  </div>
+</footer>
+
+<style>
+  .site-footer {
+    background: var(--color-surface-dark);
+    color: var(--color-text-inverse);
+    padding-block: var(--space-lg);
+  }
+
+  .site-footer__inner {
+    display: grid;
+    gap: var(--space-sm);
+  }
+
+  .site-footer__mark {
+    font-family: var(--font-display);
+    font-size: 2rem;
+  }
+
+  .site-footer__line {
+    color: color-mix(in srgb, var(--color-text-inverse) 78%, transparent);
+    font-size: var(--text-small);
+  }
+
+  .site-footer__nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-md);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .site-footer__nav a {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--touch-target-min);
+    font-size: var(--text-small);
+  }
+</style>

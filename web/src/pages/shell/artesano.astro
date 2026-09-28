@@ -1,0 +1,17 @@
+---
+// F-08 neutral shell for /artesanos/{slug} (see public/_redirects).
+import "@/styles/islands.css";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import NoScript from "@/components/ui/NoScript.astro";
+import ArtisanDetail from "@/components/islands/ArtisanDetail";
+---
+
+<BaseLayout title="Artesano" description="Perfil de artesano en ArtesaNFC." noindex>
+  <div class="page-top">
+    <NoScript>
+      Esta página necesita JavaScript para mostrar el perfil.{" "}
+      <a href="/artesanos/">Ver todos los artesanos</a>.
+    </NoScript>
+    <ArtisanDetail client:only="react" />
+  </div>
+</BaseLayout>

@@ -1,0 +1,22 @@
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+  Cross-Origin-Opener-Policy: same-origin
+
+# Hashed build output: safe to cache forever.
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# The shells answer many URLs and must never be indexed on their own.
+/shell/*
+  X-Robots-Tag: noindex
+
+# Private certificate route (/c/{token}) — Issue #72. The bearer token lives
+# in the path: no-referrer (never in a Referer header) and no-store (the page
+# and its result are never cached). Same policy as frontend/_headers.
+/c/*
+  Cache-Control: no-store
+  X-Robots-Tag: noindex, nofollow
+  Referrer-Policy: no-referrer
