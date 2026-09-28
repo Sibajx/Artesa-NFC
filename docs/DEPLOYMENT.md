@@ -557,7 +557,8 @@ de esos hashes con los del destino). El deploy-log registra lo mismo en `detail`
 (`installer=<id> sha=<12> matches_target=<bool>`). `launchers` (#137) es una clave
 **añadida** al schema 2: los lectores anteriores la ignoran y un `TOOL.json` sin ella
 (instalado por ≤ 1.3.0) sigue siendo válido. `TOOL_VERSION`: `1.2.0` en R4, `1.3.0` con
-D10.1 (R5), `1.3.1` con #137 (instalación de lanzadores).
+D10.1 (R5), `1.3.1` con #137 (instalación de lanzadores), `1.4.0` con D10.2 (copias fuera del
+host: `ops/backup_remote.py`, `artesa-backup remote-check`).
 
 **`bin/ops` y `TOOL.json` no coinciden.** `status` lo muestra como `TOOLING WARNING`
 (solo lectura, sin cambiar el código de salida): `bin/ops` apunta a otro release que
