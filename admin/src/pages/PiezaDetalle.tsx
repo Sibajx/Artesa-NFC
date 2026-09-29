@@ -1,12 +1,15 @@
 import { Link, useParams } from 'react-router-dom';
 import { adminApi } from '../api';
 import { formatDate, formatDateTime, joinList, labels } from '../format';
+import { useState } from 'react';
 import { useLoad } from '../hooks';
+import { RecordActions } from '../RecordActions';
 import { Badge, ErrorState, Field, Loading, PublicationBadge } from '../ui';
 
 export default function PiezaDetalle() {
   const { id = '' } = useParams<{ id: string }>();
-  const state = useLoad(`piece:${id}`, (signal) => adminApi.piece(id, signal));
+  const [revision, setRevision] = useState(0);
+  const state = useLoad(`piece:${id}:${revision}`, (signal) => adminApi.piece(id, signal));
 
   return (
     <div className="max-w-4xl mx-auto pb-12">
@@ -21,6 +24,7 @@ export default function PiezaDetalle() {
         const p = state.data;
         return (
           <div className="flex flex-col gap-8">
+            <RecordActions kind="pieces" id={p.id} version={p.updated_at} status={p.publication_status} availability={p.availability_status} onChanged={() => setRevision((r) => r + 1)} />
             <article className="bg-white rounded-xl border border-botanica-gris/15 overflow-hidden shadow-sm">
               <header className="bg-[#FCFBF9] border-b border-botanica-gris/15 p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
