@@ -62,10 +62,11 @@ def writable(path: Path) -> None:
         os.chmod(entry, 0o644)
 
 
-def test_tool_version_is_1_3_1():
+def test_tool_version_is_1_4_0():
     # 1.2.0 = R4 (#130/#131); 1.3.0 = D10.1 adds artesa_backup.py to the installed tool;
     # 1.3.1 = #137: install-tools installs every launcher of the target (bin/artesa-backup)
-    assert rc.TOOL_VERSION == "1.3.1"
+    # 1.4.0 = D10.2: backup_remote.py (off-host copies) + artesa-backup remote-check
+    assert rc.TOOL_VERSION == "1.4.0"
     assert ad.target_tool_version(OPS_DIR) == rc.TOOL_VERSION
 
 

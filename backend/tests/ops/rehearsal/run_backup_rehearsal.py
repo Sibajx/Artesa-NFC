@@ -36,6 +36,7 @@ OPS = BACKEND / "ops"
 sys.path.insert(0, str(OPS))
 
 import artesa_backup as ab  # noqa: E402
+import backup_remote as bremote  # noqa: E402
 import build_release as br  # noqa: E402
 import release_artifact as ra  # noqa: E402
 import release_common as rc  # noqa: E402
@@ -239,6 +240,64 @@ def main() -> int:
         step("state counts the consecutive failures", state["consecutive_failures"] == 2 and state["last_result"] == "failure")
         clock_base[0] += timedelta(minutes=5)
         step("a later run succeeds and resets the failure count", cli("run")[0] == 0 and json.loads((base / "state" / "status.json").read_text())["consecutive_failures"] == 0)
+
+        print("\n== B7 off-host copies (D10.2) to a fake write-once bucket + a loopback dead-man's switch")
+        import http.server
+        import threading
+        pings: list[str] = []
+
+        class Ping(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):  # noqa: N802
+                pings.append(self.path)
+                self.send_response(200); self.end_headers(); self.wfile.write(b"OK")
+
+            def log_message(self, *_a):
+                pass
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Ping)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        fake_bucket = work / "bucket"
+        (base / "remote.env").write_text(f"ARTESA_BACKUP_REMOTE=fake\nARTESA_BACKUP_FAKE_REMOTE_DIR={fake_bucket}\n"
+                                         f"ARTESA_BACKUP_B2_BUCKET=artesanfc-rehearsal\n"
+                                         f"ARTESA_BACKUP_DEADMAN_URL=http://127.0.0.1:{server.server_address[1]}/ping/rehearsal-check\n")
+        os.chmod(base / "remote.env", 0o600)
+        code, out = cli("remote-check", "--ping-deadman")
+        step("remote-check: no-delete model OK, test ping sent, nothing uploaded",
+             code == 0 and "no-delete model  OK" in out and len(pings) == 1 and not fake_bucket.joinpath("artesanfc").exists(), out.splitlines()[-1] if out else "")
+        def created_at(d):
+            return datetime.fromisoformat(json.loads((d / "meta.json").read_text())["created_at"].replace("Z", "+00:00"))
+        # The run uploads every local backup (backfill), including the oldest one,
+        # which retention then prunes once its copy is verified. Remember what
+        # existed before the run so the pruned backup is still counted.
+        seen = {d.name: created_at(d) for d in (base / "encrypted").iterdir()}
+        clock_base[0] += timedelta(hours=1)
+        code, out = cli("run", "--scheduled")
+        local = sorted(p for p in (base / "encrypted").iterdir())
+        seen.update({d.name: created_at(d) for d in local})
+        remote = sorted(p for p in fake_bucket.rglob("*") if p.is_file() and not p.name.endswith(".info"))
+        expected = sum(2 * len(bremote.object_bases(bremote.DEFAULT_PREFIX, name, ts)) for name, ts in seen.items())
+        step("run: the new backup and every older local one are uploaded and verified (backfill)",
+             code == 0 and "OFFSITE: VERIFIED" in out and len(remote) == expected
+             and all((base / "state" / "offsite" / f"{d.name}.json").is_file() for d in local),
+             f"{len(seen)} backups ({len(local)} kept) -> {len(remote)} objects")
+        newest = local[-1]
+        mirrored = [p for p in remote if p.parent.name == newest.name]
+        step("every remote object is byte-identical to the local ciphertext / meta.json",
+             mirrored and all(p.read_bytes() == (newest / p.name).read_bytes() for p in mirrored))
+        copy = next(p for p in mirrored if p.name == "bundle.tar.age")
+        dec = sh("age", "--decrypt", "-i", str(keys / "K1"), "-o", str(work / "offsite.tar"), str(copy), check=False)
+        step("the off-host copy decrypts with K1 (real age)", dec.returncode == 0 and (work / "offsite.tar").stat().st_size > 0)
+        (work / "offsite.tar").unlink(missing_ok=True)
+        step("dead-man's switch pinged after the fully successful run", len(pings) == 2 and pings[-1] == "/ping/rehearsal-check")
+        code, out = cli("status")
+        step("status: OFFSITE VERIFIED, exit 0, D10 still INCOMPLETE", code == 0 and "OFFSITE: VERIFIED" in out and "D10: INCOMPLETE" in out)
+        before = len(remote)
+        clock_base[0] += timedelta(days=1)
+        code, out = cli("run")
+        remote = sorted(p for p in fake_bucket.rglob("*") if p.is_file() and not p.name.endswith(".info"))
+        added = len(remote) - before
+        step("next run uploads only the new backup (idempotent names), retention keeps 7 locally",
+             code == 0 and added in (2, 4, 6) and len(list((base / "encrypted").iterdir())) == 7, f"+{added} objects")
+        server.shutdown()
 
         print("\n== B6 secrets and cleanup")
         blob = b"".join(p.read_bytes() for p in base.rglob("*") if p.is_file())

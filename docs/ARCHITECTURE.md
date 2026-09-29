@@ -427,6 +427,10 @@ página (sin comodines ni configuración por HTML):
 | `artesanfc.com` | `https://api.artesanfc.com/api/v1` |
 | cualquier otro (`www`, `*.pages.dev`, `file://`, `[::1]`, …) | sin resolver (`null`) |
 
+La app Astro (`web/src/lib/api-config.ts`, ADR-028) usa la misma tabla y añade
+`staging.artesanfc.com` → `https://api.artesanfc.com/api/v1` (requiere ese origen
+en `CORS_ALLOWED_ORIGINS`; ver `web/README.md`, "Staging paso a paso").
+
 - Con la base sin resolver, `api.js` no hace ninguna petición de red
   (resultado `unavailable`): las páginas públicas de detalle y las listas
   muestran su estado neutro "no disponible" (F-08: ya no hay contenido estático

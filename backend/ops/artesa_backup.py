@@ -6,6 +6,7 @@
     artesa-backup status [--json]
     artesa-backup verify [<backup-id> | --all]
     artesa-backup restore-test <dump-or-extracted-bundle-dir>
+    artesa-backup remote-check [--ping-deadman]
 
 Standard library only, plus the ``age`` binary for encryption and the
 PostgreSQL 18 programs the deploy tool already uses. Separate from
@@ -21,8 +22,12 @@ Contract (D10 decisions, docs/BACKUP.md):
     is no deliberate persistence and minimal exposure;
   * no fallback to an unencrypted backup: missing recipients or a missing
     ``age`` fail the run and leave no backup and no plaintext;
-  * off-host copies are phase D10.2: until then ``status`` says
-    ``OFFSITE: NOT CONFIGURED`` and ``D10: INCOMPLETE``.
+  * off-host copies (D10.2, backup_remote.py) are optional configuration:
+    without ``shared/backup/remote.env`` ``status`` says ``OFFSITE: NOT
+    CONFIGURED``. With it, every run uploads the ciphertext + meta.json with
+    a no-delete credential and verifies them; a local backup without a
+    verified remote copy is never removed by retention. ``D10: INCOMPLETE``
+    until the recovery drills of D10.3.
 
 Nothing here calls sudo, writes to the production database or reads a
 private key. Exit codes: docs/DEPLOYMENT.md §12 (0, 1, 2, 10, 11, 20, 31).
@@ -48,6 +53,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import backup_remote as br  # noqa: E402
 import deploy_db as ddb  # noqa: E402
 import deploy_layout as dl  # noqa: E402
 import release_common as rc  # noqa: E402
@@ -68,7 +74,8 @@ _RECIPIENT_RE = re.compile(r"age1[02-9ac-hj-np-z]{58}")
 _BACKUP_ID_RE = re.compile(r"\d{8}T\d{6}Z-(?:[0-9a-f]{12}|nocommit)")
 _X25519_STANZA = re.compile(rb"^-> X25519 [A-Za-z0-9+/]{43}$")
 ALLOWED_LOG_KEYS = frozenset({"ts", "run_id", "event", "backup_id", "result", "exit_code", "detail", "tool_version",
-                              "encrypted_sha256", "encrypted_size", "release_id", "git_sha", "alembic", "removed"})
+                              "encrypted_sha256", "encrypted_size", "release_id", "git_sha", "alembic", "removed",
+                              "provider", "objects", "uploaded"})
 
 
 # --- layout -----------------------------------------------------------------------------------
@@ -96,6 +103,12 @@ class BackupLayout:
     def log_file(self) -> Path: return self.state_dir / "backup-log.jsonl"
     @property
     def lock_file(self) -> Path: return self.base / "backup.lock"
+    @property
+    def remote_config(self) -> Path: return self.base / br.REMOTE_ENV_NAME
+    @property
+    def offsite_dir(self) -> Path: return self.state_dir / "offsite"
+
+    def offsite_record(self, backup_id: str) -> Path: return self.offsite_dir / f"{backup_id}.json"
 
     def ensure(self) -> None:
         for directory in (self.base, self.staging, self.encrypted, self.state_dir):
@@ -119,6 +132,8 @@ class Context:
     hostname: Callable[[], str] = socket.gethostname
     deploy_lock_wait: float = DEPLOY_LOCK_WAIT
     restore_target: Callable[..., object] | None = None   # tests: a fake disposable target
+    remote_store: Callable[[br.RemoteConfig], object] | None = None   # tests: a fake bucket (default: br.make_store)
+    http: br.Transport = br.https_transport                           # dead-man's switch ping
 
     def __post_init__(self) -> None:
         self.root = Path(self.root)
@@ -253,6 +268,7 @@ class Tool:
         self.blayout = BackupLayout(ctx.root)
         self.run_id = f"b-{ctx.clock().strftime('%Y%m%dT%H%M%SZ')}-{os.getpid()}"
         self._log: BackupLog | None = None
+        self._remote_meta: dict = {"status": "not-configured"}
 
     def log(self) -> BackupLog:
         if self._log is None:
@@ -311,6 +327,7 @@ class Tool:
             recipients = read_recipients(self.blayout.config)
             state["encryption"] = {"algorithm": "age", "recipients": recipients}
             self._check_age()
+            remote_cfg, remote_error = self._remote_config()
             env = rp.read_env_file(self.layout.env_file, enforce_mode=True)
             self.ctx.guard.merge(env.guard)
             if not env.values.get("DATABASE_URL"):
@@ -332,9 +349,11 @@ class Tool:
             state.update({"last_result": "success", "last_success_at": rc.utc_iso(self.ctx.clock()), "last_backup_id": backup_id,
                           "last_encrypted_sha256": result["encrypted_sha256"], "last_restore_check": result["restore_check"],
                           "consecutive_failures": 0, "last_error": None})
+            offsite_ok = self._offsite(state, remote_cfg, remote_error)
             state["retention_warning"] = None
             try:
-                deleted = self._retention()
+                # with off-host copies configured (even if misconfigured), a backup without a verified remote copy is kept
+                deleted = self._retention(require_offsite_verified=remote_cfg is not None or remote_error is not None)
                 if deleted:
                     self.ctx.say(f"retention: removed {len(deleted)} older encrypted backup(s): {', '.join(deleted)}")
                     self._safe_event("retention", removed=len(deleted))
@@ -347,7 +366,19 @@ class Tool:
                              encrypted_sha256=result["encrypted_sha256"], encrypted_size=result["encrypted_size"])
             self.ctx.say(f"BACKUP OK {backup_id}: encrypted to K1+K2 ({result['encrypted_size']} bytes, sha256 {result['encrypted_sha256'][:16]}...), "
                          f"restore-check PASS, no plaintext left")
-            self.ctx.say("OFFSITE: NOT CONFIGURED -- D10: INCOMPLETE (off-host copies are phase D10.2)")
+            if remote_cfg is None and remote_error is None:
+                self.ctx.say("OFFSITE: NOT CONFIGURED -- D10: INCOMPLETE (off-host copies are phase D10.2)")
+                return 0
+            if not offsite_ok:
+                self.ctx.say(f"OFFSITE: FAILED -- the local encrypted backup {backup_id} is kept; the upload is retried on the next run. D10: INCOMPLETE")
+                return int(rc.Exit.BACKUP)
+            self.ctx.say(f"OFFSITE: VERIFIED ({state['offsite']['provider']}, bucket {state['offsite']['bucket']}) -- D10: INCOMPLETE (recovery drills: D10.3)")
+            if remote_cfg is not None and remote_cfg.deadman_url:
+                pinged = br.ping_deadman(remote_cfg.deadman_url, transport=self.ctx.http, rehearsal=self.ctx.rehearsal)
+                state["offsite"]["deadman_last_ping"] = {"at": rc.utc_iso(self.ctx.clock()), "ok": pinged}
+                _write_json_atomic(self.blayout.status_file, state)
+                if not pinged:
+                    self.ctx.say("WARNING: the dead-man's switch ping failed; the external monitor will alert if this keeps happening")
             return 0
         except rc.OpsError as exc:
             return self._fail(state, exc.code, exc.message, staging, result_name="deferred" if getattr(exc, "deferred", False) else "failure")
@@ -355,6 +386,76 @@ class Tool:
             return self._fail(state, int(rc.Exit.NO_TTY_OR_ABORT), "interrupted", staging)
         except Exception as exc:  # noqa: BLE001 -- never a traceback: locals may carry secrets
             return self._fail(state, int(rc.Exit.INTERNAL), f"internal error: {type(exc).__name__}", staging)
+
+    def _remote_config(self) -> tuple[br.RemoteConfig | None, rc.OpsError | None]:
+        """remote.env is optional. A broken one does NOT stop the local
+        backup (it is still worth having); it makes the off-host step fail."""
+        try:
+            cfg = br.read_remote_config(self.blayout.remote_config, rehearsal=self.ctx.rehearsal)
+        except rc.OpsError as exc:
+            self._remote_meta = {"status": "misconfigured"}
+            return None, exc
+        if cfg is None:
+            self._remote_meta = {"status": "not-configured"}
+            return None, None
+        self.ctx.guard.add(*cfg.secrets())
+        self._remote_meta = {"status": "offsite-pending", "provider": cfg.provider, "bucket": cfg.bucket, "prefix": cfg.prefix}
+        return cfg, None
+
+    def _offsite(self, state: dict, cfg: br.RemoteConfig | None, error: rc.OpsError | None) -> bool:
+        """Upload + verify every local backup that has no verified remote copy
+        yet (newest first; a failed upload is retried by the next run, the
+        object names are idempotent). Never deletes anything remotely."""
+        previous = state.get("offsite") if isinstance(state.get("offsite"), dict) else {}
+        if cfg is None and error is None:
+            state["offsite"] = {"status": "not-configured"}
+            return True
+        info = {"provider": cfg.provider if cfg else None, "bucket": cfg.bucket if cfg else None, "prefix": cfg.prefix if cfg else None,
+                "last_verified_backup_id": previous.get("last_verified_backup_id"), "last_verified_at": previous.get("last_verified_at")}
+        try:
+            if error is not None:
+                raise error
+            store = (self.ctx.remote_store or br.make_store)(cfg)
+            store.authorize()
+            warnings = list(getattr(store, "warnings", []))
+            done = []
+            for directory in self._backup_dirs():
+                if self._offsite_verified(directory.name):
+                    continue
+                meta = json.loads((directory / META_NAME).read_text(encoding="utf-8"))
+                created = datetime.fromisoformat(str(meta["created_at"]).replace("Z", "+00:00"))
+                record = br.upload_backup(store, directory, directory.name, created, (BUNDLE_NAME, META_NAME),
+                                          lambda: rc.utc_iso(self.ctx.clock()))
+                self.blayout.offsite_dir.mkdir(mode=0o700, exist_ok=True)
+                _write_json_atomic(self.blayout.offsite_record(directory.name), record)
+                done.append(directory.name)
+                self._safe_event("offsite_ok", backup_id=directory.name, result="verified", provider=cfg.provider,
+                                 objects=len(record["objects"]), uploaded=sum(o["uploaded"] for o in record["objects"]))
+            newest = next((d.name for d in self._backup_dirs() if self._offsite_verified(d.name)), None)
+            info.update({"status": "verified", "last_verified_backup_id": newest or info["last_verified_backup_id"],
+                         "last_verified_at": rc.utc_iso(self.ctx.clock()) if done or newest else info["last_verified_at"],
+                         "consecutive_failures": 0, "last_error": None, "warnings": [self.ctx.guard.scrub(w) for w in warnings]})
+            state["offsite"] = info
+            for name in done:
+                self.ctx.say(f"offsite: {name} uploaded and verified ({cfg.provider}, bucket {cfg.bucket})")
+            for warning in info["warnings"]:
+                self.ctx.say(f"WARNING: offsite: {warning}")
+            return True
+        except (rc.OpsError, OSError, ValueError, KeyError) as exc:
+            text = self.ctx.guard.scrub(getattr(exc, "message", None) or f"{type(exc).__name__}")[:300]
+            info.update({"status": "failed", "consecutive_failures": int(previous.get("consecutive_failures") or 0) + 1,
+                         "last_error": {"code": int(getattr(exc, "code", rc.Exit.BACKUP)), "message": text}})
+            state["offsite"] = info
+            self._safe_event("offsite_failed", result="failure", exit_code=int(rc.Exit.BACKUP), detail=text[:200])
+            self.ctx.say(f"OFFSITE FAILED: {text}")
+            return False
+
+    def _offsite_verified(self, backup_id: str) -> bool:
+        try:
+            record = json.loads(self.blayout.offsite_record(backup_id).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return False
+        return isinstance(record, dict) and record.get("status") == "verified" and record.get("backup_id") == backup_id
 
     def _fail(self, state: dict, code: int, message: str, staging: Path | None, result_name: str = "failure") -> int:
         self._discard_staging(staging)
@@ -416,7 +517,7 @@ class Tool:
             "files": {"database.dump": {"size": size, "sha256": digest}},
             "restore_check": restore,
             "encryption": {"algorithm": "age", "recipient_type": "X25519", "recipients": recipients},
-            "remote": {"status": "not-configured"},
+            "remote": dict(self._remote_meta),
         }
         _write_private(staging / "manifest.json", json.dumps(manifest, indent=2, sort_keys=True) + "\n")
         bundle = staging / "bundle.tar"
@@ -434,7 +535,7 @@ class Tool:
         meta = {"schema_version": MANIFEST_SCHEMA, "backup_id": backup_id, "created_at": manifest["created_at"], "backup_tool_version": rc.TOOL_VERSION,
                 "encrypted": {"name": BUNDLE_NAME, "size": enc_size, "sha256": enc_sha},
                 "encryption": manifest["encryption"], "restore_check": {"ok": True, "at": restore["at"]},
-                "remote": {"status": "not-configured"},
+                "remote": dict(self._remote_meta),
                 "note": "public metadata only; the full manifest (db, application, plaintext checksum) is inside the encrypted bundle"}
         partial = self.blayout.encrypted / f".{backup_id}.partial"
         os.mkdir(partial, 0o700)
@@ -572,13 +673,12 @@ class Tool:
         for directory in dirs[keep:]:
             if directory in kept:
                 continue
-            if require_offsite_verified:
-                meta = json.loads((directory / META_NAME).read_text(encoding="utf-8"))
-                if (meta.get("remote") or {}).get("status") != "verified":
-                    continue
+            if require_offsite_verified and not self._offsite_verified(directory.name):
+                continue
             if Path(os.path.realpath(directory)).parent != Path(os.path.realpath(self.blayout.encrypted)):
                 continue
             _remove_tree(directory)
+            self.blayout.offsite_record(directory.name).unlink(missing_ok=True)
             deleted.append(directory.name)
         return deleted
 
@@ -594,9 +694,24 @@ class Tool:
             except ValueError:
                 age_hours = None
         stale = age_hours is None or age_hours > STALE_AFTER_HOURS
+        offsite = state.get("offsite") if isinstance(state.get("offsite"), dict) else {}
+        configured = self.blayout.remote_config.exists()   # read-only: existence only, no network
+        offsite_status = offsite.get("status", "not-configured")
+        if configured and offsite_status == "not-configured":
+            offsite_status = "pending (configured, no run since)"
+        elif not configured and offsite_status != "not-configured":
+            offsite_status = "not-configured (remote.env removed)"
+        offsite_age = None
+        if configured and offsite.get("last_verified_at"):
+            try:
+                offsite_age = round((now - datetime.fromisoformat(offsite["last_verified_at"].replace("Z", "+00:00"))).total_seconds() / 3600, 1)
+            except ValueError:
+                offsite_age = None
+        offsite_stale = configured and (offsite_age is None or offsite_age > STALE_AFTER_HOURS or offsite_status != "verified")
         return {**state, "last_success_age_hours": age_hours, "stale": stale, "local_backups": len(self._backup_dirs()),
                 "encryption_status": "configured" if state.get("encryption") else "unknown (no run yet)",
-                "offsite_status": (state.get("offsite") or {}).get("status", "not-configured"), "d10": "INCOMPLETE"}
+                "offsite_configured": configured, "offsite_status": offsite_status, "offsite_age_hours": offsite_age,
+                "offsite_stale": offsite_stale, "d10": "INCOMPLETE"}
 
     def cmd_status(self, as_json: bool) -> int:
         self.check_root()
@@ -616,9 +731,70 @@ class Tool:
                 self.ctx.say(f"WARNING: local retention: {report['retention_warning']}")
             if report["stale"]:
                 self.ctx.say(f"STALE: no successful backup in the last {STALE_AFTER_HOURS} h")
-            self.ctx.say("OFFSITE: NOT CONFIGURED")
-            self.ctx.say("D10: INCOMPLETE (off-host copies: D10.2; recovery drills: D10.3)")
-        return 0 if not report["stale"] and not report.get("consecutive_failures") else int(rc.Exit.PREFLIGHT)
+            offsite = report.get("offsite") or {}
+            if not report["offsite_configured"]:
+                self.ctx.say("OFFSITE: NOT CONFIGURED")
+                self.ctx.say("D10: INCOMPLETE (off-host copies: D10.2; recovery drills: D10.3)")
+            else:
+                self.ctx.say(f"OFFSITE: {report['offsite_status'].upper()}  {offsite.get('provider') or '-'} bucket {offsite.get('bucket') or '-'}  "
+                             f"last verified {offsite.get('last_verified_backup_id') or '-'}"
+                             + (f"  age {report['offsite_age_hours']} h" if report.get("offsite_age_hours") is not None else ""))
+                if offsite.get("last_error"):
+                    self.ctx.say(f"  offsite failures in a row {offsite.get('consecutive_failures') or 0}  last error: {offsite['last_error']['message']}")
+                if (offsite.get("deadman_last_ping") or {}).get("ok") is False:
+                    self.ctx.say("  WARNING: the last dead-man's switch ping failed")
+                if report["offsite_stale"]:
+                    self.ctx.say(f"OFFSITE STALE: no verified off-host copy in the last {STALE_AFTER_HOURS} h")
+                self.ctx.say("D10: INCOMPLETE (recovery drills: D10.3)")
+        healthy = not report["stale"] and not report.get("consecutive_failures") and not report["offsite_stale"]
+        return 0 if healthy else int(rc.Exit.PREFLIGHT)
+
+    def cmd_remote_check(self, ping_deadman: bool) -> int:
+        """Read-only probe of the off-host destination (the D10.2 egress test):
+        TLS reachability with full verification, the credential's real
+        capabilities and restrictions (no-delete model). Uploads nothing."""
+        self.check_root()
+        cfg = br.read_remote_config(self.blayout.remote_config, rehearsal=self.ctx.rehearsal)
+        if cfg is None:
+            raise rc.OpsError(rc.Exit.CONFIG, "shared/backup/remote.env not found: off-host copies are not configured")
+        self.ctx.guard.add(*cfg.secrets())
+        store = (self.ctx.remote_store or br.make_store)(cfg)
+        access = store.authorize()
+        self.ctx.say(f"remote            {cfg.provider}  bucket {cfg.bucket}  prefix {cfg.prefix}")
+        self.ctx.say(f"credential        capabilities: {', '.join(sorted(access.capabilities))}")
+        self.ctx.say(f"restriction       bucket {access.bucket}  name prefix {access.name_prefix or '(none)'}")
+        for warning in getattr(store, "warnings", []):
+            self.ctx.say(f"WARNING: {warning}")
+        self.ctx.say("no-delete model  OK: the credential cannot delete files, change buckets/keys or weaken Object Lock")
+        code = 0
+        # A writeFiles key can still HIDE a file (lifecycle may then expire it): re-list what was verified.
+        missing, checked = [], 0
+        for record_path in sorted(self.blayout.offsite_dir.glob("*.json")) if self.blayout.offsite_dir.is_dir() else []:
+            try:
+                record = json.loads(record_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            for obj in record.get("objects") or []:
+                checked += 1
+                found = store.stat(obj["name"])
+                if found is None or found.size != obj["size"] or found.sha1 != obj["sha1"]:
+                    missing.append(obj["name"])
+        if checked:
+            self.ctx.say(f"remote copies     {checked - len(missing)}/{checked} verified objects still present and identical")
+            for name in missing[:10]:
+                self.ctx.say(f"  MISSING or CHANGED: {name}")
+            if missing:
+                code = int(rc.Exit.BACKUP)
+        if ping_deadman:
+            if not cfg.deadman_url:
+                self.ctx.say("dead-man's switch: not configured (ARTESA_BACKUP_DEADMAN_URL)")
+                code = int(rc.Exit.CONFIG)
+            else:
+                ok = br.ping_deadman(cfg.deadman_url, transport=self.ctx.http, rehearsal=self.ctx.rehearsal)
+                self.ctx.say(f"dead-man's switch: test ping {'OK' if ok else 'FAILED'}")
+                code = 0 if ok else int(rc.Exit.BACKUP)
+        self.ctx.say(f"remote-check {'PASS' if code == 0 else 'FAIL'} (nothing was uploaded)")
+        return code
 
     def cmd_verify(self, backup_id: str | None, all_: bool) -> int:
         self.check_root()
@@ -731,6 +907,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--all", action="store_true")
     p = sub.add_parser("restore-test", help="restore-check of an explicit plaintext dump or extracted bundle (never decrypts)")
     p.add_argument("path")
+    p = sub.add_parser("remote-check", help="read-only probe of the off-host destination and the no-delete credential (D10.2)")
+    p.add_argument("--ping-deadman", action="store_true", help="also send one test ping to the dead-man's switch")
     return parser
 
 
@@ -748,6 +926,8 @@ def main(argv: list[str] | None = None, ctx: Context | None = None) -> int:
             return tool.cmd_verify(args.backup_id, args.all)
         if args.command == "restore-test":
             return tool.cmd_restore_test(args.path)
+        if args.command == "remote-check":
+            return tool.cmd_remote_check(args.ping_deadman)
     except rc.OpsError as exc:
         ctx.say(f"error: {exc.message}")
         return exc.code

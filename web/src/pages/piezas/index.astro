@@ -1,0 +1,26 @@
+---
+import "@/styles/islands.css";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import NoScript from "@/components/ui/NoScript.astro";
+import PieceGallery from "@/components/islands/PieceGallery";
+---
+
+<BaseLayout
+  title="Piezas"
+  description="Colección de piezas artesanales únicas de Oaxaca, con su artesano, su comunidad y su proceso."
+  canonicalPath="/piezas/"
+>
+  <section class="section container page-top" aria-labelledby="pieces-title">
+    <header class="page-header">
+      <p class="eyebrow">Colección</p>
+      <h1 id="pieces-title" class="display-l">
+        Piezas
+      </h1>
+      <p class="lead muted">
+        Cada pieza es única. Las marcadas con 3D pueden recorrerse en el navegador.
+      </p>
+    </header>
+    <NoScript>La colección se carga con JavaScript desde el registro de ArtesaNFC.</NoScript>
+    <PieceGallery client:only="react" />
+  </section>
+</BaseLayout>

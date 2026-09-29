@@ -1,0 +1,46 @@
+---
+// Home — at most four blocks (migration brief): hero, manifesto, entry to the
+// collection, closing call. No API call: the home communicates without it.
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import Hero from "@/components/home/Hero.astro";
+import Manifesto from "@/components/home/Manifesto.astro";
+import CollectionEntry from "@/components/home/CollectionEntry.astro";
+import Closing from "@/components/home/Closing.astro";
+import { heroMedia } from "@/content/site";
+
+const poster = heroMedia.poster;
+---
+
+<BaseLayout
+  title="ArtesaNFC"
+  description="Piezas artesanales únicas de Oaxaca, conectadas con su origen, su oficio y la persona que las hizo."
+  canonicalPath="/"
+  headerTone="dark"
+>
+  <Fragment slot="head">
+    {poster.mobile?.avif && (
+      <link
+        rel="preload"
+        as="image"
+        type="image/avif"
+        href={poster.mobile.avif}
+        media="(max-width: 700px) and (orientation: portrait)"
+        fetchpriority="high"
+      />
+    )}
+    {poster.desktop.avif && (
+      <link
+        rel="preload"
+        as="image"
+        type="image/avif"
+        href={poster.desktop.avif}
+        media="not all and (max-width: 700px) and (orientation: portrait)"
+        fetchpriority="high"
+      />
+    )}
+  </Fragment>
+  <Hero />
+  <Manifesto />
+  <CollectionEntry />
+  <Closing />
+</BaseLayout>

@@ -1,9 +1,13 @@
 # ArtesaNFC — Backups cifrados de la base de datos (D10, #126)
 
-> **Estado: D10.1 — base local cifrada.** Esto **no** es D10 completo: todavía no hay
-> copia fuera del host (D10.2) ni recuperación demostrada con la clave offline (D10.3).
-> `artesa-backup status` lo dice siempre: `OFFSITE: NOT CONFIGURED` y `D10: INCOMPLETE`.
-> #126 sigue abierto hasta cumplir la Definition of Done (§11).
+> **Estado: D10.1 — base local cifrada, más el código de D10.2 (copias fuera del host,
+> §14), que no está configurado en producción.** Esto **no** es D10 completo:
+> - no hay cuenta, bucket ni credencial reales;
+> - no hay recuperación demostrada con la clave offline (D10.3).
+>
+> Sin `shared/backup/remote.env`, `artesa-backup status` dice `OFFSITE: NOT CONFIGURED`.
+> Siempre dice `D10: INCOMPLETE`. #126 sigue abierto hasta cumplir la Definition of Done
+> (§11).
 
 ## 1. Decisiones aprobadas (2026-09-27)
 
@@ -41,6 +45,7 @@ investigando (issue #134). Finanzas queda fuera.
 ```text
 <root>/shared/backup/            0700 -- separado de shared/backups/ (dumps previos a migraciones de artesa-deploy)
 ├── backup.env                   0600 -- SOLO destinatarios públicos K1/K2
+├── remote.env                   0600 -- D10.2 (opcional): destino fuera del host, credencial SIN borrado (§14)
 ├── backup.lock                  flock propio (independiente del deploy lock)
 ├── staging/                     0700 -- plaintext temporal de UNA ejecución; vacío al terminar
 ├── encrypted/                   0700
@@ -49,7 +54,8 @@ investigando (issue #134). Finanzas queda fuera.
 │       └── meta.json            0600 -- metadatos PÚBLICOS mínimos
 └── state/                       0700
     ├── status.json              0600 -- estado consultable (atómico)
-    └── backup-log.jsonl         0600 -- eventos, claves en allowlist, sin secretos
+    ├── backup-log.jsonl         0600 -- eventos, claves en allowlist, sin secretos
+    └── offsite/<backup_id>.json 0600 -- D10.2: objetos remotos verificados (nombre, tamaño, SHA-1, SHA-256, fileId)
 ```
 
 `backup.env`:
@@ -136,6 +142,7 @@ copia en claro, cualquier restauración (también la local) necesita K1 o K2.
 | `artesa-backup status [--json]` | Último intento y último éxito, restore-check, antigüedad, fallos seguidos, cifrado, `OFFSITE: NOT CONFIGURED`, `D10: INCOMPLETE`; `STALE` si pasan más de 26 h sin éxito. Exit 0 si está al día; 11 si está `STALE` o el último intento falló |
 | `artesa-backup verify [<id> \| --all]` | **Sin clave privada:** archivos, tamaño y sha256 frente a `meta.json`, cabecera age con 2 destinatarios, modos, coherencia con el estado. No prueba que el contenido descifre: eso solo lo demuestra una restauración (D10.3) |
 | `artesa-backup restore-test <ruta>` | restore-check sobre un plaintext **dado explícitamente**: un dump de `artesa-deploy` con su `.json`, o un bundle ya descifrado **fuera del servidor** y extraído (`database.dump` + `manifest.json`). **Nunca descifra**: el servidor no tiene claves privadas |
+| `artesa-backup remote-check [--ping-deadman]` | D10.2, **solo lectura**. Comprueba el destino fuera del host: TLS verificado, capacidades **reales** de la credencial y sus restricciones (modelo sin borrado). No sube nada. Con `--ping-deadman` envía un ping de prueba al dead-man's switch. Es la prueba de egress desde easerver |
 
 En producción se ejecuta la copia instalada con su lanzador,
 `/home/energias/artesa-nfc/bin/artesa-backup <comando>`, que equivale a `/usr/bin/python3
@@ -223,13 +230,10 @@ comprobar que:
 3. un `ExecStartPre` de prueba, o `systemd-run -p ProtectSystem=strict -p
    ReadWritePaths=... touch <root>/releases/x`, **falla** fuera de `shared/`.
 
-**Instalación (paso privilegiado, D14, manual y posterior):**
-1. `sudo apt install age`;
-2. crear `shared/backup/backup.env` con las dos públicas;
-3. `artesa-backup run` a mano una vez;
-4. copiar las units a `/etc/systemd/system/`, `sudo systemctl daemon-reload`,
-   `sudo systemctl enable --now artesa-backup.timer`;
-5. `systemctl list-timers artesa-backup.timer`.
+**Instalación (pasos privilegiados, D14, manuales):** runbook completo y en orden en
+§13. En resumen: `age` → K1/K2 generadas fuera del host → `backup.env` → primer `run`
+a mano → units sin timer → `systemctl start` bajo el hardening real → simulacro fuera
+del host con K1 **y** con K2 → solo entonces `enable --now` del timer.
 
 ## 11. Definition of Done de #126 (D10 completo)
 
@@ -260,3 +264,348 @@ comprobar que:
   release real construido desde git, `age` real con K1/K2 de usar y tirar. Cubre
   descifrar con K1 **y** con K2, `restore-test` del bundle descifrado, retención, rechazos
   (falta K2, dump corrupto, lock ocupado) y limpieza. Se ejecuta en Release CI.
+
+## 13. Runbook de activación de D10.1 (manual; después de R6)
+
+Requisito: estar en un release con `TOOL_VERSION` ≥ 1.3.1 (R6) y con su tooling
+instalado. `bin/artesa-backup` tiene que existir (#137). Cada bloque indica **dónde** se
+ejecuta. Los pasos con `sudo` o que crean configuración en el servidor los hace el
+operador. Ninguno toca la base de producción, salvo el `pg_dump` de solo lectura.
+
+Estado comprobado el 2026-09-28 (solo lectura):
+- easerver: Ubuntu 26.04.1, systemd 259, zona horaria del sistema `Etc/UTC`;
+- `age` no instalado; el candidato de apt es `1.2.1-1build1`;
+- PostgreSQL 18.6 con `pg_dump`, `initdb` y `pg_ctl` en `/usr/lib/postgresql/18/bin`;
+- `shared/backup/` no existe; no hay units ni timers de backup;
+- `kernel.apparmor_restrict_unprivileged_userns=1`.
+
+La CI prueba con `age` 1.1.1 (Ubuntu 24.04). El formato age v1 es el mismo; el primer
+`run` real con 1.2.1 (paso 5) lo confirma.
+
+```bash
+ROOT=/home/energias/artesa-nfc
+```
+
+### 13.1 `age` en easerver (servidor)
+
+```bash
+sudo apt-get update && sudo apt-get install -y age
+age --version                      # esperado: v1.2.1 (paquete 1.2.1-1build1)
+command -v age                     # /usr/bin/age: el PATH que usa la unit
+```
+
+Si `age` no está disponible, `artesa-backup run` sale con exit 20 (CONFIG) **sin** crear
+backup ni plaintext. No hay vuelta atrás a un backup sin cifrar.
+
+### 13.2 K1 y K2 (máquina de confianza del operador; nunca en easerver)
+
+```bash
+sudo apt-get install -y age        # en la máquina local
+umask 077; mkdir -p ~/artesa-keys && cd ~/artesa-keys
+age-keygen -o artesa-backup-K1.key
+age-keygen -o artesa-backup-K2.key
+age-keygen -y artesa-backup-K1.key > artesa-backup-K1.pub
+age-keygen -y artesa-backup-K2.key > artesa-backup-K2.pub
+cat artesa-backup-K1.pub artesa-backup-K2.pub        # dos líneas age1... (públicas)
+# huella corta, para registrarla en el Brain y compararla con meta.json
+for k in K1 K2; do printf '%s  %s\n' $k "$(tr -d '\n' < artesa-backup-$k.pub | sha256sum | cut -c1-16)"; done
+```
+
+**Prueba de las dos antes de tocar el servidor:**
+
+```bash
+echo "d10 key test $(date -u +%FT%TZ)" > probe.txt
+age -r "$(cat artesa-backup-K1.pub)" -r "$(cat artesa-backup-K2.pub)" -o probe.txt.age probe.txt
+age -d -i artesa-backup-K1.key probe.txt.age        # imprime el texto
+age -d -i artesa-backup-K2.key probe.txt.age        # imprime el texto
+rm probe.txt probe.txt.age
+```
+
+**Protección y custodia:**
+
+- Cifra cada identidad con passphrase. `age` acepta la identidad cifrada directamente en
+  `-i` y pide la passphrase:
+
+  ```bash
+  age -p -o artesa-backup-K1.key.age artesa-backup-K1.key
+  age -p -o artesa-backup-K2.key.age artesa-backup-K2.key
+  age -r "$(cat artesa-backup-K1.pub)" <<<ok | age -d -i artesa-backup-K1.key.age   # pide la passphrase; imprime "ok"
+  age -r "$(cat artesa-backup-K2.pub)" <<<ok | age -d -i artesa-backup-K2.key.age
+  shred -u artesa-backup-K1.key artesa-backup-K2.key  # solo DESPUÉS de guardar las copias
+  ```
+
+- **K1:** el `.key.age` y su passphrase van al gestor de contraseñas como entradas
+  separadas, más una copia offline (USB cifrado o papel).
+- **K2:** en **otra ubicación física** o bajo custodia de otra persona (sobre sellado o
+  caja fuerte), nunca junto a K1.
+- **Nunca:** en easerver, en el repositorio, en el Brain, en Nextcloud ni en ninguna
+  carpeta sincronizada. El Brain registra **solo** las dos líneas `age1...` y sus huellas.
+
+### 13.3 `backup.env` (servidor; solo recipients públicos)
+
+```bash
+install -d -m 700 $ROOT/shared/backup
+( umask 077; cat > $ROOT/shared/backup/backup.env <<'ENV'
+ARTESA_BACKUP_AGE_RECIPIENT_K1=age1<K1 pública, 58 caracteres>
+ARTESA_BACKUP_AGE_RECIPIENT_K2=age1<K2 pública, 58 caracteres>
+ENV
+)
+stat -c '%a %U %F %n' $ROOT/shared/backup $ROOT/shared/backup/backup.env   # 700 / 600 energias, archivo regular
+grep -ci 'AGE-SECRET-KEY' $ROOT/shared/backup/backup.env                   # 0
+```
+
+La herramienta rechaza con exit 20 (CONFIG, sin tocar nada):
+- un archivo que no sea regular o que sea un symlink;
+- un modo distinto de 0600 o un dueño distinto del usuario del servicio;
+- cualquier texto `AGE-SECRET-KEY-`;
+- K1/K2 ausentes o mal formados;
+- K1 = K2.
+
+### 13.4 Precheck (servidor, solo lectura)
+
+```bash
+cd $ROOT
+bin/artesa-deploy status | grep -iE 'current|tooling'    # R6; sin TOOLING WARNING
+bin/artesa-backup status; echo "exit $?"                  # sin backups todavía: STALE, exit 11 (esperado)
+df -h $ROOT/shared | tail -1                               # espacio: cada backup ocupa hoy ~decenas de KB
+```
+
+### 13.5 Primer backup a mano (servidor)
+
+```bash
+bin/artesa-backup run; echo "exit $?"         # exit 0: "BACKUP OK <id>: encrypted to K1+K2 ..."
+bin/artesa-backup status; echo "exit $?"      # último éxito < 1 h, restore-check ok, exit 0
+bin/artesa-backup verify --all                # sin clave privada: tamaños, sha256, cabecera age con 2 recipients, modos
+ls -A $ROOT/shared/backup/staging             # vacío
+find $ROOT/shared/backup -type f ! -path '*/encrypted/*/bundle.tar.age' ! -path '*/encrypted/*/meta.json' \
+     ! -name status.json ! -name backup-log.jsonl ! -name backup.env ! -name backup.lock -print   # nada: cero plaintext
+ls -l $ROOT/shared/backup/encrypted/*/        # solo bundle.tar.age y meta.json, 0600
+python3 -m json.tool $ROOT/shared/backup/encrypted/*/meta.json | head -30   # recipients = K1, K2; restore_check.ok = true
+tail -3 $ROOT/shared/backup/state/backup-log.jsonl
+```
+
+La retención local (7) todavía no borra nada. Se ve con 8 o más backups; la rehearsal
+de CI la cubre (B4).
+
+### 13.6 Units sin timer y hardening real (servidor)
+
+```bash
+ID=<release activo, p. ej. 20260928T071035Z-7c8b51bd6c24>
+sudo install -m 0644 -o root -g root $ROOT/releases/$ID/ops/systemd/artesa-backup.service.example /etc/systemd/system/artesa-backup.service
+sudo install -m 0644 -o root -g root $ROOT/releases/$ID/ops/systemd/artesa-backup.timer.example   /etc/systemd/system/artesa-backup.timer
+sudo systemd-analyze verify /etc/systemd/system/artesa-backup.service /etc/systemd/system/artesa-backup.timer
+sudo systemctl daemon-reload
+systemctl show artesa-backup.service -p ProtectSystem -p ProtectHome -p ReadWritePaths -p NoNewPrivileges -p CapabilityBoundingSet
+systemd-analyze security artesa-backup.service --no-pager | tail -1        # exposición: anotarla (esperado "OK" o "MEDIUM")
+# NO habilitar el timer todavía.
+
+# Un backup completo bajo el hardening real (oneshot: vuelve al terminar)
+sudo systemctl start artesa-backup.service
+systemctl show artesa-backup.service -p Result -p ExecMainStatus          # Result=success ExecMainStatus=0
+journalctl -u artesa-backup.service -n 40 --no-pager
+bin/artesa-backup status; echo "exit $?"                                  # exit 0, 2 backups locales
+
+# ¿Se aplican de verdad ProtectSystem/ProtectHome? (no se pudo comprobar en desarrollo, §10)
+sudo systemd-run --wait --pipe --quiet -p User=energias -p ProtectSystem=strict -p ProtectHome=read-only \
+     -p ReadWritePaths=$ROOT/shared -p PrivateTmp=yes -p NoNewPrivileges=yes -- /bin/sh -c "
+  touch $ROOT/releases/.d10probe 2>/dev/null && { echo 'BAD: releases/ writable'; rm -f $ROOT/releases/.d10probe; } || echo 'OK: releases/ read-only';
+  touch /etc/.d10probe 2>/dev/null && echo 'BAD: /etc writable' || echo 'OK: /etc read-only';
+  touch $ROOT/shared/.d10probe && rm $ROOT/shared/.d10probe && echo 'OK: shared/ writable'"
+```
+
+Las tres líneas tienen que salir `OK`. Si alguna sale `BAD`, el hardening no se aplica
+en este host: **no** habilites el timer y registra el hallazgo antes de seguir.
+
+### 13.7 Simulacro fuera del host con K1 y con K2 (máquina local)
+
+Requisitos: `age` y docker (usa un PostgreSQL 18 desechable y sin red). El script es
+`qa/d10-offhost-drill/drill.py`; su autotest es `qa/d10-offhost-drill/selftest.py`.
+
+```bash
+BID=<backup_id del paso 13.5 o 13.6>
+mkdir -p ~/d10-drill && scp -r energias@100.93.35.86:/home/energias/artesa-nfc/shared/backup/encrypted/$BID ~/d10-drill/
+cd ~/artesa-nfc
+python3 qa/d10-offhost-drill/drill.py ~/d10-drill/$BID ~/artesa-keys/artesa-backup-K1.key.age   # pide la passphrase de K1
+python3 qa/d10-offhost-drill/drill.py ~/d10-drill/$BID ~/artesa-keys/artesa-backup-K2.key.age   # pide la passphrase de K2
+# cada uno: "DRILL PASS: backup <BID> recovered with ..." y "plaintext work dir removed: True"
+```
+
+El simulacro comprueba:
+- `bundle.tar.age` coincide con `meta.json` y lleva 2 recipients;
+- el bundle se descifra con esa identidad;
+- `database.dump` coincide con el sha256 del manifest;
+- `pg_restore` restaura en PostgreSQL 18 con la misma revisión Alembic y los mismos conteos por tabla que el manifest.
+
+El plaintext vive solo en un directorio temporal 0700 que se borra al salir.
+`~/d10-drill/` contiene únicamente el cifrado y `meta.json`, que se pueden conservar.
+
+### 13.8 Timer (servidor; solo con 13.5–13.7 en verde)
+
+```bash
+sudo systemctl enable --now artesa-backup.timer
+systemctl list-timers artesa-backup.timer --no-pager     # próxima ejecución ~03:30 America/Mexico_City (09:30 UTC ± 15 min)
+systemctl is-enabled artesa-backup.timer                  # enabled
+# al día siguiente:
+bin/artesa-backup status; echo "exit $?"                  # último éxito < 26 h, exit 0
+journalctl -u artesa-backup.service --since yesterday --no-pager | tail -20
+```
+
+**Vuelta atrás** (sin pérdida): `sudo systemctl disable --now artesa-backup.timer`. Los
+backups cifrados y `backup.env` se quedan; la herramienta no se toca.
+
+### 13.9 Qué deja D10.1 activo y qué no
+
+- **Activo:** un backup diario cifrado a K1+K2, restore-check local en cada ejecución,
+  7 backups locales y `status`.
+- **Sigue faltando:**
+  - copia fuera del host y alerta externa (D10.2);
+  - runbook de host nuevo y simulacros periódicos (D10.3).
+- `status` sigue mostrando `OFFSITE: NOT CONFIGURED` y `D10: INCOMPLETE`. #126 sigue abierto.
+
+## 14. D10.2 — copias fuera del host (código listo; sin configurar en producción)
+
+`TOOL_VERSION` 1.4.0 (`ops/backup_remote.py`, solo stdlib). **No hay cuenta, bucket ni
+credencial reales.** Sin `shared/backup/remote.env`, todo se comporta exactamente como en
+D10.1.
+
+### 14.1 Qué hace `run` con `remote.env`
+
+1. El backup local se hace igual que en D10.1. Un `remote.env` roto **no** impide el
+   backup local, pero la ejecución termina con exit 31 y `OFFSITE: FAILED`.
+2. `authorize` con la credencial. Antes de subir nada, el tool **rechaza** (exit 20) una
+   clave que:
+   - tenga cualquiera de `deleteFiles`, `deleteBuckets`, `writeBuckets`,
+     `writeBucketRetentions`, `writeBucketEncryption`, `writeBucketReplications`,
+     `writeBucketNotifications`, `deleteKeys`, `writeKeys`, `bypassGovernance`,
+     `writeFileRetentions` o `writeFileLegalHolds`;
+   - no tenga `writeFiles` y `listFiles`;
+   - no esté restringida a **exactamente** el bucket configurado;
+   - tenga un prefijo que no cubra el configurado. Sin prefijo solo avisa.
+
+   El módulo no tiene ninguna llamada de borrado ni de *hide*; un test lo comprueba.
+3. Por cada backup local sin copia verificada (el nuevo y los anteriores: *backfill*) se
+   suben `bundle.tar.age` y `meta.json` a:
+   `<prefijo>{daily|weekly|monthly}/YYYY/MM/DD/<backup_id>/`.
+   - `daily` siempre, `weekly` los domingos y `monthly` el día 1, según el calendario de
+     America/Mexico_City.
+   - Cabeceras: SHA-1 (`X-Bz-Content-Sha1`) y SHA-256 (`X-Bz-Info-sha256`).
+   - Reintentos: 3, con backoff de 2 s y 8 s; ante 401/408/429/5xx se pide una upload URL nueva.
+4. **Verificación:** cada objeto se vuelve a listar y su tamaño, SHA-1 y SHA-256 tienen que
+   coincidir con el archivo local.
+   - Si el nombre ya existe con el mismo contenido, cuenta como hecho (idempotencia).
+   - Si existe con **otro** contenido, es un conflicto: exit 31 y **nunca** se sobrescribe.
+5. El registro va a `state/offsite/<backup_id>.json` (0600). El directorio del backup no
+   se modifica.
+6. **Retención local:** con `remote.env` presente, un backup sin copia remota verificada
+   **no** se borra nunca.
+7. **Dead-man's switch** (opcional, `ARTESA_BACKUP_DEADMAN_URL`, https): un GET **solo**
+   si todo salió bien. La alarma la da el servicio externo cuando falta un ping. Un ping
+   fallido solo deja un aviso.
+8. **`status`:**
+   - `OFFSITE: VERIFIED | FAILED | PENDING`, con la antigüedad de la última copia verificada;
+   - `OFFSITE STALE` a las 26 h;
+   - exit 11 si el offsite está configurado y falla o está obsoleto;
+   - `D10: INCOMPLETE` hasta D10.3.
+
+Pruebas:
+- `tests/ops/test_backup_d10_2.py`: 48 tests. Incluyen el cliente B2 real contra un
+  B2 falso en memoria (reintentos, 400 sin reintento, cuentas sin restricción o con borrado,
+  versiones ocultas, `http` rechazado, secretos nunca en la salida).
+- Rehearsal D10, paso B7: bucket falso *write-once* y dead-man's switch en loopback. La
+  copia remota se descifra con K1 usando `age` real.
+
+### 14.2 `remote.env` (plantilla; 0600, solo en el servidor)
+
+```bash
+ARTESA_BACKUP_REMOTE=b2
+ARTESA_BACKUP_B2_KEY_ID=<keyID de la clave de aplicación, NO la master key>
+ARTESA_BACKUP_B2_APPLICATION_KEY=<applicationKey (secreto; se muestra una sola vez al crearla)>
+ARTESA_BACKUP_B2_BUCKET=<nombre del bucket>
+ARTESA_BACKUP_B2_PREFIX=artesanfc/prod/postgres/
+ARTESA_BACKUP_DEADMAN_URL=https://hc-ping.com/<uuid>     # opcional
+```
+
+- Cualquier otra clave es un error (exit 20). Los valores secretos nunca aparecen en la
+  salida, en el estado ni en el log.
+- **Nunca** va aquí la master key ni una clave con capacidades de borrado.
+
+### 14.3 Egress desde easerver: comprobado
+
+El 2026-09-28, desde easerver y de solo lectura, sin credenciales:
+`GET https://api.backblazeb2.com/b2api/v4/b2_authorize_account` → **HTTP 401** (lo
+esperado sin credenciales).
+- Certificado de **Let's Encrypt** (`CN=backblazeb2.com`): no hay inspección TLS del
+  Fortinet en este camino.
+- `urllib` con verificación completa (el camino del tool) conecta.
+
+Falta la prueba con credencial: `remote-check`, paso 5 de §14.4. Los hosts de subida
+(`pod-*.backblaze.com`) solo se prueban con la primera subida real.
+
+### 14.4 Runbook de activación de D10.2 (humano; después de D10.1)
+
+1. **Cuenta B2** con MFA (decisión y alta del PO). El tramo gratis cubre el volumen: ~KB
+   por backup.
+2. **Bucket** privado, con **Object Lock** activado y una retención por defecto (§14.5):
+
+   ```bash
+   b2 bucket create --default-server-side-encryption SSE-B2 --file-lock-enabled <bucket> allPrivate
+   ```
+
+   Después se fija la retención por defecto en la web o con `b2 bucket update`.
+3. **Lifecycle** por prefijo:
+   - `…/daily/`: ocultar a los 35 d y borrar 1 d después;
+   - `…/weekly/`: 91 d / 1 d;
+   - `…/monthly/`: 400 d / 1 d.
+
+   Un objeto bloqueado no se borra antes de que venza su retención.
+4. **Clave del servidor**, restringida al bucket y al prefijo, **sin** borrado. Solo se
+   muestra una vez; va directa al `remote.env`:
+
+   ```bash
+   b2 key create --bucket <bucket> --name-prefix artesanfc/prod/postgres/ artesa-backup-easerver listFiles,writeFiles
+   ```
+
+5. **En easerver:**
+
+   ```bash
+   (umask 077; ${EDITOR:-nano} /home/energias/artesa-nfc/shared/backup/remote.env)   # plantilla §14.2
+   stat -c '%a %U' /home/energias/artesa-nfc/shared/backup/remote.env                 # 600 energias
+   /home/energias/artesa-nfc/bin/artesa-backup remote-check     # TLS, capacidades reales, "no-delete model OK"; no sube nada
+   ```
+
+6. **Dead-man's switch** (p. ej. healthchecks.io, gratis; decisión del PO): un check con
+   periodo de 1 día y gracia de 2 h. Su URL de ping va en `remote.env`:
+
+   ```bash
+   bin/artesa-backup remote-check --ping-deadman
+   ```
+
+7. **Primera subida real:**
+
+   ```bash
+   bin/artesa-backup run; bin/artesa-backup status
+   ```
+
+   Esperado: `OFFSITE: VERIFIED` y todos los backups locales subidos (backfill).
+8. **La credencial del servidor no puede borrar** (DoD). Desde la máquina del operador,
+   con esa misma clave:
+
+   ```bash
+   b2 rm b2://<bucket>/<un objeto>
+   ```
+
+   Tiene que fallar por permisos. Anotar el resultado.
+9. **Consultas periódicas:**
+   - `bin/artesa-backup remote-check` vuelve a listar lo verificado y detecta objetos
+     ocultados o cambiados (exit 31);
+   - el simulacro de D10.3 descarga una copia **remota** y la restaura con K1 y con K2
+     (`qa/d10-offhost-drill/drill.py`).
+
+### 14.5 Decisiones pendientes del PO para D10.2
+
+| # | Decisión | Recomendación |
+|---|---|---|
+| a | Alta de la cuenta B2 y quién custodia la master key (MFA) | PO; master key fuera del servidor, en el gestor de contraseñas |
+| b | Object Lock: la retención por defecto del bucket es **una sola** para todos los prefijos | **Un bucket, `governance` 35 d**, más una clave del servidor sin `bypassGovernance`. `weekly`/`monthly` quedan bloqueados 35 d y después solo los protege la clave sin borrado. Alternativa más fuerte: 3 buckets con retención = lifecycle (35/91/400 d), a cambio de 3 claves |
+| c | `compliance` frente a `governance` | `governance` al principio: un error de configuración se puede corregir. Pasar a `compliance` cuando el piloto tenga datos reales |
+| d | Servicio de dead-man's switch | healthchecks.io (gratis, 1 check), aviso por email |

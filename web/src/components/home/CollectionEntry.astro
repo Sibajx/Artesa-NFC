@@ -1,0 +1,95 @@
+---
+// Home block 3 — visual entry to the collection. Static on purpose: the home
+// shows no API data, so it communicates fully without JavaScript or the API.
+import ResponsivePicture from "@/components/ui/ResponsivePicture.astro";
+import { collectionEntryImage, homeCopy } from "@/content/site";
+const { collection } = homeCopy;
+---
+
+<section class="collection section on-dark" aria-labelledby="collection-title">
+  <div class="container collection__grid">
+    <a
+      class="collection__media media-frame"
+      href={collection.cta.href}
+      tabindex="-1"
+      aria-hidden="true"
+    >
+      <ResponsivePicture
+        image={collectionEntryImage}
+        sizes="(min-width: 900px) 50vw, 100vw"
+        decorative
+      />
+      {collectionEntryImage.provisional && <span class="placeholder-note">Imagen provisional</span>}
+    </a>
+    <div class="collection__text" data-reveal>
+      <p class="eyebrow">{collection.eyebrow}</p>
+      <h2 id="collection-title" class="display-l">
+        {collection.title}
+      </h2>
+      <p class="lead">{collection.body}</p>
+      <div class="collection__links">
+        <a class="button" href={collection.cta.href}>
+          {collection.cta.label}
+        </a>
+        <a class="editorial-link" href={collection.secondary.href}>
+          {collection.secondary.label}
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .collection {
+    background: var(--color-surface-dark);
+    color: var(--color-text-inverse);
+  }
+
+  .collection__grid {
+    display: grid;
+    gap: var(--space-md);
+    align-items: center;
+  }
+
+  .collection__media {
+    aspect-ratio: 4 / 5;
+    display: block;
+    background: var(--color-wood);
+  }
+
+  .collection__media :global(img) {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform var(--duration-scene) var(--ease-out);
+  }
+
+  .collection__media:hover :global(img) {
+    transform: scale(1.02);
+  }
+
+  .collection__text {
+    display: grid;
+    gap: var(--space-sm);
+    justify-items: start;
+  }
+
+  .collection__text .lead {
+    color: color-mix(in srgb, var(--color-text-inverse) 85%, transparent);
+  }
+
+  .collection__links {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-md);
+    margin-top: var(--space-xs);
+  }
+
+  @media (min-width: 900px) {
+    .collection__grid {
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-lg);
+    }
+  }
+</style>
