@@ -106,6 +106,16 @@ class AvailabilityBody(_Body):
     availability_status: AvailabilityStatus
 
 
+AltText = Annotated[str, StringConstraints(strip_whitespace=True, max_length=300)]
+
+
+class MediaUpdate(_Body):
+    alt_text: AltText | None = None
+    position: int | None = Field(default=None, ge=0, le=999)
+
+    _blank = field_validator("alt_text", mode="before")(_blank_to_none)
+
+
 def provided(body: BaseModel, *, never_null: tuple[str, ...] = ()) -> dict:
     """Only the fields the client actually sent (PATCH semantics). Fields that
     may not be cleared are dropped when sent as null."""

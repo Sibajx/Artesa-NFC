@@ -35,19 +35,34 @@ export interface PieceSummary {
   updated_at: string;
 }
 
+export type MediaRole = 'hero' | 'gallery' | 'detail' | 'process' | 'portrait' | 'model_3d';
+
 export interface MediaPublic {
-  type: string;
-  role: string;
+  type: 'image' | 'video' | 'model_3d' | string;
+  role: MediaRole | string;
   url: string;
   alt_text: string | null;
   position: number;
+  format: Record<string, unknown>;
 }
 
 export interface AdminMedia {
   id: string;
-  status: string;
+  status: 'active' | 'archived';
+  updated_at: string;
   media: MediaPublic;
 }
+
+// Published files live under /media/ on the public API host (docs/MEDIA.md
+// §4). On gestion.artesanfc.com that path belongs to the UI's static server,
+// so previews are loaded from the API host; `npm run dev` proxies /media/.
+const MEDIA_ORIGIN: string = import.meta.env.VITE_MEDIA_ORIGIN ?? (import.meta.env.DEV ? '' : 'https://api.artesanfc.com');
+
+export function mediaUrl(url: string): string {
+  return `${MEDIA_ORIGIN}${url}`;
+}
+
+export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
 export interface ArtisanDetail {
   id: string;
@@ -157,11 +172,20 @@ function kindFor(status: number): ApiErrorKind {
   if (status === 403) return 'forbidden';
   if (status === 404) return 'not_found';
   if (status === 409 || status === 412 || status === 428) return 'conflict';
-  if (status === 422 || status === 400) return 'invalid';
+  if (status === 422 || status === 400 || status === 413 || status === 415) return 'invalid';
   return 'unavailable';
 }
 
-async function request<T>(method: string, path: string, init: { params?: Record<string, string | undefined>; body?: unknown; version?: string; signal?: AbortSignal } = {}): Promise<T> {
+interface RequestInit_ {
+  params?: Record<string, string | undefined>;
+  body?: unknown;
+  // Upload: the file itself is the body, sent with its own content type.
+  file?: { data: Blob; contentType: string };
+  version?: string;
+  signal?: AbortSignal;
+}
+
+async function request<T>(method: string, path: string, init: RequestInit_ = {}): Promise<T> {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(init.params ?? {})) {
     if (value) query.set(key, value);
@@ -172,15 +196,16 @@ async function request<T>(method: string, path: string, init: { params?: Record<
     // The API refuses writes without this header and a JSON body (CSRF
     // guard, API_CONTRACT §14.2); If-Match carries the version on screen.
     headers['X-Artesa-Admin'] = '1';
-    headers['Content-Type'] = 'application/json';
+    headers['Content-Type'] = init.file ? init.file.contentType : 'application/json';
     if (init.version) headers['If-Match'] = init.version;
   }
+  const body = method === 'GET' ? undefined : init.file ? init.file.data : JSON.stringify(init.body ?? {});
   let response: Response;
   try {
     response = await fetch(url, {
       method,
       headers,
-      body: method === 'GET' ? undefined : JSON.stringify(init.body ?? {}),
+      body,
       credentials: 'same-origin',
       // An expired Access session answers with a redirect to the login page;
       // following it would hand an HTML page to the JSON parser.
@@ -267,6 +292,16 @@ export const adminApi = {
     request<PieceDetail>('POST', `/pieces/${encodeURIComponent(id)}/${action}`, { body: reason ? { reason } : {}, version }),
   setAvailability: (id: string, version: string, availability_status: string) =>
     request<PieceDetail>('POST', `/pieces/${encodeURIComponent(id)}/availability`, { body: { availability_status }, version }),
+
+  uploadMedia: (owner: 'artisans' | 'pieces', id: string, file: Blob, contentType: string, role: MediaRole, altText?: string) =>
+    request<AdminMedia>('POST', `/${owner}/${encodeURIComponent(id)}/media`, {
+      params: { role, alt_text: altText },
+      file: { data: file, contentType },
+    }),
+  updateMedia: (id: string, version: string, body: { alt_text?: string | null; position?: number }) =>
+    request<AdminMedia>('PATCH', `/media/${encodeURIComponent(id)}`, { body, version }),
+  transitionMedia: (id: string, version: string, action: 'archive' | 'restore') =>
+    request<AdminMedia>('POST', `/media/${encodeURIComponent(id)}/${action}`, { body: {}, version }),
 };
 
 // Cloudflare Access ends the session at this path on the protected hostname.

@@ -1,6 +1,6 @@
 # ArtesaNFC — Media (fotos, video y modelos 3D) en el servidor
 
-**Estado:** Propuesta para el piloto. Decisiones marcadas **[PO]** pendientes de aprobación.
+**Estado:** Aprobado por el PO el 2026-09-29 (M1–M5, ver §8) e implementado en la fase 4 de Gestión (API_CONTRACT §14.3). **El registro se hace desde Gestión, no con una CLI** (§6).
 **Fecha:** 2026-09-28
 **Relación:** cierra el diseño de PEND-033 / P-019 ("definir la capa de medios"); `docs/API_CONTRACT.md` §6 y §6.1; `docs/DEPLOYMENT.md`; `docs/OPERATIONS.md` (regla A).
 
@@ -86,7 +86,10 @@ navegador ─► api.artesanfc.com/media/…  (Cloudflare, caché en el borde)
 - `publico/` es regenerable desde `originales/` + la herramienta: backup opcional.
 - Tamaño estimado del piloto: < 2 GB.
 
-## 6. Registro en la base de datos — falta una herramienta
+## 6. Registro en la base de datos
+
+**Decisión del PO (2026-09-29):** la subida se hace desde **Gestión** (`gestion.artesanfc.com`), no con la CLI que proponía este apartado. El servidor hace el procesado de §3, guarda el original y registra el `media_asset` con su `audit_event` (API_CONTRACT §14.3). Diferencias con lo propuesto: el video no se re-codifica, se **rechaza** si trae audio o ubicación; `webm`, AVIF/WebP publicados y la carpeta `sitio/` quedan fuera de la subida por ahora. La propuesta original queda abajo como historia.
+
 
 Hoy **no hay forma soportada** de crear filas `media_asset` (no hay API admin; el seed es solo demo). Propuesta: CLI local, al estilo de `app.cli.provision`:
 
@@ -108,7 +111,7 @@ Implementación: después de aprobar este documento (backend + tests; sin migrac
 - Variantes responsive (`hero-01-800.avif`, …) con una clave aditiva en `format` o en `MEDIA_ASSET` (§13 no disruptivo).
 - Mover `publico/` a R2 o a `media.artesanfc.com` si el tráfico lo pide (Opción B).
 
-## 8. Decisiones pendientes **[PO]**
+## 8. Decisiones **[PO]** — aprobadas el 2026-09-29 tal como se recomiendan, salvo M4 (subida desde Gestión)
 
 | # | Decisión | Recomendación |
 |---|---|---|

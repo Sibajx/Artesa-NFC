@@ -39,7 +39,9 @@ import release_common as rc  # noqa: E402
 
 ALLOWED_ENV_KEYS = ("APP_ENV", "DATABASE_URL", "DEBUG", "CORS_ALLOWED_ORIGINS",
                     # Gestión admin API (ADR-029): all three or none.
-                    "ADMIN_ACCESS_TEAM_DOMAIN", "ADMIN_ACCESS_AUD", "ADMIN_EMAILS")
+                    "ADMIN_ACCESS_TEAM_DOMAIN", "ADMIN_ACCESS_AUD", "ADMIN_EMAILS",
+                    # Gestión phase 4 media (docs/MEDIA.md): optional.
+                    "MEDIA_ROOT")
 _ADMIN_ENV_KEYS = ("ADMIN_ACCESS_TEAM_DOMAIN", "ADMIN_ACCESS_AUD", "ADMIN_EMAILS")
 _SECRET_NAME_HINTS = ("SECRET", "PASSWORD", "PASSWD", "TOKEN", "KEY", "DATABASE_URL", "CREDENTIAL")
 _PASSTHROUGH_ENV = ("PATH", "HOME", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "TMPDIR")
@@ -216,6 +218,14 @@ def validate_production_env(values: Mapping[str, str]) -> None:
     admin = [bool(values.get(key, "").strip()) for key in _ADMIN_ENV_KEYS]
     if any(admin) and not all(admin):
         raise rc.OpsError(rc.Exit.CONFIG, "admin configuration is partial: set all of " + ", ".join(_ADMIN_ENV_KEYS) + " or none")
+    media_root = values.get("MEDIA_ROOT", "").strip()
+    if media_root:
+        root = Path(media_root)
+        if not root.is_absolute():
+            raise rc.OpsError(rc.Exit.CONFIG, "MEDIA_ROOT must be an absolute path")
+        missing = [name for name in ("originales", "publico") if not (root / name).is_dir()]
+        if missing:
+            raise rc.OpsError(rc.Exit.CONFIG, "MEDIA_ROOT must contain " + " and ".join(f"{m}/" for m in missing))
 
 
 def child_env(values: Mapping[str, str], extra: Mapping[str, str] | None = None) -> dict[str, str]:

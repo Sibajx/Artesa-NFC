@@ -78,6 +78,11 @@ class Settings(BaseSettings):
     # who may sign in; this list decides who may use the admin API.
     admin_emails: str = ""
 
+    # Gestión phase 4 (docs/MEDIA.md): absolute path of the media directory,
+    # which holds originales/ (private, never served) and publico/ (the only
+    # thing /media/ serves). Unset: /media/ answers 404 and uploads 503.
+    media_root: str = ""
+
     # .env.example (and any .env copied from it) also carries the discrete
     # POSTGRES_USER/PASSWORD/DB/HOST/PORT vars consumed directly by
     # docker-compose.yml for the `db` service; Settings only needs the
@@ -107,6 +112,7 @@ class Settings(BaseSettings):
             assert_production_grade_database(self.database_url, self.app_env)
 
         self._validate_admin_access()
+        self._validate_media_root()
 
         if self.app_env == ENV_PRODUCTION:
             if PRODUCTION_FRONTEND_ORIGIN not in self.cors_allowed_origins_list:
@@ -144,6 +150,31 @@ class Settings(BaseSettings):
             raise UnsafeConfigurationError("ADMIN_ACCESS_AUD must be the 64-hex-character AUD tag.")
         if any(not _EMAIL_RE.fullmatch(email) for email in self.admin_emails_list):
             raise UnsafeConfigurationError("ADMIN_EMAILS must be a comma-separated list of email addresses.")
+
+    def _validate_media_root(self) -> None:
+        self.media_root = self.media_root.strip()
+        if not self.media_root:
+            return
+        root = Path(self.media_root)
+        if not root.is_absolute():
+            raise UnsafeConfigurationError("MEDIA_ROOT must be an absolute path.")
+        missing = [name for name in ("originales", "publico") if not (root / name).is_dir()]
+        if missing:
+            raise UnsafeConfigurationError(
+                "MEDIA_ROOT must contain the directories originales/ and publico/ (docs/MEDIA.md section 2)."
+            )
+
+    @property
+    def media_enabled(self) -> bool:
+        return bool(self.media_root)
+
+    @property
+    def media_originals_dir(self) -> Path:
+        return Path(self.media_root) / "originales"
+
+    @property
+    def media_public_dir(self) -> Path:
+        return Path(self.media_root) / "publico"
 
     @property
     def admin_enabled(self) -> bool:

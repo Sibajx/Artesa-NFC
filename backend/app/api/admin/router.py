@@ -52,7 +52,11 @@ def _like(q: str) -> str:
 def _admin_media(db: Session, *, piece_id: uuid.UUID | None = None, artisan_id: uuid.UUID | None = None) -> list[AdminMedia]:
     owner = MediaAsset.piece_id == piece_id if piece_id is not None else MediaAsset.artisan_id == artisan_id
     rows = db.execute(select(MediaAsset).where(owner).order_by(*media_order_by())).scalars().all()
-    return [AdminMedia(id=m.id, status=m.status.value, media=media_asset_to_public(m)) for m in rows]
+    return [admin_media(m) for m in rows]
+
+
+def admin_media(asset: MediaAsset) -> AdminMedia:
+    return AdminMedia(id=asset.id, status=asset.status.value, updated_at=asset.updated_at, media=media_asset_to_public(asset))
 
 
 def _piece_summaries(db: Session, pieces: list[Piece]) -> list[AdminPieceSummary]:

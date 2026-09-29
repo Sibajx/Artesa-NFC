@@ -44,11 +44,13 @@ PRECONDITION_REQUIRED = {"code": "precondition_required", "message": "If-Match w
 BAD_PRECONDITION = {"code": "bad_request", "message": "If-Match must be the record's updated_at timestamp."}
 
 
-def require_write_guard(request: Request) -> None:
-    if request.headers.get(ADMIN_WRITE_HEADER) != "1":
-        raise HTTPException(status_code=403, detail=CSRF_ERROR)
+def _same_origin(request: Request) -> bool:
     origin = request.headers.get("origin")
-    if origin is not None and urlsplit(origin).netloc.lower() != request.headers.get("host", "").lower():
+    return origin is None or urlsplit(origin).netloc.lower() == request.headers.get("host", "").lower()
+
+
+def require_write_guard(request: Request) -> None:
+    if request.headers.get(ADMIN_WRITE_HEADER) != "1" or not _same_origin(request):
         raise HTTPException(status_code=403, detail=CSRF_ERROR)
     media_type = request.headers.get("content-type", "").split(";")[0].strip().lower()
     if media_type != "application/json":

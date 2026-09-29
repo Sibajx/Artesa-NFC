@@ -848,6 +848,52 @@ Detalles del registro:
 - un cambio sin efecto no toca `updated_at` ni deja evento;
 - una escritura rechazada no deja evento.
 
+### 14.3 Fase 4 de Gestión: medios (docs/MEDIA.md, 2026-09-29)
+
+**Subida:** `POST /api/admin/v1/{artisans|pieces}/{id}/media?role=<rol>&alt_text=<texto>`.
+- El **cuerpo es el archivo** (sin multipart), con su propio `Content-Type`:
+  `image/jpeg`, `image/png`, `image/webp`, `video/mp4`, `model/gltf-binary` o
+  `application/octet-stream`. Otro tipo: `415`.
+- Mismo guard CSRF que §14.2: `X-Artesa-Admin: 1` y `Origin` del mismo host.
+- Límite del cuerpo: 25 MB (`413 too_large`, se corta al leer, sin confiar en
+  `Content-Length`).
+- El tipo real se deduce **de los bytes**, nunca del cliente.
+
+| Tipo | Qué se publica | Rechazos (`422` salvo tamaño) |
+|---|---|---|
+| Foto JPEG/PNG/WebP | Re-codificada: EXIF y GPS fuera, rotación aplicada, lado mayor ≤ 1600 px, JPEG progresivo q80 | `unsupported_type`, `image_too_large` (> 50 MP), `alt_text_required` |
+| Video MP4 | Tal cual, **sin re-codificar** | `video_has_audio`, `video_has_location`, `invalid_video`; > 4 MB: `413` |
+| Modelo GLB | Tal cual (cabecera glTF 2.0 y longitud verificadas) | `invalid_model`; > 8 MB: `413` |
+
+Roles: artesano `portrait` (foto), `process` y `gallery` (foto o video); pieza
+`hero` y `detail` (foto), `gallery` y `process` (foto o video), `model_3d` (GLB).
+Otro rol: `invalid_role`. Tipo que no corresponde: `wrong_type_for_role`.
+Dueño archivado: `409 archived`. Sin `MEDIA_ROOT` configurado: `503 media_not_configured`.
+
+Respuesta **201**: `{id, status, updated_at, media}` (`media` con la forma pública de §6).
+Archivos: el original, byte a byte, en `originales/{artesano}/{_artesano|pieza}/`
+(0600, nunca servido); el derivado en `publico/{artesanos|piezas}/{slug}/{rol}-{nn}.{ext}`,
+**nunca sobrescrito**.
+
+| Método y ruta | Efecto |
+|---|---|
+| `PATCH /api/admin/v1/media/{id}` | JSON `{"alt_text"?, "position"? (0–999)}` con `If-Match`. Una foto no puede quedar sin `alt_text` |
+| `POST /api/admin/v1/media/{id}/{archive\|restore}` | JSON `{}` con `If-Match`. Archivar lo quita de la API pública; el archivo **no** se borra |
+
+**Auditoría** (`entity_type = "media_asset"`): `media.uploaded` (dueño, rol,
+tipo, `storage_path`, bytes, sha256 del original), `media.updated` (diff),
+`media.archived`, `media.restored`. Las listas `media` del detalle admin (§14.1)
+traen ahora `updated_at`.
+
+**Servir:** `GET|HEAD /media/{artesanos|piezas|sitio}/{slug}/{nombre}.{ext}` desde
+`publico/`. Solo rutas con esa forma exacta (minúsculas, extensiones de la lista
+blanca); cualquier otra, `404` sin tocar el disco. Cabeceras:
+`Cache-Control: public, max-age=31536000, immutable`, `nosniff` y
+`Access-Control-Allow-Origin: *`. Esta última es una excepción acotada a bytes
+públicos: `<model-viewer>` pide el GLB con CORS, y Cloudflare guarda una sola
+copia por URL sin mirar `Vary: Origin`. En producción requiere ampliar la
+regla A de Cloudflare a `GET|HEAD /media/*`.
+
 ## 15. Estado de las decisiones
 
 Todos los puntos que en la versión anterior de este documento estaban

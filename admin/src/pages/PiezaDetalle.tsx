@@ -3,6 +3,7 @@ import { adminApi } from '../api';
 import { formatDate, formatDateTime, joinList, labels } from '../format';
 import { useState } from 'react';
 import { useLoad } from '../hooks';
+import { MediaSection } from '../MediaSection';
 import { RecordActions } from '../RecordActions';
 import { Badge, ErrorState, Field, Loading, PublicationBadge } from '../ui';
 
@@ -116,14 +117,8 @@ export default function PiezaDetalle() {
               </div>
             </section>
 
-            <section>
-              <h2 className="text-2xl font-serif text-botanica-negro mb-2">Medios ({p.media.length})</h2>
-              <p className="text-sm text-botanica-grafito">
-                {p.media.length === 0
-                  ? 'Sin fotos registradas. La subida de medios llega en la fase 4, con la capa de media del servidor.'
-                  : p.media.map((m) => `${m.media.role} (${m.status})`).join(' · ')}
-              </p>
-            </section>
+            <MediaSection kind="pieces" ownerId={p.id} media={p.media}
+              ownerArchived={p.publication_status === 'archived'} onChanged={() => setRevision((r) => r + 1)} />
           </div>
         );
       })()}
