@@ -37,7 +37,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import release_common as rc  # noqa: E402
 
-ALLOWED_ENV_KEYS = ("APP_ENV", "DATABASE_URL", "DEBUG", "CORS_ALLOWED_ORIGINS")
+ALLOWED_ENV_KEYS = ("APP_ENV", "DATABASE_URL", "DEBUG", "CORS_ALLOWED_ORIGINS",
+                    # Gestión admin API (ADR-029): all three or none.
+                    "ADMIN_ACCESS_TEAM_DOMAIN", "ADMIN_ACCESS_AUD", "ADMIN_EMAILS")
+_ADMIN_ENV_KEYS = ("ADMIN_ACCESS_TEAM_DOMAIN", "ADMIN_ACCESS_AUD", "ADMIN_EMAILS")
 _SECRET_NAME_HINTS = ("SECRET", "PASSWORD", "PASSWD", "TOKEN", "KEY", "DATABASE_URL", "CREDENTIAL")
 _PASSTHROUGH_ENV = ("PATH", "HOME", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "TMPDIR")
 PLACEHOLDER_PASSWORDS = frozenset({"artesanfc", "change-me", "changeme", "password", "postgres", "ci"})
@@ -210,6 +213,9 @@ def validate_production_env(values: Mapping[str, str]) -> None:
         raise rc.OpsError(rc.Exit.CONFIG, f"CORS_ALLOWED_ORIGINS must include {rc.PRODUCTION_FRONTEND_ORIGIN}")
     if "*" in origins:
         raise rc.OpsError(rc.Exit.CONFIG, "CORS_ALLOWED_ORIGINS must not contain '*'")
+    admin = [bool(values.get(key, "").strip()) for key in _ADMIN_ENV_KEYS]
+    if any(admin) and not all(admin):
+        raise rc.OpsError(rc.Exit.CONFIG, "admin configuration is partial: set all of " + ", ".join(_ADMIN_ENV_KEYS) + " or none")
 
 
 def child_env(values: Mapping[str, str], extra: Mapping[str, str] | None = None) -> dict[str, str]:

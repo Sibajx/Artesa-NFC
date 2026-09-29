@@ -10,15 +10,15 @@ from app.models.certificate import CertificateStatus
 from app.models.media_asset import MediaRole, MediaType
 from app.models.nfc_tag import NfcTagStatus
 
-EXPECTED_TABLES = {"artisan", "piece", "media_asset", "certificate", "nfc_tag", "alembic_version"}
-DEFERRED_TABLES = {"audit_event"}
+# audit_event was deferred until the Gestión admin API (ADR-029, revision
+# 904d7f9d6509).
+EXPECTED_TABLES = {"artisan", "piece", "media_asset", "certificate", "nfc_tag", "audit_event", "alembic_version"}
 
 
 def test_migration_head_creates_only_expected_tables():
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
-    assert EXPECTED_TABLES <= tables
-    assert not (DEFERRED_TABLES & tables)
+    assert tables == EXPECTED_TABLES
 
 
 def test_artisan_slug_is_unique(db_session):
