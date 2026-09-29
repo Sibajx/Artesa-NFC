@@ -18,9 +18,11 @@ def test_parse_env_text_handles_quotes_export_and_comments():
     assert parsed == {"A": "1", "B": "two words", "C": "3", "D": "a=b"}
 
 
-def test_only_the_four_variables_the_app_reads_are_loaded_and_the_rest_are_names_only(tmp_path):
+def test_only_the_variables_the_app_reads_are_loaded_and_the_rest_are_names_only(tmp_path):
     env = rp.read_env_file(write_env(tmp_path))
     assert set(env.values) == {"APP_ENV", "DATABASE_URL", "DEBUG", "CORS_ALLOWED_ORIGINS"}
+    assert set(rp.ALLOWED_ENV_KEYS) == {"APP_ENV", "DATABASE_URL", "DEBUG", "CORS_ALLOWED_ORIGINS",
+                                        "ADMIN_ACCESS_TEAM_DOMAIN", "ADMIN_ACCESS_AUD", "ADMIN_EMAILS"}
     assert env.ignored_keys == ["CLOUDFLARE_API_TOKEN", "SECRET_KEY"]
     for secret in (DATABASE_URL, CANARY_PASSWORD, CANARY_OTHER, "another-secret-value-123"):
         assert secret in env.guard._values  # guarded even though the app never receives them
@@ -76,6 +78,31 @@ def test_validate_production_env_refusals(values, code):
 
 def test_validate_production_env_accepts_a_correct_configuration():
     rp.validate_production_env({"APP_ENV": " Production ", "DATABASE_URL": DATABASE_URL, "DEBUG": "False", "CORS_ALLOWED_ORIGINS": "https://artesanfc.com, https://www.artesanfc.com"})
+
+
+_PROD = {"APP_ENV": "production", "DATABASE_URL": DATABASE_URL, "DEBUG": "False", "CORS_ALLOWED_ORIGINS": "https://artesanfc.com"}
+_ADMIN = {"ADMIN_ACCESS_TEAM_DOMAIN": "artesanfc.cloudflareaccess.com", "ADMIN_ACCESS_AUD": "a" * 64, "ADMIN_EMAILS": "ops@example.org"}
+
+
+@pytest.mark.parametrize("missing", sorted(_ADMIN))
+def test_validate_production_env_refuses_a_partial_admin_configuration(missing):
+    values = {**_PROD, **{k: v for k, v in _ADMIN.items() if k != missing}}
+    with pytest.raises(rc.OpsError) as err:
+        rp.validate_production_env(values)
+    assert err.value.code == rc.Exit.CONFIG and "partial" in err.value.message
+
+
+def test_validate_production_env_accepts_admin_all_or_none():
+    rp.validate_production_env(dict(_PROD))
+    rp.validate_production_env({**_PROD, **_ADMIN})
+
+
+def test_admin_keys_are_loaded_from_shared_env(tmp_path):
+    path = tmp_path / ".env"
+    path.write_text("".join(f"{k}={v}\n" for k, v in {**_PROD, **_ADMIN}.items()))
+    path.chmod(0o600)
+    env = rp.read_env_file(path)
+    assert {k: env.values[k] for k in _ADMIN} == _ADMIN
 
 
 def test_child_env_is_composed_not_inherited(monkeypatch):

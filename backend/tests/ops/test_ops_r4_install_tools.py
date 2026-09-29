@@ -66,7 +66,8 @@ def test_tool_version_is_1_4_0():
     # 1.2.0 = R4 (#130/#131); 1.3.0 = D10.1 adds artesa_backup.py to the installed tool;
     # 1.3.1 = #137: install-tools installs every launcher of the target (bin/artesa-backup)
     # 1.4.0 = D10.2: backup_remote.py (off-host copies) + artesa-backup remote-check
-    assert rc.TOOL_VERSION == "1.4.0"
+    # 1.5.0 = ADR-029: shared/.env admin keys (ADMIN_ACCESS_*, ADMIN_EMAILS), all or none
+    assert rc.TOOL_VERSION == "1.5.0"
     assert ad.target_tool_version(OPS_DIR) == rc.TOOL_VERSION
 
 

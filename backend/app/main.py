@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from app.api.admin.router import router as admin_router
 from app.api.v1.router import router as api_v1_router
 from app.core.config import get_settings
 from app.core.errors import error_response, register_exception_handlers
@@ -107,6 +108,31 @@ class ResolveNoStoreMiddleware:
 # staging/production serve no interactive docs and no OpenAPI schema
 # (Settings.docs_enabled). Passing None removes the routes altogether -
 # /docs, /redoc, /openapi.json and /docs/oauth2-redirect become ordinary 404s.
+_ADMIN_PREFIX = "/api/admin"
+
+
+class AdminNoStoreMiddleware:
+    """`Cache-Control: no-store` on every /api/admin/* response (ADR-029):
+    200s carry non-public records, and 401/403/404 must not be cached either.
+    Applies whether or not the admin API is configured."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        path = scope.get("path", "")
+        if scope["type"] != "http" or not (path == _ADMIN_PREFIX or path.startswith(_ADMIN_PREFIX + "/")):
+            await self.app(scope, receive, send)
+            return
+
+        async def send_with_no_store(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                MutableHeaders(scope=message)["Cache-Control"] = "no-store"
+            await send(message)
+
+        await self.app(scope, receive, send_with_no_store)
+
+
 _docs_urls: dict[str, None] = (
     {} if settings.docs_enabled else {"docs_url": None, "redoc_url": None, "openapi_url": None}
 )
@@ -120,6 +146,7 @@ app.add_middleware(ResolveBodySizeLimitMiddleware)
 # applied by the outer layer, and this only touches the resolve responses
 # produced by the app itself.
 app.add_middleware(ResolveNoStoreMiddleware)
+app.add_middleware(AdminNoStoreMiddleware)
 # Explicit allowlist only (docs/SECURITY.md section 10) - no "*", no origin
 # regex. GET and POST are the only methods the public API's browser
 # integration needs: GET for the artisan/piece catalog, POST for
@@ -137,6 +164,8 @@ app.add_middleware(
 )
 register_exception_handlers(app)
 app.include_router(api_v1_router)
+# Always mounted; without the admin configuration require_admin answers 404.
+app.include_router(admin_router)
 
 
 _HEALTH_HEADERS = {"Cache-Control": "no-store"}

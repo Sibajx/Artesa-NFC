@@ -263,3 +263,52 @@ staging y rollback; CI propio (`.github/workflows/web-ci.yml`). Pendientes: capa
 de media/CDN (PEND-033), assets reales autorizados, staging con su hostname en
 `api-config` y CORS, y el cambio de configuración de build del proyecto de
 Pages (dashboard, no versionado).
+
+## ADR-029 — Gestión: API administrativa web detrás de Cloudflare Access
+
+**Estado:** Aceptado (PO, 2026-09-28). Fase 1 (solo lectura) implementada;
+**no desplegada**. La configuración de Access, el hostname y el Tunnel son un
+gate humano.
+
+**Fecha:** 2026-09-28
+
+**Contexto:** la app de Gestión (`gestion.artesanfc.com`) existía como
+prototipo de interfaz sin backend: guardaba todo en `localStorage` y su login
+era simulado (Brain B-026). Para dar de alta contenido real hace falta una API
+administrativa, que ADR-026 había dejado fuera (todo por CLI).
+
+**Decisión:**
+- API administrativa web **para contenido** (artesanos, piezas y, más adelante,
+  media) en **`/api/admin/v1`**. **Certificados y NFC siguen siendo solo por
+  CLI** (ADR-026): la API los muestra en solo lectura y nunca expone
+  `token_hash`, el token, `physical_uid` ni `storage_path`.
+- **Identidad: Cloudflare Access**, delante del hostname de Gestión. La API
+  **no confía** en que la petición pasó por Access: verifica ella misma el JWT
+  de la cabecera `Cf-Access-Jwt-Assertion` (RS256 contra las claves públicas
+  del equipo, audiencia, emisor, expiración) y exige que el email esté en su
+  propia allowlist (`ADMIN_EMAILS`). Un proceso del host que llegue a
+  `127.0.0.1:8000` sin token recibe 401. No se lee la cookie `CF_Authorization`.
+- Sin configuración (`ADMIN_ACCESS_TEAM_DOMAIN`, `ADMIN_ACCESS_AUD`,
+  `ADMIN_EMAILS`), todo GET de `/api/admin/*` responde el mismo 404 que una ruta
+  inexistente. Una configuración parcial impide arrancar.
+- **Namespace `/api/admin/v1`, no `/api/v1/admin`** (API_CONTRACT §14): la regla
+  A de Cloudflare permite `/api/v1/*` en `api.artesanfc.com`, y el admin no debe
+  quedar dentro de ese prefijo público.
+- `audit_event` (DATA_MODEL §2.6) se crea ahora, **append-only en la base**:
+  triggers rechazan UPDATE, DELETE y TRUNCATE. Se añade `actor_email`, porque
+  Access identifica por email. Cada escritura de las fases siguientes insertará
+  su evento en la misma transacción.
+- Dependencias nuevas autorizadas por el PO: `pyjwt` y `cryptography` (más
+  `cffi` y `pycparser`, transitivas), fijadas con hash en el lock.
+- La UI del prototipo se incorpora al repo (`admin/`) y solo cambia su capa de
+  datos.
+
+**Alternativas descartadas:** confiar solo en Access (un error de
+configuración dejaría el admin abierto, y cualquier proceso del host podría
+llamarlo); usuarios y contraseñas propios (más código y más superficie);
+admin bajo `/api/v1/admin` (quedaría dentro del prefijo público de la regla A).
+
+**Consecuencias:** fases 2 y 3 (escrituras de artesano y pieza, con auditoría);
+fase 4 (media), que depende de la capa de media. El despliegue requiere una
+aplicación de Access, su AUD y el team domain en `shared/.env`, y un hostname en
+el Tunnel (paso humano).

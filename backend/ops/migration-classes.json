@@ -16,6 +16,10 @@
     "895974720462": {
       "class": "additive",
       "note": "Relaxes ck_nfc_tag_locked_at_matches_status (locked_at may persist on replaced/retired). Older code only writes values the wider constraint still accepts."
+    },
+    "904d7f9d6509": {
+      "class": "additive",
+      "note": "Creates the append-only audit_event table (enum types, indexes, UPDATE/DELETE/TRUNCATE-rejecting triggers); no existing object changes. Older code never reads or writes it."
     }
   }
 }
