@@ -18,7 +18,9 @@ export default function Piezas() {
 
   return (
     <div className="max-w-6xl mx-auto pb-12">
-      <PageHeader title="Piezas" subtitle="Inventario completo, con su estado de publicación y disponibilidad." />
+      <PageHeader title="Piezas" subtitle="Inventario completo, con su estado de publicación y disponibilidad.">
+        <Link to={artisanId ? `/piezas/nueva?artesano=${artisanId}` : '/piezas/nueva'} className="btn-primary"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Nueva pieza</Link>
+      </PageHeader>
 
       <div className="bg-white rounded-xl border border-botanica-gris/20 overflow-hidden shadow-sm">
         <ListFilters {...filters} searchLabel="Buscar por nombre o código" />

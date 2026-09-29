@@ -5,6 +5,7 @@ from starlette.datastructures import Headers, MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.api.admin.router import router as admin_router
+from app.api.admin.writes import router as admin_writes_router
 from app.api.v1.router import router as api_v1_router
 from app.core.config import get_settings
 from app.core.errors import error_response, register_exception_handlers
@@ -166,6 +167,7 @@ register_exception_handlers(app)
 app.include_router(api_v1_router)
 # Always mounted; without the admin configuration require_admin answers 404.
 app.include_router(admin_router)
+app.include_router(admin_writes_router)
 
 
 _HEALTH_HEADERS = {"Cache-Control": "no-store"}

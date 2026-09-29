@@ -170,10 +170,15 @@ def test_every_admin_route_requires_the_token(client):
         assert client.get(path).status_code == 401, path
 
 
-def test_admin_routes_are_read_only(client):
-    for method in ("post", "put", "patch", "delete"):
-        response = getattr(client, method)("/api/admin/v1/artisans", headers=auth(make_token()))
-        assert response.status_code == 405, method
+def test_admin_api_never_deletes_or_replaces(client):
+    # Phase 2 (ADR-029) adds POST/PATCH writes; records are archived, never
+    # deleted, and there is no whole-record PUT.
+    some_id = uuid.uuid4()
+    for path in ("/api/admin/v1/artisans", f"/api/admin/v1/artisans/{some_id}",
+                 "/api/admin/v1/pieces", f"/api/admin/v1/pieces/{some_id}"):
+        for method in ("put", "delete"):
+            response = getattr(client, method)(path, headers=auth(make_token()))
+            assert response.status_code == 405, (method, path)
 
 
 def test_admin_routes_do_not_answer_cors_for_the_public_origin(client):

@@ -4,9 +4,9 @@ Consola interna para administrar contenido (docs/DECISIONS.md **ADR-029**). Reac
 19 + Vite + Tailwind 4, con el diseño "Esencia Botánica" del prototipo original
 del equipo.
 
-**Fase 1: solo lectura.** Resumen, artesanos, piezas (con certificados y NFC en
-modo consulta) y auditoría. Las altas y ediciones llegan en las fases 2 y 3, y
-los medios en la fase 4. **Certificados y etiquetas NFC nunca se gestionan desde
+**Fases 1 a 3.** Resumen, artesanos y piezas: alta, edición, publicar, pasar a
+borrador, archivar, restaurar y disponibilidad. También auditoría. Los medios
+llegan en la fase 4. **Certificados y etiquetas NFC nunca se gestionan desde
 aquí**: siguen en la CLI de provisioning (ADR-026).
 
 ## Cómo funciona
@@ -27,6 +27,10 @@ navegador ── https://gestion.artesanfc.com ── Cloudflare Access (login p
 - **Rutas con `#`** (`#/piezas/<id>`): el servidor de estáticos no necesita
   redirigir rutas profundas a `index.html`.
 - **La UI no guarda nada** en `localStorage` ni maneja tokens.
+- **Escrituras:** cada una lleva `X-Artesa-Admin: 1`, JSON y `If-Match` con el
+  `updated_at` que se ve en pantalla. Si otra persona cambió el registro, la API
+  responde 412 y la UI pide recargar. Los errores se muestran en español a
+  partir del código; el texto del servidor nunca se muestra.
 
 ## Desarrollo
 

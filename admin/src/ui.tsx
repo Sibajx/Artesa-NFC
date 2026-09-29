@@ -33,6 +33,7 @@ const ERROR_TEXT: Record<ApiError['kind'], { title: string; body: string }> = {
     body: 'Tu cuenta inició sesión, pero no está autorizada para usar Gestión. Pide que agreguen tu email.',
   },
   not_found: { title: 'No encontrado', body: 'El registro no existe.' },
+  conflict: { title: 'No se pudo guardar', body: 'El registro cambió o la acción no aplica. Recarga la página.' },
   invalid: { title: 'Solicitud inválida', body: 'Revisa el enlace o los filtros.' },
   unavailable: { title: 'Servicio no disponible', body: 'La API no respondió. Intenta de nuevo en unos minutos.' },
   network: { title: 'Sin conexión', body: 'No se pudo contactar al servidor. Revisa tu conexión.' },
