@@ -4,9 +4,11 @@ Consola interna para administrar contenido (docs/DECISIONS.md **ADR-029**). Reac
 19 + Vite + Tailwind 4, con el diseño "Esencia Botánica" del prototipo original
 del equipo.
 
-**Fases 1 a 3.** Resumen, artesanos y piezas: alta, edición, publicar, pasar a
-borrador, archivar, restaurar y disponibilidad. También auditoría. Los medios
-llegan en la fase 4. **Certificados y etiquetas NFC nunca se gestionan desde
+**Fases 1 a 4.** Resumen, artesanos y piezas: alta, edición, publicar, pasar a
+borrador, archivar, restaurar y disponibilidad. También auditoría. Fase 4: subir
+fotos, videos y modelos 3D, editar su descripción y orden, y archivarlos
+(docs/MEDIA.md). Las vistas previas se cargan desde `https://api.artesanfc.com/media/`
+(`VITE_MEDIA_ORIGIN` lo cambia; `npm run dev` reenvía `/media` al backend local). **Certificados y etiquetas NFC nunca se gestionan desde
 aquí**: siguen en la CLI de provisioning (ADR-026).
 
 ## Cómo funciona
@@ -76,3 +78,21 @@ Sin un token de Access, el backend local responde 404 (admin sin configurar) o
    - con un email autorizado, se ve el Resumen;
    - con otro email, aparece "Sin acceso";
    - `https://api.artesanfc.com/api/admin/v1/me` sigue bloqueado por la regla A.
+
+### Fase 4: medios (gate humano, una vez)
+
+1. Carpetas en el servidor:
+   ```bash
+   install -d -m 0700 /home/energias/artesa-nfc/media /home/energias/artesa-nfc/media/originales
+   install -d -m 0755 /home/energias/artesa-nfc/media/publico
+   chmod 0711 /home/energias/artesa-nfc/media
+   ```
+2. `shared/.env`: `MEDIA_ROOT=/home/energias/artesa-nfc/media`. La herramienta de
+   deploy (TOOL 1.6.0) lo acepta y exige que sea absoluto y contenga las dos
+   carpetas.
+3. Deploy del release (sin migración) e `install-tools`, que pasa de 1.5.0 a 1.6.0.
+4. Cloudflare: ampliar la **regla A** para permitir `GET` y `HEAD` en
+   `api.artesanfc.com/media/*`. Sin esto, el sitio y las vistas previas de
+   Gestión no pueden cargar las fotos.
+5. Backup: `originales/` es irrecuperable. Hasta que el job cifrado a B2
+   (decisión M3) esté activo, respaldarlo a mano.

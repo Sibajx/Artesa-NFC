@@ -3,6 +3,7 @@ import { adminApi } from '../api';
 import { formatDate, joinList, labels } from '../format';
 import { useState } from 'react';
 import { useLoad } from '../hooks';
+import { MediaSection } from '../MediaSection';
 import { RecordActions } from '../RecordActions';
 import { ErrorState, Field, Loading, PublicationBadge } from '../ui';
 
@@ -75,14 +76,8 @@ export default function ArtesanoDetalle() {
               </div>
             </section>
 
-            <section>
-              <h2 className="text-2xl font-serif text-botanica-negro mb-4">Medios ({a.media.length})</h2>
-              <p className="text-sm text-botanica-grafito">
-                {a.media.length === 0
-                  ? 'Sin fotos registradas. La subida de medios llega en la fase 4, con la capa de media del servidor.'
-                  : a.media.map((m) => `${m.media.role} (${m.status})`).join(' · ')}
-              </p>
-            </section>
+            <MediaSection kind="artisans" ownerId={a.id} media={a.media}
+              ownerArchived={a.publication_status === 'archived'} onChanged={() => setRevision((r) => r + 1)} />
           </div>
         );
       })()}
