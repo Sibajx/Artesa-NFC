@@ -38,7 +38,17 @@ const NFC_LABELS: Record<string, string> = {
   retired: 'Retirado',
 };
 
+const ROLE_LABELS: Record<string, string> = {
+  hero: 'Portada',
+  gallery: 'Galería',
+  detail: 'Detalle',
+  process: 'Proceso',
+  portrait: 'Retrato',
+  model_3d: 'Modelo 3D',
+};
+
 export const labels = {
+  role: (s: string) => ROLE_LABELS[s] ?? s,
   publication: (s: PublicationStatus) => PUBLICATION_LABELS[s] ?? s,
   availability: (s: string) => AVAILABILITY_LABELS[s] ?? s,
   certificate: (s: string) => CERTIFICATE_LABELS[s] ?? s,
@@ -59,6 +69,20 @@ const CONFLICT_TEXT: Record<string, string> = {
   active_certificate: 'La pieza tiene un certificado activo. Revócalo con la CLI de provisioning antes de archivarla.',
   unknown_artisan: 'El artesano seleccionado no existe.',
   archived_artisan: 'El artesano está archivado; restáuralo o elige otro.',
+  archived: 'El registro está archivado; restáuralo antes de agregar medios.',
+  media_not_configured: 'El almacenamiento de medios todavía no está configurado en el servidor.',
+  too_large: 'El archivo es demasiado grande: fotos hasta 25 MB, videos hasta 4 MB y modelos 3D hasta 8 MB.',
+  empty_file: 'El archivo está vacío.',
+  unsupported_type: 'Formato no admitido. Sube una foto JPEG, PNG o WebP, un video MP4 o un modelo GLB.',
+  unsupported_media_type: 'Formato no admitido. Sube una foto JPEG, PNG o WebP, un video MP4 o un modelo GLB.',
+  image_too_large: 'La foto tiene más de 50 megapíxeles.',
+  alt_text_required: 'Las fotos necesitan una descripción (texto alternativo).',
+  invalid_role: 'Ese uso no está disponible aquí.',
+  wrong_type_for_role: 'Ese tipo de archivo no corresponde al uso elegido (la portada es una foto; el modelo 3D, un GLB).',
+  video_has_audio: 'El video tiene sonido. Expórtalo de nuevo sin la pista de audio.',
+  video_has_location: 'El video guarda la ubicación GPS. Expórtalo de nuevo sin ubicación.',
+  invalid_video: 'El video está dañado o no es un MP4 válido.',
+  invalid_model: 'El modelo 3D no es un archivo GLB (glTF 2.0) válido.',
 };
 
 const DUPLICATE_TEXT: Record<string, string> = {

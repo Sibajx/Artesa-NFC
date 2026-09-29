@@ -48,6 +48,8 @@ class AdminPieceSummary(BaseModel):
 class AdminMedia(BaseModel):
     id: uuid.UUID
     status: str
+    # The version to send back as If-Match (phase 4 media edits).
+    updated_at: datetime
     media: MediaAssetPublic
 
 

@@ -22,7 +22,7 @@ def test_only_the_variables_the_app_reads_are_loaded_and_the_rest_are_names_only
     env = rp.read_env_file(write_env(tmp_path))
     assert set(env.values) == {"APP_ENV", "DATABASE_URL", "DEBUG", "CORS_ALLOWED_ORIGINS"}
     assert set(rp.ALLOWED_ENV_KEYS) == {"APP_ENV", "DATABASE_URL", "DEBUG", "CORS_ALLOWED_ORIGINS",
-                                        "ADMIN_ACCESS_TEAM_DOMAIN", "ADMIN_ACCESS_AUD", "ADMIN_EMAILS"}
+                                        "ADMIN_ACCESS_TEAM_DOMAIN", "ADMIN_ACCESS_AUD", "ADMIN_EMAILS", "MEDIA_ROOT"}
     assert env.ignored_keys == ["CLOUDFLARE_API_TOKEN", "SECRET_KEY"]
     for secret in (DATABASE_URL, CANARY_PASSWORD, CANARY_OTHER, "another-secret-value-123"):
         assert secret in env.guard._values  # guarded even though the app never receives them
@@ -208,3 +208,16 @@ def test_decode_ipv6_addresses():
     assert rp._decode_addr("00000000000000000000000001000000") == "::1"
     assert rp._decode_addr("00000000000000000000000000000000") == "::"
     assert rp._decode_addr("0100007F") == "127.0.0.1"
+
+
+def test_media_root_is_optional_but_must_be_absolute_with_both_folders(tmp_path):
+    base = {"APP_ENV": "production", "DATABASE_URL": "postgresql://app:s3cure-pass@db/artesanfc",
+            "CORS_ALLOWED_ORIGINS": rc.PRODUCTION_FRONTEND_ORIGIN}
+    rp.validate_production_env(base)
+    with pytest.raises(rc.OpsError, match="absolute"):
+        rp.validate_production_env({**base, "MEDIA_ROOT": "media"})
+    with pytest.raises(rc.OpsError, match="originales/ and publico/"):
+        rp.validate_production_env({**base, "MEDIA_ROOT": str(tmp_path)})
+    (tmp_path / "originales").mkdir()
+    (tmp_path / "publico").mkdir()
+    rp.validate_production_env({**base, "MEDIA_ROOT": str(tmp_path)})
