@@ -1,12 +1,15 @@
 import { Link, useParams } from 'react-router-dom';
 import { adminApi } from '../api';
 import { formatDate, joinList, labels } from '../format';
+import { useState } from 'react';
 import { useLoad } from '../hooks';
+import { RecordActions } from '../RecordActions';
 import { ErrorState, Field, Loading, PublicationBadge } from '../ui';
 
 export default function ArtesanoDetalle() {
   const { id = '' } = useParams<{ id: string }>();
-  const state = useLoad(`artisan:${id}`, (signal) => adminApi.artisan(id, signal));
+  const [revision, setRevision] = useState(0);
+  const state = useLoad(`artisan:${id}:${revision}`, (signal) => adminApi.artisan(id, signal));
 
   return (
     <div className="max-w-4xl mx-auto pb-12">
@@ -22,6 +25,7 @@ export default function ArtesanoDetalle() {
         const place = [a.locality, a.municipality, a.state, a.country].filter(Boolean).join(', ');
         return (
           <div className="flex flex-col gap-8">
+            <RecordActions kind="artisans" id={a.id} version={a.updated_at} status={a.publication_status} onChanged={() => setRevision((r) => r + 1)} />
             <article className="bg-white rounded-xl border border-botanica-gris/15 overflow-hidden shadow-sm">
               <header className="bg-[#FCFBF9] border-b border-botanica-gris/15 p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
@@ -47,7 +51,10 @@ export default function ArtesanoDetalle() {
             </article>
 
             <section>
-              <h2 className="text-2xl font-serif text-botanica-negro mb-4">Piezas ({a.pieces.length})</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl font-serif text-botanica-negro">Piezas ({a.pieces.length})</h2>
+                {a.publication_status !== 'archived' && <Link to={`/piezas/nueva?artesano=${a.id}`} className="btn-secondary">Agregar pieza</Link>}
+              </div>
               <div className="bg-white border border-botanica-gris/15 rounded-xl overflow-hidden shadow-sm">
                 {a.pieces.length === 0 ? (
                   <p className="p-8 text-center text-botanica-gris">Este artesano todavía no tiene piezas.</p>

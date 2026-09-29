@@ -127,42 +127,65 @@ export interface AuditEvent {
 }
 
 // kind drives what the UI shows; the server's message is never rendered raw.
-export type ApiErrorKind = 'session' | 'forbidden' | 'not_found' | 'unavailable' | 'invalid' | 'network';
+export type ApiErrorKind = 'session' | 'forbidden' | 'not_found' | 'conflict' | 'unavailable' | 'invalid' | 'network';
 
 export class ApiError extends Error {
   readonly kind: ApiErrorKind;
   readonly status: number;
+  // From the error envelope of a write (409/412/422): a stable code, the
+  // field it concerns, and per-field validation details.
+  readonly code?: string;
+  readonly field?: string;
+  readonly fields: Record<string, string>;
 
-  constructor(kind: ApiErrorKind, status: number) {
+  constructor(kind: ApiErrorKind, status: number, body?: ErrorBody) {
     super(kind);
     this.kind = kind;
     this.status = status;
+    this.code = body?.error?.code;
+    this.field = body?.error?.field;
+    this.fields = Object.fromEntries((body?.error?.details ?? []).map((d) => [d.field, d.reason]));
   }
+}
+
+interface ErrorBody {
+  error?: { code?: string; message?: string; field?: string; details?: { field: string; reason: string }[] };
 }
 
 function kindFor(status: number): ApiErrorKind {
   if (status === 401) return 'session';
   if (status === 403) return 'forbidden';
   if (status === 404) return 'not_found';
+  if (status === 409 || status === 412 || status === 428) return 'conflict';
   if (status === 422 || status === 400) return 'invalid';
   return 'unavailable';
 }
 
-async function get<T>(path: string, params?: Record<string, string | undefined>, signal?: AbortSignal): Promise<T> {
+async function request<T>(method: string, path: string, init: { params?: Record<string, string | undefined>; body?: unknown; version?: string; signal?: AbortSignal } = {}): Promise<T> {
   const query = new URLSearchParams();
-  for (const [key, value] of Object.entries(params ?? {})) {
+  for (const [key, value] of Object.entries(init.params ?? {})) {
     if (value) query.set(key, value);
   }
   const url = `${BASE}${path}${query.size ? `?${query}` : ''}`;
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (method !== 'GET') {
+    // The API refuses writes without this header and a JSON body (CSRF
+    // guard, API_CONTRACT §14.2); If-Match carries the version on screen.
+    headers['X-Artesa-Admin'] = '1';
+    headers['Content-Type'] = 'application/json';
+    if (init.version) headers['If-Match'] = init.version;
+  }
   let response: Response;
   try {
     response = await fetch(url, {
-      headers: { Accept: 'application/json' },
+      method,
+      headers,
+      body: method === 'GET' ? undefined : JSON.stringify(init.body ?? {}),
       credentials: 'same-origin',
       // An expired Access session answers with a redirect to the login page;
       // following it would hand an HTML page to the JSON parser.
       redirect: 'manual',
-      signal,
+      signal: init.signal,
     });
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') throw error;
@@ -172,9 +195,52 @@ async function get<T>(path: string, params?: Record<string, string | undefined>,
     throw new ApiError('session', 0);
   }
   if (!response.ok) {
-    throw new ApiError(kindFor(response.status), response.status);
+    let body: ErrorBody | undefined;
+    try {
+      body = (await response.json()) as ErrorBody;
+    } catch {
+      body = undefined;
+    }
+    throw new ApiError(kindFor(response.status), response.status, body);
   }
   return (await response.json()) as T;
+}
+
+function get<T>(path: string, params?: Record<string, string | undefined>, signal?: AbortSignal): Promise<T> {
+  return request<T>('GET', path, { params, signal });
+}
+
+export type Transition = 'publish' | 'unpublish' | 'archive' | 'restore';
+
+export interface ArtisanInput {
+  full_name?: string;
+  slug?: string;
+  artistic_name?: string | null;
+  locality?: string | null;
+  municipality?: string | null;
+  state?: string | null;
+  country?: string | null;
+  languages?: string[] | null;
+  languages_public?: boolean;
+  biography?: string | null;
+  history?: string | null;
+  techniques?: string[] | null;
+  public_contact?: Record<string, string> | null;
+}
+
+export interface PieceInput {
+  artisan_id?: string;
+  name?: string;
+  slug?: string;
+  public_code?: string;
+  description?: string | null;
+  history?: string | null;
+  technique?: string | null;
+  materials?: string[] | null;
+  origin?: string | null;
+  creation_year?: number | null;
+  dimensions?: Record<string, number | string> | null;
+  availability_status?: string;
 }
 
 export const adminApi = {
@@ -187,6 +253,20 @@ export const adminApi = {
   piece: (id: string, signal?: AbortSignal) => get<PieceDetail>(`/pieces/${encodeURIComponent(id)}`, undefined, signal),
   auditEvents: (params: { entity_type?: string; entity_id?: string; limit?: string }, signal?: AbortSignal) =>
     get<ListEnvelope<AuditEvent>>('/audit-events', params, signal),
+
+  createArtisan: (body: ArtisanInput) => request<ArtisanDetail>('POST', '/artisans', { body }),
+  updateArtisan: (id: string, version: string, body: ArtisanInput) =>
+    request<ArtisanDetail>('PATCH', `/artisans/${encodeURIComponent(id)}`, { body, version }),
+  transitionArtisan: (id: string, version: string, action: Transition, reason?: string) =>
+    request<ArtisanDetail>('POST', `/artisans/${encodeURIComponent(id)}/${action}`, { body: reason ? { reason } : {}, version }),
+
+  createPiece: (body: PieceInput) => request<PieceDetail>('POST', '/pieces', { body }),
+  updatePiece: (id: string, version: string, body: PieceInput) =>
+    request<PieceDetail>('PATCH', `/pieces/${encodeURIComponent(id)}`, { body, version }),
+  transitionPiece: (id: string, version: string, action: Transition, reason?: string) =>
+    request<PieceDetail>('POST', `/pieces/${encodeURIComponent(id)}/${action}`, { body: reason ? { reason } : {}, version }),
+  setAvailability: (id: string, version: string, availability_status: string) =>
+    request<PieceDetail>('POST', `/pieces/${encodeURIComponent(id)}/availability`, { body: { availability_status }, version }),
 };
 
 // Cloudflare Access ends the session at this path on the protected hostname.

@@ -9,6 +9,8 @@ import ArtesanoDetalle from './pages/ArtesanoDetalle';
 import Piezas from './pages/Piezas';
 import PiezaDetalle from './pages/PiezaDetalle';
 import Auditoria from './pages/Auditoria';
+import ArtesanoForm from './pages/ArtesanoForm';
+import PiezaForm from './pages/PiezaForm';
 
 const icons: Record<string, ReactElement> = {
   Resumen: (
@@ -109,7 +111,7 @@ export default function App() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium text-botanica-negro truncate" title={email}>{email}</p>
-              <p className="text-xs text-botanica-gris">Solo lectura (fase 1)</p>
+              <p className="text-xs text-botanica-gris">Editor de contenido</p>
             </div>
             <a
               href={LOGOUT_URL}
@@ -130,8 +132,12 @@ export default function App() {
       <main className="flex-1 p-6 md:p-10 overflow-auto">
         <Routes>
           <Route path="/resumen" element={<Dashboard />} />
+          <Route path="/artesanos/nuevo" element={<ArtesanoForm />} />
+          <Route path="/artesanos/:id/editar" element={<ArtesanoForm />} />
           <Route path="/artesanos/:id" element={<ArtesanoDetalle />} />
           <Route path="/artesanos" element={<Artesanos />} />
+          <Route path="/piezas/nueva" element={<PiezaForm />} />
+          <Route path="/piezas/:id/editar" element={<PiezaForm />} />
           <Route path="/piezas/:id" element={<PiezaDetalle />} />
           <Route path="/piezas" element={<Piezas />} />
           <Route path="/auditoria" element={<Auditoria />} />

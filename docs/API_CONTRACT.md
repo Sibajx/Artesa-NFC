@@ -804,6 +804,50 @@ El texto anterior de esta sección se conserva como historia. Desde ADR-029:
 Emitir, rotar o revocar certificados y programar tags sigue siendo solo por
 CLI (ADR-026).
 
+### 14.2 Fase 2 de Gestión: escrituras de contenido (ADR-029)
+
+Además de la identidad de §14.1, **toda escritura** exige:
+- la cabecera `X-Artesa-Admin: 1`;
+- un cuerpo `application/json` (si no, `415 unsupported_media_type`);
+- un `Origin`, cuando el navegador lo envía, igual al host de la petición.
+
+Si falla la cabecera o el `Origin`: `403 forbidden`. Es la defensa contra CSRF:
+Access agrega su cabecera a cualquier petición que lleve la cookie de sesión.
+
+Todo cambio sobre un registro existente exige **`If-Match: <updated_at>`**, el
+valor que el cliente cargó. Sin él: `428 precondition_required`. Con un valor
+que no es fecha: `400`. Si el registro cambió: `412 stale`. Un campo
+desconocido en el cuerpo da `422`.
+
+| Método y ruta | Efecto |
+|---|---|
+| `POST /api/admin/v1/artisans` | Crea en `draft`. `slug` es opcional: se genera del nombre y es único (`-2`, `-3`…). Devuelve el detalle de §14.1 con **201** |
+| `PATCH /api/admin/v1/artisans/{id}` | Cambia solo los campos enviados. `slug` solo se puede cambiar en `draft` |
+| `POST /api/admin/v1/artisans/{id}/{publish\|unpublish\|archive\|restore}` | Cuerpo `{}` o `{"reason": "..."}`. `archive` se rechaza si el artesano tiene piezas publicadas |
+| `POST /api/admin/v1/pieces` | Crea en `draft`. Si no se envía `public_code`, se genera `ANFC-XXXXXX` (alfabeto sin 0/O/1/I). El artesano no puede estar archivado |
+| `PATCH /api/admin/v1/pieces/{id}` | `slug`, `public_code` y `artisan_id` solo se pueden cambiar en `draft` |
+| `POST /api/admin/v1/pieces/{id}/{publish\|unpublish\|archive\|restore}` | `archive` se rechaza si hay un certificado **activo**: primero se revoca por CLI |
+| `POST /api/admin/v1/pieces/{id}/availability` | `{"availability_status": "available\|reserved\|exhibited\|archived"}` |
+
+Transiciones permitidas: `draft → published`, `published → draft`,
+`draft|published → archived` y `archived → draft`. Cualquier otra da
+`409 invalid_transition`.
+
+**No hay DELETE ni PUT.** Los códigos `409` son: `duplicate` (con `field`),
+`draft_only`, `invalid_transition`, `incomplete`, `has_published_pieces`,
+`active_certificate`, `unknown_artisan` y `archived_artisan`.
+
+**Auditoría:** cada cambio que aplica algo inserta **en la misma transacción**
+un `audit_event` con `actor_email`, la IP y, en `metadata`, un diff
+`{campo: {from, to}}` o la transición con su motivo. Las acciones son
+`artisan.created`, `.updated`, `.published`, `.unpublished`, `.archived`,
+`.restored`, lo mismo con `piece.*`, y `piece.availability_changed`.
+
+Detalles del registro:
+- `public_contact` **nunca** va en el diff: se anota solo `{"changed": true}`;
+- un cambio sin efecto no toca `updated_at` ni deja evento;
+- una escritura rechazada no deja evento.
+
 ## 15. Estado de las decisiones
 
 Todos los puntos que en la versión anterior de este documento estaban
