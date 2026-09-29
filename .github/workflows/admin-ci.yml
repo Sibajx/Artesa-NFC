@@ -1,0 +1,65 @@
+name: Admin CI
+
+# Validation of the Gestión UI in admin/ (ADR-029). No deployment, no secrets,
+# no network access to the real API.
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+    paths:
+      - "admin/**"
+      - ".github/workflows/admin-ci.yml"
+  push:
+    branches:
+      - develop
+      - main
+    paths:
+      - "admin/**"
+      - ".github/workflows/admin-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  admin:
+    name: admin
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: admin
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: admin/.nvmrc
+          cache: npm
+          cache-dependency-path: admin/package-lock.json
+
+      - name: Install dependencies (lockfile only)
+        run: npm ci --no-audit --no-fund
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      # The prototype stored data in localStorage and faked login and
+      # certificate hashes (Brain B-026). None of that may come back.
+      - name: No client-side storage, fake auth or client-generated hashes
+        run: |
+          if grep -rnE "localStorage|sessionStorage|getRandomValues|isAuthenticated" src; then
+            echo "forbidden client-side pattern found"; exit 1
+          fi

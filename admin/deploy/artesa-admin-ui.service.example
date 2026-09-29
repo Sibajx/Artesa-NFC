@@ -1,0 +1,41 @@
+# Static file server for the Gestión UI (admin/README.md, ADR-029).
+# Serves shared/admin-ui/current on loopback only; cloudflared routes
+# gestion.artesanfc.com (except /api/admin/*) here, behind Cloudflare Access.
+# Python's http.server is enough: a handful of static files, loopback only,
+# no uploads. Install: sudo install -m 0644 -o root -g root <this file>
+# /etc/systemd/system/artesa-admin-ui.service && sudo systemctl daemon-reload
+# && sudo systemctl enable --now artesa-admin-ui.service
+
+[Unit]
+Description=ArtesaNFC Gestión UI (static files, loopback)
+After=network.target
+
+[Service]
+Type=simple
+User=energias
+Group=energias
+WorkingDirectory=/home/energias/artesa-nfc/shared/admin-ui/current
+ExecStart=/usr/bin/python3 -I -m http.server 8003 --bind 127.0.0.1 --directory /home/energias/artesa-nfc/shared/admin-ui/current
+Restart=on-failure
+RestartSec=5
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictAddressFamilies=AF_INET AF_INET6
+LockPersonality=yes
+CapabilityBoundingSet=
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
