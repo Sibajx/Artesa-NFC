@@ -193,7 +193,7 @@ jobs:
         working-directory: backend
         run: python tests/ops/rehearsal/run_rehearsal.py --pg-bindir /usr/lib/postgresql/18/bin
 
-      - name: Backup rehearsal (D10.1 -- artesa-backup, throw-away age keys, no provider)
+      - name: Backup rehearsal (D10.1 + D10.2 -- artesa-backup, throw-away age keys, fake write-once bucket)
         working-directory: backend
         run: |
           sudo apt-get install -y --no-install-recommends age
