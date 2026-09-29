@@ -4,11 +4,14 @@ from fastapi.responses import JSONResponse
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from app.api.admin.media import router as admin_media_router
+from app.api.admin.media import upload_router as admin_upload_router
 from app.api.admin.router import router as admin_router
 from app.api.admin.writes import router as admin_writes_router
 from app.api.v1.router import router as api_v1_router
 from app.core.config import get_settings
 from app.core.errors import error_response, register_exception_handlers
+from app.core.media_files import MediaFilesMiddleware
 from app.db.session import check_database_connection
 
 settings = get_settings()
@@ -163,11 +166,17 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_credentials=False,
 )
+# Outermost: /media/ is answered before CORS and the app (app/core/media_files.py).
+app.add_middleware(MediaFilesMiddleware)
 register_exception_handlers(app)
 app.include_router(api_v1_router)
 # Always mounted; without the admin configuration require_admin answers 404.
 app.include_router(admin_router)
+# Before the writes: POST /{owner}/{id}/media would otherwise match their
+# /{owner}/{id}/{action} transition route and fail as an unknown action.
+app.include_router(admin_upload_router)
 app.include_router(admin_writes_router)
+app.include_router(admin_media_router)
 
 
 _HEALTH_HEADERS = {"Cache-Control": "no-store"}

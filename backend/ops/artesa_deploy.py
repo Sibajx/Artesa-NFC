@@ -917,7 +917,7 @@ class Tool:
             if env.ignored_keys:
                 # systemd's EnvironmentFile= would hand these to the service too
                 return ("warn", f"valid, but carries {len(env.ignored_keys)} key(s) the app does not use ({', '.join(env.ignored_keys)[:120]}); "
-                                "keep only APP_ENV, DATABASE_URL, DEBUG, CORS_ALLOWED_ORIGINS", env)
+                                "keep only " + ", ".join(rp.ALLOWED_ENV_KEYS), env)
             return "0600, APP_ENV=production, DATABASE_URL set (not shown), DEBUG off, CORS ok"
 
         self._gate(gates, "shared/.env configuration", envgate)
