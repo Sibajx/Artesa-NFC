@@ -308,6 +308,8 @@ configuración dejaría el admin abierto, y cualquier proceso del host podría
 llamarlo); usuarios y contraseñas propios (más código y más superficie);
 admin bajo `/api/v1/admin` (quedaría dentro del prefijo público de la regla A).
 
+**Actualización (2026-09-29):** fase 1 desplegada con R8. Fases 2 y 3, escrituras de artesano y pieza, implementadas juntas (API_CONTRACT §14.2): CSRF (cabecera propia, JSON y `Origin`), `If-Match` con `updated_at` y auditoría en la misma transacción.
+
 **Consecuencias:** fases 2 y 3 (escrituras de artesano y pieza, con auditoría);
 fase 4 (media), que depende de la capa de media. El despliegue requiere una
 aplicación de Access, su AUD y el team domain en `shared/.env`, y un hostname en
