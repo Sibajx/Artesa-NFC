@@ -609,3 +609,126 @@ Falta la prueba con credencial: `remote-check`, paso 5 de §14.4. Los hosts de s
 | b | Object Lock: la retención por defecto del bucket es **una sola** para todos los prefijos | **Un bucket, `governance` 35 d**, más una clave del servidor sin `bypassGovernance`. `weekly`/`monthly` quedan bloqueados 35 d y después solo los protege la clave sin borrado. Alternativa más fuerte: 3 buckets con retención = lifecycle (35/91/400 d), a cambio de 3 claves |
 | c | `compliance` frente a `governance` | `governance` al principio: un error de configuración se puede corregir. Pasar a `compliance` cuando el piloto tenga datos reales |
 | d | Servicio de dead-man's switch | healthchecks.io (gratis, 1 check), aviso por email |
+
+### 14.6 Activación en producción (2026-09-28)
+
+Decisiones de §14.5 aprobadas por el PO: **(a)** B2, con la master key en el gestor de
+contraseñas del PO; **(b)** un bucket con `governance` de 35 d; **(c)** `governance`
+por ahora; **(d)** healthchecks.io.
+
+| Paso | Resultado |
+|---|---|
+| Bucket `artesanfc-backups-prod` | privado, SSE-B2, Object Lock activo, retención por defecto `governance` 35 d, lifecycle daily/weekly/monthly (35/91/400 d + 1 d) |
+| Clave del servidor | `listFiles,writeFiles`, restringida al bucket y a `artesanfc/prod/postgres/`; creada por CLI y escrita en `remote.env` sin mostrarse |
+| R7 (`20260929T042348Z-1a68d20615fb`, TOOL 1.4.0) | desplegado; `install-tools` a R7 |
+| `remote-check --ping-deadman` | `no-delete model OK`, ping de prueba OK, nada subido |
+| Primer `run` | backfill de 3 backups, `OFFSITE: VERIFIED`; objetos con `fileRetention` `governance` durante 35 d |
+| La credencial no puede borrar (DoD, §14.4 paso 8) | `b2_delete_file_version` con la clave del servidor sobre un `meta.json` real: **HTTP 401 `unauthorized`**, objeto intacto (misma versión). Sonda ejecutada en easerver con los módulos instalados, sin imprimir la clave. No se probó `b2_hide_file`, porque `writeFiles` lo permite y ocultaría el objeto de verdad |
+
+**Lecciones:**
+- `b2 account authorize` imprime la clave. Usarlo siempre con `> /dev/null`.
+- Nunca copiar una plantilla con marcadores (`<…>`) a `remote.env`: la herramienta
+  rechaza una URL que no sea https (exit 20).
+- `writeFiles` también permite `b2_hide_file`. La protección frente a un objeto oculto es
+  el Object Lock (la versión sigue existiendo) más `remote-check`, que vuelve a listar lo
+  verificado.
+
+## 15. D10.3 — recuperación demostrada y host nuevo
+
+### 15.1 Simulacro desde la copia remota (2026-09-28)
+
+Se descargó desde B2 a la máquina del operador el backup
+`20260929T043741Z-1a68d20615fb`, con la master key y `b2 file download`. El sha256 del
+bundle coincide con `meta.json`. Después se ejecutó
+`qa/d10-offhost-drill/drill.py <dir> <K?.key.age>` con cada identidad:
+
+| Identidad | Resultado |
+|---|---|
+| K1 (`artesa-backup-K1.key.age`, con passphrase) | **DRILL PASS**: descifrado, dump = manifest, restaurado en PostgreSQL 18 desechable (alembic `895974720462`, 13 tablas, conteos idénticos), plaintext borrado |
+| K2 (`artesa-backup-K2.key.age`, con passphrase) | **DRILL PASS**, mismos resultados |
+
+**Cadencia:**
+- un simulacro remoto por trimestre, alternando K1 y K2;
+- además, uno después de cada cambio en el tool de backup o en el esquema.
+
+Cada simulacro se registra con fecha, `backup_id` e identidad.
+
+### 15.2 RPO y RTO
+
+- **RPO ≤ 24 h:** el timer corre a las 03:30 America/Mexico_City (±15 min). Si falla
+  una noche, `status` pasa a `STALE` a las 26 h y healthchecks.io avisa por email tras
+  el periodo de 1 d más 2 h de gracia.
+- **RTO objetivo: 4 h** hasta tener la API pública en un host nuevo. Es un objetivo,
+  **no está medido**. El próximo simulacro de host nuevo tiene que cronometrar el §15.3
+  completo.
+- **Fuera del alcance del backup:** la media (no hay capa de media todavía), la
+  configuración de Cloudflare (reglas A/B/C, Tunnel, DNS; ver `OPERATIONS.md`) y los
+  secretos (`shared/.env`, que se recrean).
+
+### 15.3 Runbook: recuperar en un host nuevo (easerver perdido)
+
+Es una decisión humana. Cada bloque indica **dónde** se ejecuta. Todo lo que implique
+sudo, secretos o Cloudflare lo hace el operador.
+
+**Qué se necesita:**
+- K1 **o** K2 (`.key.age`) con su passphrase;
+- acceso a B2 (master key, o una clave de solo lectura `listFiles,readFiles`);
+- acceso a GitHub (artifact de Release CI) y al panel de Cloudflare (Tunnel);
+- un host Ubuntu con Python 3.14 y PostgreSQL 18.
+
+1. **Máquina del operador: elegir y probar el backup.**
+   ```bash
+   ~/b2cli/bin/b2 account authorize > /dev/null
+   ~/b2cli/bin/b2 ls -r b2://artesanfc-backups-prod/artesanfc/prod/postgres/daily/ | grep bundle.tar.age | sort | tail -3
+   BID=<el más reciente>; P=<ruta daily/AAAA/MM/DD/$BID>
+   mkdir -p ~/recover/$BID && for f in bundle.tar.age meta.json; do ~/b2cli/bin/b2 file download --no-progress "b2://artesanfc-backups-prod/$P/$f" ~/recover/$BID/$f; done
+   python3 qa/d10-offhost-drill/drill.py ~/recover/$BID ~/artesa-keys/artesa-backup-K1.key.age   # DRILL PASS antes de seguir
+   ```
+2. **Máquina del operador: descifrar para la restauración real.** Hacerlo en un
+   directorio 0700 y borrarlo al final:
+   ```bash
+   umask 077; mkdir -p ~/recover/plain && cd ~/recover/plain
+   age -d -i ~/artesa-keys/artesa-backup-K1.key.age -o bundle.tar ~/recover/$BID/bundle.tar.age
+   tar -xf bundle.tar
+   python3 -c 'import json,hashlib;m=json.load(open("manifest.json"));print(m)' | head -40   # revisión alembic y commit
+   cat recovery/RELEASE.json   # commit y release_id que corrían al hacer el backup
+   ```
+   Comprobar `sha256sum database.dump` frente al manifest.
+3. **Host nuevo: base.**
+   - usuario `energias`;
+   - SSH solo por llave;
+   - Tailscale;
+   - `apt install postgresql-18 python3.14 python3.14-venv`;
+   - layout de `DEPLOYMENT.md` §11.1 paso 2.
+4. **Host nuevo: base de datos.** Los roles no están en el dump.
+   - Crear el rol de la aplicación con `LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE` y una
+     contraseña **nueva**, más la base con ese propietario.
+   - Copiar `database.dump` con `scp` a un archivo 0600 y ejecutar
+     `pg_restore --no-owner --role=<rol> -d <db> database.dump`.
+   - Borrar el dump del host y `~/recover/plain` de la máquina del operador.
+5. **Host nuevo: release.**
+   - Usar el artifact del commit de `recovery/RELEASE.json`: el de Release CI de ese
+     commit de `main`, o reconstruirlo con `build_release.py --ref <commit>`, que es
+     byte-idéntico.
+   - Seguir `DEPLOYMENT.md` §11.1 pasos 3–7. `shared/.env` se escribe **nuevo** con las 4
+     variables: `DATABASE_URL` con la contraseña nueva, y `CORS_ALLOWED_ORIGINS` con
+     `https://artesanfc.com` más los orígenes de staging.
+   - `bin/artesa-deploy run alembic current` debe coincidir con el manifest.
+6. **Host nuevo: servicio.**
+   - Unit de `ops/systemd/artesa-nfc.service.example` (§11.1 paso 8, sin unit legada).
+   - `deploy <id> --expect-commit <sha>`. Es el primer despliegue del host: no hay
+     rollback automático (exit 54).
+7. **Cloudflare Tunnel.**
+   - Instalar `cloudflared` y conectar el **Tunnel existente** con un conector nuevo
+     (token del panel), con `api.artesanfc.com` apuntando a `http://localhost:8000`.
+   - Retirar el conector del host perdido.
+   - Las reglas A/B/C viven en el borde y no cambian.
+8. **Verificación:** checklist externo de `OPERATIONS.md` §10 y
+   `curl https://api.artesanfc.com/api/v1/artisans`.
+9. **Backups en el host nuevo.**
+   - D10.1: §13, con `backup.env` que lleva **los mismos recipients públicos** K1/K2.
+   - D10.2: §14.4 pasos 4–7, con una **clave de servidor nueva**. **Borrar la clave del
+     host perdido** con la master key. La URL de healthchecks no cambia.
+10. **Cierre.**
+    - Revocar todo lo del host perdido: llaves SSH, conector del Tunnel, clave B2.
+    - Registrar la recuperación (hora de inicio y de fin, `backup_id`, identidad usada).
