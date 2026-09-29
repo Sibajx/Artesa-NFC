@@ -770,6 +770,40 @@ Este documento se actualizará con el contrato administrativo completo
 cuando exista `SECURITY.md` y una decisión de autenticación aprobada, no
 antes.
 
+### 14.1 Fase 1 de Gestión (ADR-029, 2026-09-28)
+
+El texto anterior de esta sección se conserva como historia. Desde ADR-029:
+
+- **Namespace:** `/api/admin/v1`, no `/api/v1/admin`: el admin no debe quedar
+  dentro del prefijo público que permite la regla A de Cloudflare.
+- **Autenticación:** JWT de Cloudflare Access en la cabecera
+  `Cf-Access-Jwt-Assertion`, verificado por la API (RS256, audiencia, emisor,
+  expiración) más la allowlist `ADMIN_EMAILS`. Sin cabecera o con un token
+  inválido: `401 {"code": "unauthenticated"}`. Con un email fuera de la lista:
+  `403 {"code": "forbidden"}`. Si no se pueden obtener las claves:
+  `503 {"code": "auth_unavailable"}`. Sin configuración admin, `404` idéntico al
+  de una ruta inexistente.
+- **Todas** las respuestas llevan `Cache-Control: no-store`. No hay CORS para
+  el admin.
+- Los identificadores en la URL son los UUID internos. Un UUID mal formado da
+  `422 validation_error`; uno inexistente, el `404` estándar.
+
+| Método y ruta | Respuesta |
+|---|---|
+| `GET /api/admin/v1/me` | `{"email"}` de la identidad verificada |
+| `GET /api/admin/v1/artisans?publication_status=&q=` | `ListEnvelope` de `{id, slug, full_name, artistic_name, publication_status, piece_count, updated_at}`; **incluye borradores y archivados**; orden `updated_at` desc |
+| `GET /api/admin/v1/artisans/{id}` | todos los campos del artesano (incluido `public_contact`), `media` (con `id` y `status`) y **todas** sus piezas |
+| `GET /api/admin/v1/pieces?publication_status=&artisan_id=&q=` | `ListEnvelope` de `{id, slug, public_code, name, artisan_id, artisan_slug, publication_status, availability_status, updated_at}` |
+| `GET /api/admin/v1/pieces/{id}` | todos los campos de la pieza, `publicly_visible` (pieza **y** artesano publicados, §9), `artisan`, `media`, historial de `certificates` (`id, status, version, issued_at, revoked_at, revocation_reason, created_at`) y de `nfc_tags` (`id, status, chip_model, programmed_at, locked_at, created_at`) |
+| `GET /api/admin/v1/audit-events?entity_type=&entity_id=&limit=` | eventos más recientes primero (`limit` 1–200, por defecto 50) |
+
+`q` busca sin distinguir mayúsculas; `%` y `_` se tratan como texto literal.
+
+**Nunca** se exponen, tampoco aquí: `certificate.token_hash`, el token,
+`nfc_tag.physical_uid`, `media_asset.storage_path` ni `audit_event.ip_address`.
+Emitir, rotar o revocar certificados y programar tags sigue siendo solo por
+CLI (ADR-026).
+
 ## 15. Estado de las decisiones
 
 Todos los puntos que en la versión anterior de este documento estaban

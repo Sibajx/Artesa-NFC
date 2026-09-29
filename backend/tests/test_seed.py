@@ -278,20 +278,18 @@ def test_all_image_media_have_alt_text():
         assert asset.alt_text.strip() != ""
 
 
-def test_no_nfc_tag_seed_data_introduced():
+def test_no_nfc_tag_or_audit_event_seed_data_introduced():
     # nfc_tag entered scope as of Sprint 4 issue #68 (persistence foundation
     # only): the model/table/migration exist, but no seed fixture rows are
-    # added for it. audit_event remains deferred to a later Sprint 4 issue
-    # (#61 boundary).
+    # added for it. audit_event arrived with the Gestión admin API (ADR-029):
+    # the seed never writes audit history either.
     _run_seed()
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
-    assert "nfc_tag" in tables
-    assert "audit_event" not in tables
+    assert {"nfc_tag", "audit_event"} <= tables
+
+    from app.models import AuditEvent
 
     with SessionLocal() as session:
         assert session.query(NfcTag).count() == 0
-
-    import app.models as models_module
-
-    assert not hasattr(models_module, "AuditEvent")
+        assert session.query(AuditEvent).count() == 0

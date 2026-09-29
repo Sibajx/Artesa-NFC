@@ -1,3 +1,4 @@
+import re
 from functools import lru_cache
 from pathlib import Path
 
@@ -25,6 +26,10 @@ ENV_FILE = BACKEND_DIR / ".env"
 
 # The one browser origin production must allow (docs/SECURITY.md section 10).
 PRODUCTION_FRONTEND_ORIGIN = "https://artesanfc.com"
+
+_ACCESS_TEAM_DOMAIN_RE = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.cloudflareaccess\.com")
+_ACCESS_AUD_RE = re.compile(r"[0-9a-f]{64}")
+_EMAIL_RE = re.compile(r"[^@\s,]+@[^@\s,]+\.[^@\s,]+")
 
 
 class Settings(BaseSettings):
@@ -59,6 +64,20 @@ class Settings(BaseSettings):
     # CORS_ALLOWED_ORIGINS=https://artesanfc.com.
     cors_allowed_origins: str = "http://127.0.0.1:5500,http://localhost:5500"
 
+    # Gestión admin API (ADR-029). It is enabled only when all three are set;
+    # with none of them every admin GET answers the same 404 as an unknown
+    # route. A partial configuration refuses to start (below).
+    # Team domain of the Cloudflare Access team, e.g.
+    # artesanfc.cloudflareaccess.com: the JWT issuer is https://<domain> and
+    # its signing keys come from https://<domain>/cdn-cgi/access/certs.
+    admin_access_team_domain: str = ""
+    # The Access application's AUD tag (64 hex characters). Not a secret, but
+    # it binds a token to this one application.
+    admin_access_aud: str = ""
+    # Comma-separated allowlist, compared case-insensitively. Access decides
+    # who may sign in; this list decides who may use the admin API.
+    admin_emails: str = ""
+
     # .env.example (and any .env copied from it) also carries the discrete
     # POSTGRES_USER/PASSWORD/DB/HOST/PORT vars consumed directly by
     # docker-compose.yml for the `db` service; Settings only needs the
@@ -87,6 +106,8 @@ class Settings(BaseSettings):
         if self.app_env in (ENV_STAGING, ENV_PRODUCTION):
             assert_production_grade_database(self.database_url, self.app_env)
 
+        self._validate_admin_access()
+
         if self.app_env == ENV_PRODUCTION:
             if PRODUCTION_FRONTEND_ORIGIN not in self.cors_allowed_origins_list:
                 raise UnsafeConfigurationError(
@@ -99,6 +120,38 @@ class Settings(BaseSettings):
                     "false (docs/SECURITY.md)."
                 )
         return self
+
+    def _validate_admin_access(self) -> None:
+        self.admin_access_team_domain = self.admin_access_team_domain.strip().lower()
+        self.admin_access_aud = self.admin_access_aud.strip().lower()
+        configured = [
+            bool(self.admin_access_team_domain),
+            bool(self.admin_access_aud),
+            bool(self.admin_emails_list),
+        ]
+        if not any(configured):
+            return
+        if not all(configured):
+            raise UnsafeConfigurationError(
+                "Refusing to start with a partial admin configuration: set all of "
+                "ADMIN_ACCESS_TEAM_DOMAIN, ADMIN_ACCESS_AUD and ADMIN_EMAILS, or none."
+            )
+        if not _ACCESS_TEAM_DOMAIN_RE.fullmatch(self.admin_access_team_domain):
+            raise UnsafeConfigurationError(
+                "ADMIN_ACCESS_TEAM_DOMAIN must be <team>.cloudflareaccess.com (no scheme, no path)."
+            )
+        if not _ACCESS_AUD_RE.fullmatch(self.admin_access_aud):
+            raise UnsafeConfigurationError("ADMIN_ACCESS_AUD must be the 64-hex-character AUD tag.")
+        if any(not _EMAIL_RE.fullmatch(email) for email in self.admin_emails_list):
+            raise UnsafeConfigurationError("ADMIN_EMAILS must be a comma-separated list of email addresses.")
+
+    @property
+    def admin_enabled(self) -> bool:
+        return bool(self.admin_access_team_domain and self.admin_access_aud and self.admin_emails_list)
+
+    @property
+    def admin_emails_list(self) -> list[str]:
+        return [email.strip().lower() for email in self.admin_emails.split(",") if email.strip()]
 
     @property
     def docs_enabled(self) -> bool:
