@@ -263,17 +263,22 @@ def main() -> int:
         code, out = cli("remote-check", "--ping-deadman")
         step("remote-check: no-delete model OK, test ping sent, nothing uploaded",
              code == 0 and "no-delete model  OK" in out and len(pings) == 1 and not fake_bucket.joinpath("artesanfc").exists(), out.splitlines()[-1] if out else "")
-        local = sorted(p for p in (base / "encrypted").iterdir())
+        def created_at(d):
+            return datetime.fromisoformat(json.loads((d / "meta.json").read_text())["created_at"].replace("Z", "+00:00"))
+        # The run uploads every local backup (backfill), including the oldest one,
+        # which retention then prunes once its copy is verified. Remember what
+        # existed before the run so the pruned backup is still counted.
+        seen = {d.name: created_at(d) for d in (base / "encrypted").iterdir()}
         clock_base[0] += timedelta(hours=1)
         code, out = cli("run", "--scheduled")
         local = sorted(p for p in (base / "encrypted").iterdir())
+        seen.update({d.name: created_at(d) for d in local})
         remote = sorted(p for p in fake_bucket.rglob("*") if p.is_file() and not p.name.endswith(".info"))
-        expected = sum(2 * len(bremote.object_bases(bremote.DEFAULT_PREFIX, d.name,
-                                                    datetime.fromisoformat(json.loads((d / "meta.json").read_text())["created_at"].replace("Z", "+00:00"))))
-                       for d in local)
+        expected = sum(2 * len(bremote.object_bases(bremote.DEFAULT_PREFIX, name, ts)) for name, ts in seen.items())
         step("run: the new backup and every older local one are uploaded and verified (backfill)",
              code == 0 and "OFFSITE: VERIFIED" in out and len(remote) == expected
-             and all((base / "state" / "offsite" / f"{d.name}.json").is_file() for d in local), f"{len(local)} backups -> {len(remote)} objects")
+             and all((base / "state" / "offsite" / f"{d.name}.json").is_file() for d in local),
+             f"{len(seen)} backups ({len(local)} kept) -> {len(remote)} objects")
         newest = local[-1]
         mirrored = [p for p in remote if p.parent.name == newest.name]
         step("every remote object is byte-identical to the local ciphertext / meta.json",
