@@ -16,6 +16,7 @@ from fastapi import Depends
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
+from app.db.base import SessionLocal
 from app.core.config import get_settings
 from app.core.db_safety import assert_safe_for_tests
 from app.main import app
@@ -49,3 +50,20 @@ def operational(db: Session = Depends(get_db)):
 @app.get("/probe/runtime")
 def runtime():
     raise RuntimeError(f"non-database programmer error {CANARY_RUNTIME}")
+
+
+def _commit_on_teardown():
+    session = SessionLocal()
+    try:
+        yield session
+        failures.insert_duplicate_token_hash(session, CANARY_HASH)  # fails after the endpoint returned
+        session.commit()
+    finally:
+        session.close()
+
+
+@app.get("/probe/teardown-commit")
+def teardown_commit(db: Session = Depends(_commit_on_teardown)):
+    # Newer FastAPI/Starlette run this teardown once the response has started:
+    # the failure cannot become a 500, and Starlette re-raises it to Uvicorn.
+    return {"ok": True}

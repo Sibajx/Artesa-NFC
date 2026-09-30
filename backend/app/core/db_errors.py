@@ -176,13 +176,35 @@ def _method(request: Request) -> str:
     return value if value in _HTTP_METHODS else "OTHER"
 
 
+# A router prefix: static segments only, never a path parameter.
+_STATIC_PREFIX_RE = re.compile(r"(?:/[A-Za-z0-9_\-]{1,63}){0,8}")
+
+
 @_total(_UNMATCHED_ROUTE)
 def _route_template(request: Request) -> str:
     # `scope["route"]` is set by the router once a route matched. Its `path`
     # is the template. Never fall back to `request.url.path`.
-    path = getattr(request.scope.get("route"), "path", None)
-    if isinstance(path, str) and _ROUTE_TEMPLATE_RE.fullmatch(path):
+    route = request.scope.get("route")
+    path = getattr(route, "path", None)
+    if not (isinstance(path, str) and _ROUTE_TEMPLATE_RE.fullmatch(path)):
+        return _UNMATCHED_ROUTE
+    # FastAPI >= 0.13x keeps included routers nested: with a router included
+    # inside another one (/api/v1 -> /artisans), `route.path` is relative to
+    # its own router and lacks the outer prefix. The prefix is the part of the
+    # requested path in front of the suffix the route's own regex matches; it
+    # is only used when it is purely static, so a path parameter can never
+    # reach the log. On FastAPI versions that flatten routes the suffix is the
+    # whole path and the prefix is empty.
+    regex = getattr(route, "path_regex", None)
+    requested = request.scope.get("path", "")
+    if regex is None or not isinstance(requested, str) or regex.fullmatch(requested):
         return path
+    for cut in (i for i, ch in enumerate(requested) if ch == "/" and i > 0):
+        if regex.fullmatch(requested[cut:]):
+            prefix = requested[:cut]
+            if _STATIC_PREFIX_RE.fullmatch(prefix) and _ROUTE_TEMPLATE_RE.fullmatch(prefix + path):
+                return prefix + path
+            break
     return _UNMATCHED_ROUTE
 
 
@@ -206,3 +228,60 @@ async def database_exception_handler(request: Request, exc: Exception) -> JSONRe
         status_code=500,
         content={"error": {"code": "internal_error", "message": "An unexpected error occurred."}},
     )
+
+
+# --- after the response has started (defence in depth, issue #121) -----------------
+
+
+_AFTER_RESPONSE_ROUTE = "<after-response>"
+
+
+def _database_error_in_chain(exc: BaseException | None) -> BaseException | None:
+    seen: set[int] = set()
+    while exc is not None and id(exc) not in seen:
+        seen.add(id(exc))
+        if isinstance(exc, DATABASE_EXCEPTION_TYPES):
+            return exc
+        exc = exc.__cause__ or exc.__context__
+    return None
+
+
+class DatabaseTracebackFilter(logging.Filter):
+    """Keeps database text out of the server's own error log.
+
+    The handlers above consume a database exception while the response can
+    still be chosen. Newer Starlette re-raises one that happens after the
+    response has started (e.g. a failing commit in a yield-dependency teardown,
+    which ArtesaNFC does not do today) as ``RuntimeError(...) from exc``; the
+    server would then print the chained PostgreSQL ``DETAIL``. This filter,
+    installed on ``uvicorn.error``, rewrites any record whose exception chain
+    carries a database error into the same single sanitized line, with no
+    traceback. Other records (a programmer's RuntimeError) are untouched."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            exc = record.exc_info[1] if record.exc_info else None
+            database_error = _database_error_in_chain(exc)
+            if database_error is None:
+                return True
+            record.msg = _LOG_FORMAT
+            record.args = (
+                _category(database_error),
+                _sqlstate(database_error),
+                _constraint(database_error),
+                "OTHER",
+                _AFTER_RESPONSE_ROUTE,
+            )
+        except Exception:
+            record.msg, record.args = "event=db_error category=unknown", ()
+        record.exc_info = None
+        record.exc_text = None
+        record.stack_info = None
+        return True
+
+
+def install_server_log_filter() -> None:
+    """Idempotent: adds DatabaseTracebackFilter to the Uvicorn error logger."""
+    server_logger = logging.getLogger("uvicorn.error")
+    if not any(isinstance(f, DatabaseTracebackFilter) for f in server_logger.filters):
+        server_logger.addFilter(DatabaseTracebackFilter())
