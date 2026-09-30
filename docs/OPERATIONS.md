@@ -191,13 +191,16 @@ Antes de (re)aplicarlas:
 
 **Estado: aplicada y activa** (en el dashboard: `api namespace restriction`).
 
-Objetivo: desde Internet, `api.artesanfc.com` solo debe atender `/api/v1/*`.
+Objetivo: desde Internet, `api.artesanfc.com` solo debe atender `/api/v1/*` y, desde la fase 4 de Gestión, `GET|HEAD /media/*`.
 Quedan bloqueados `/health`, `/c/*`, `/` y cualquier otra ruta que no sea del
 namespace público (incluida cualquier ruta de docs, aunque la app ya no las
 sirva).
 
 - Tipo: regla personalizada (WAF custom rule).
-- Expresión: `(http.host eq "api.artesanfc.com" and not starts_with(http.request.uri.path, "/api/v1/"))`
+- Expresión (desde 2026-09-30, fase 4 de Gestión, `docs/MEDIA.md` §4):
+  `http.host eq "api.artesanfc.com" and not (starts_with(http.request.uri.path, "/api/v1/") or (starts_with(http.request.uri.path, "/media/") and http.request.method in {"GET" "HEAD"}))`
+  - Verificada desde fuera de la red del operador (2026-09-30): `/api/v1/artisans` → JSON; `/media/<ruta inexistente>` → 404 de la app; `/health` → 403 de Cloudflare.
+  - Antes: `(http.host eq "api.artesanfc.com" and not starts_with(http.request.uri.path, "/api/v1/"))`.
 - Acción: Block.
 - Efecto colateral esperado: `/health` deja de ser alcanzable desde fuera (se usa
   en local, §6). `/c/*` en el host de la API deja de llegar a Uvicorn, así que

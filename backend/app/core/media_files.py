@@ -14,6 +14,13 @@ GLB with CORS, and Cloudflare caches one copy per URL regardless of
 ``Vary: Origin``, so an origin-specific header would be served to the wrong
 site. No credentials are involved. This sits outside CORSMiddleware so the
 two never mix.
+
+Only a single, simple byte range reaches FileResponse (``bytes=a-b``,
+``bytes=a-`` or ``bytes=-n``); any other Range header is dropped and the
+whole file is served (200). Starlette 0.48's FileResponse merges multiple
+ranges in quadratic time (upstream advisory, fixed in 0.49.1; issue #121),
+and nothing here needs multipart ranges -- Safari needs a single range to
+play a video.
 """
 from __future__ import annotations
 
@@ -37,12 +44,23 @@ CONTENT_TYPES = {
     "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp", "avif": "image/avif", "png": "image/png",
     "mp4": "video/mp4", "webm": "video/webm", "glb": "model/gltf-binary",
 }
+_SINGLE_RANGE_RE = re.compile(r"bytes=(?:\d{1,15}-\d{0,15}|-\d{1,15})")
 MEDIA_HEADERS = {
     "Cache-Control": "public, max-age=31536000, immutable",
     "X-Content-Type-Options": "nosniff",
     "Access-Control-Allow-Origin": "*",
     "Cross-Origin-Resource-Policy": "cross-origin",
 }
+
+
+def _only_simple_range(scope: Scope) -> Scope:
+    headers = scope["headers"]
+    ranges = [value for name, value in headers if name == b"range"]
+    if not ranges:
+        return scope
+    if len(ranges) == 1 and _SINGLE_RANGE_RE.fullmatch(ranges[0].decode("latin-1").strip()):
+        return scope
+    return {**scope, "headers": [(name, value) for name, value in headers if name != b"range"]}
 
 
 def resolve_media_path(public_root: Path, relative: str) -> Path | None:
@@ -81,4 +99,4 @@ class MediaFilesMiddleware:
             return
         extension = found.suffix[1:]
         response = FileResponse(found, media_type=CONTENT_TYPES[extension], headers=MEDIA_HEADERS)
-        await response(scope, receive, send)
+        await response(_only_simple_range(scope), receive, send)
