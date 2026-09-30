@@ -105,12 +105,20 @@ Producción sigue sirviendo `frontend/`. `web/` solo está en staging.
 
 1. **Staging:** ver "Staging paso a paso".
 2. **Aprobación visual** sobre staging y sustitución de los assets provisionales.
-3. **Producción (gate humano):** desplegar `web/dist` construido desde `main` en
-   el proyecto `artesanfc-web` (`wrangler pages deploy dist --project-name
-artesanfc-web --branch main`).
-4. **Rollback:** en el dashboard de Pages, _Rollback_ al deployment anterior
-   (el de `frontend/`), o volver a subir `frontend/` desde `main`. `frontend/` no
-   se elimina hasta que la nueva versión lleve un periodo estable en producción.
+3. **Producción (gate humano):** en un checkout limpio de `origin/main`
+   (`git checkout --detach origin/main`), `web/scripts/deploy-production.sh
+--dry-run` y luego `web/scripts/deploy-production.sh`.
+   - El script verifica, construye y comprueba la API de producción y las
+     cabeceras privadas de `/c/*`.
+   - Guarda el id del deployment actual de producción en
+     `web/.deploy-previous-production` y pide escribir `artesanfc.com` antes de
+     subir.
+   - Estado al 2026-09-30: producción = deployment `6caa984a` (`frontend/`, `b449f58`).
+4. **Rollback:** en el dashboard de Pages, _Rollback to this deployment_ sobre
+   el deployment anterior (un clic), o `web/scripts/deploy-production.sh
+--legacy-frontend`, que vuelve a subir `frontend/` desde `main`.
+   `frontend/` no se elimina hasta que la nueva versión lleve un periodo estable
+   en producción.
 
 ## Staging paso a paso
 
