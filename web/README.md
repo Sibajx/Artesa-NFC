@@ -107,7 +107,7 @@ Producción sigue sirviendo `frontend/`. `web/` solo está en staging.
 2. **Aprobación visual** sobre staging y sustitución de los assets provisionales.
 3. **Producción (gate humano):** en un checkout limpio de `origin/main`
    (`git checkout --detach origin/main`), `web/scripts/deploy-production.sh
-   --dry-run` y luego `web/scripts/deploy-production.sh`.
+--dry-run` y luego `web/scripts/deploy-production.sh`.
    - El script verifica, construye y comprueba la API de producción y las
      cabeceras privadas de `/c/*`.
    - Guarda el id del deployment actual de producción en
@@ -116,7 +116,7 @@ Producción sigue sirviendo `frontend/`. `web/` solo está en staging.
    - Estado al 2026-09-30: producción = deployment `6caa984a` (`frontend/`, `b449f58`).
 4. **Rollback:** en el dashboard de Pages, _Rollback to this deployment_ sobre
    el deployment anterior (un clic), o `web/scripts/deploy-production.sh
-   --legacy-frontend`, que vuelve a subir `frontend/` desde `main`.
+--legacy-frontend`, que vuelve a subir `frontend/` desde `main`.
    `frontend/` no se elimina hasta que la nueva versión lleve un periodo estable
    en producción.
 
