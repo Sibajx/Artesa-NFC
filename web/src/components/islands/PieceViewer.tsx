@@ -47,9 +47,16 @@ declare module "react" {
 }
 
 let modelViewerModule: Promise<unknown> | null = null;
-// Loaded once, on demand; bundles three.js into its own lazy chunk.
+// Loaded once, on demand; bundles three.js into its own lazy chunk. The Draco
+// and KTX2 decoders (only fetched for compressed models) are served from this
+// site (scripts/copy-decoders.mjs), not www.gstatic.com: the CSP allows no
+// third-party origin.
 export function loadModelViewer(): Promise<unknown> {
-  modelViewerModule ??= import("@google/model-viewer");
+  modelViewerModule ??= import("@google/model-viewer").then((mod) => {
+    mod.ModelViewerElement.dracoDecoderLocation = "/decoders/draco/";
+    mod.ModelViewerElement.ktx2TranscoderLocation = "/decoders/basis/";
+    return mod;
+  });
   return modelViewerModule;
 }
 
