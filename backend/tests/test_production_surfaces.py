@@ -44,6 +44,11 @@ print(json.dumps({
     "route_paths": sorted({getattr(route, "path", "") for route in app.routes}),
     "docs_url": app.docs_url, "redoc_url": app.redoc_url, "openapi_url": app.openapi_url,
     "health": client.get("/health").status_code,
+    # Routed-ness by behaviour, not by walking app.routes (FastAPI >= 0.13x keeps
+    # included routers nested, with no public way to flatten them): a missing
+    # route would answer 404 to both.
+    "resolve_invalid_body": client.post("/api/v1/certificates/resolve", json={}).status_code,
+    "piece_delete": client.delete("/api/v1/pieces/any-slug").status_code,
 }))
 """ % json.dumps(DOCS_PATHS)
 
@@ -79,8 +84,8 @@ def test_production_and_staging_serve_no_docs_and_no_schema(app_env):
     assert not set(DOCS_PATHS) & set(probe["route_paths"])
     # ...and nothing else went away with them.
     assert "/health" in probe["route_paths"]
-    assert "/api/v1/certificates/resolve" in probe["route_paths"]
-    assert "/api/v1/pieces/{slug}" in probe["route_paths"]
+    assert probe["resolve_invalid_body"] == 422
+    assert probe["piece_delete"] == 405
     # 503 or 200 depending on the database; the point is that /health is still routed.
     assert probe["health"] in (200, 503)
 

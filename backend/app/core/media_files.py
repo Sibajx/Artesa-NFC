@@ -17,10 +17,11 @@ two never mix.
 
 Only a single, simple byte range reaches FileResponse (``bytes=a-b``,
 ``bytes=a-`` or ``bytes=-n``); any other Range header is dropped and the
-whole file is served (200). Starlette 0.48's FileResponse merges multiple
-ranges in quadratic time (upstream advisory, fixed in 0.49.1; issue #121),
-and nothing here needs multipart ranges -- Safari needs a single range to
-play a video.
+whole file is served (200). Starlette 0.48's FileResponse merged multiple
+ranges in quadratic time (upstream advisory, fixed in 0.49.1); the stack is
+on Starlette 1.x since issue #121, and this stays as defence in depth:
+nothing here needs multipart ranges -- Safari needs a single range to play a
+video.
 """
 from __future__ import annotations
 

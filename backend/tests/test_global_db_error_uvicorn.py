@@ -186,6 +186,7 @@ def failing_queries_run() -> ServerRun:
             ("pending", "GET", "/probe/pending-rollback", None),
             ("operational", "GET", "/probe/operational", None),
             ("runtime", "GET", "/probe/runtime", None),
+            ("teardown", "GET", "/probe/teardown-commit", None),
         ],
         env_overrides={},
     )
@@ -204,7 +205,9 @@ def test_database_failures_return_the_generic_500(failing_queries_run):
 
 
 def test_each_database_failure_writes_exactly_one_safe_event_line(failing_queries_run):
-    lines = failing_queries_run.db_error_lines()
+    # The teardown probe is checked on its own below (its line depends on the
+    # FastAPI/Starlette version).
+    lines = [m for m in failing_queries_run.db_error_lines() if m["route"] != "/probe/teardown-commit"]
     by_route = {m["route"]: m for m in lines}
 
     assert sorted(by_route) == ["/probe/integrity", "/probe/operational", "/probe/pending-rollback"]
@@ -246,6 +249,27 @@ def test_no_database_text_reaches_stdout_or_stderr(failing_queries_run):
     # No traceback was printed for any database failure: the only "Exception in
     # ASGI application" is the RuntimeError control's.
     assert output.count("Exception in ASGI application") == 1
+
+
+def test_a_database_failure_after_the_response_started_logs_one_safe_line(failing_queries_run):
+    # A commit failing in a yield-dependency teardown (issue #121). Older
+    # FastAPI still handled it inside the request (500 + the normal safe line);
+    # Starlette 1.x runs it after the response started and re-raises it to
+    # Uvicorn, where DatabaseTracebackFilter turns it into the same safe line.
+    # Either way: one line, the right constraint, and no database text
+    # (test_no_database_text_reaches_stdout_or_stderr).
+    response = failing_queries_run.responses["teardown"]
+    output = failing_queries_run.output
+    in_request = [m for m in failing_queries_run.db_error_lines() if m["route"] == "/probe/teardown-commit"]
+    after_response = re.findall(
+        r"event=db_error category=integrity sqlstate=23505 constraint=certificate_token_hash_key "
+        r"method=OTHER route=<after-response>", output)
+    if response.status_code == 500:
+        assert len(in_request) == 1 and not after_response
+        assert in_request[0]["constraint"] == "certificate_token_hash_key"
+    else:
+        assert response.status_code == 200
+        assert len(after_response) == 1 and not in_request
 
 
 def test_non_database_runtime_error_keeps_its_normal_server_traceback(failing_queries_run):
