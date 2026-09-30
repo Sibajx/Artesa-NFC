@@ -68,7 +68,8 @@ def test_tool_version_is_1_4_0():
     # 1.4.0 = D10.2: backup_remote.py (off-host copies) + artesa-backup remote-check
     # 1.5.0 = ADR-029: shared/.env admin keys (ADMIN_ACCESS_*, ADMIN_EMAILS), all or none
     # 1.6.0 = Gestión phase 4: optional MEDIA_ROOT (absolute, with originales/ and publico/)
-    assert rc.TOOL_VERSION == "1.6.0"
+    # 1.7.0 = M3: artesa-backup copies the media originals off-host (backup_media.py)
+    assert rc.TOOL_VERSION == "1.7.0"
     assert ad.target_tool_version(OPS_DIR) == rc.TOOL_VERSION
 
 

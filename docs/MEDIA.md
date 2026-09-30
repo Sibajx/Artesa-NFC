@@ -82,6 +82,9 @@ navegador ─► api.artesanfc.com/media/…  (Cloudflare, caché en el borde)
 
 ## 5. Backups **[PO]**
 
+**Implementado (M3, 2026-09-30):** `artesa-backup` copia `originales/` fuera del host, cifrado con K1+K2, de forma incremental y direccionada por contenido. El índice va dentro del bundle cifrado de la base. Ver `docs/BACKUP.md` §16; la restauración se hace con `qa/d10-offhost-drill/media_restore.py`.
+
+
 - `originales/` es **irrecuperable** (el material de campo): debe entrar en el backup fuera del host (D10.2, B2) con su propio job (`rsync`/`restic` cifrado), no en `pg_dump`.
 - `publico/` es regenerable desde `originales/` + la herramienta: backup opcional.
 - Tamaño estimado del piloto: < 2 GB.
