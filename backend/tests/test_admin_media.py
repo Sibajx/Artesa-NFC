@@ -439,3 +439,41 @@ def test_resolver_rejects_raw_traversal_shapes(media_root, relative):
     from app.core.media_files import resolve_media_path
 
     assert resolve_media_path(media_root / "publico", relative) is None
+
+
+# --- Range header (Starlette 0.48 quadratic range merge, issue #121) ------------------
+
+
+@pytest.fixture()
+def video_file(media_root) -> bytes:
+    folder = media_root / "publico/piezas/mascara"
+    folder.mkdir(parents=True)
+    data = bytes(range(256)) * 40
+    (folder / "process-01.mp4").write_bytes(data)
+    return data
+
+
+@pytest.mark.parametrize(("header", "expected"), [
+    ("bytes=0-99", slice(0, 100)),
+    ("bytes=100-", slice(100, None)),
+    ("bytes=-50", slice(-50, None)),
+])
+def test_a_single_simple_range_is_honoured(video_file, header, expected):
+    r = TestClient(app).get("/media/piezas/mascara/process-01.mp4", headers={"Range": header})
+    assert r.status_code == 206
+    assert r.content == video_file[expected]
+    assert r.headers["cache-control"] == "public, max-age=31536000, immutable"
+
+
+@pytest.mark.parametrize("header", [
+    ",".join(f"{i}-{i}" for i in range(0, 4000, 2)).join(["bytes=", ""]),
+    "bytes=0-1,5-9",
+    "bytes=0-1, 3-4",
+    "items=0-10",
+    "bytes=abc",
+    "bytes=" + "9" * 30 + "-",
+])
+def test_any_other_range_is_ignored_and_the_whole_file_served(video_file, header):
+    r = TestClient(app).get("/media/piezas/mascara/process-01.mp4", headers={"Range": header})
+    assert r.status_code == 200
+    assert r.content == video_file
