@@ -54,7 +54,11 @@ def call(asgi_app, *, method="POST", path=RESOLVE, chunks=(b"",), headers=None, 
     messages; `stream` (an iterator of byte chunks) replaces it for an
     unbounded body. Returns what was sent and how many times the server side
     asked for more body."""
-    raw_headers = {k.lower(): v for k, v in (headers or {}).items()}
+    # Every real client (frontend/, web/, qa/) sends the JSON content type the
+    # contract requires (API_CONTRACT.md §10); FastAPI >= 0.13x no longer
+    # parses a body without it (see test_a_body_without_json_content_type_is_422).
+    raw_headers = {"content-type": "application/json"}
+    raw_headers.update({k.lower(): v for k, v in (headers or {}).items()})
     if content_length == "auto":
         if stream is None:
             raw_headers.setdefault("content-length", str(sum(len(c) for c in chunks)))
@@ -212,6 +216,14 @@ def test_the_replayed_body_is_byte_identical():
 def test_a_normal_token_request_still_works():
     outcome = call(app, chunks=(json.dumps({"token": "A" * 43}).encode(),))
     assert outcome.status == 200 and outcome.json == UNAVAILABLE
+
+
+def test_a_body_without_json_content_type_is_422():
+    # Strict Content-Type: a JSON body sent as text/plain (what a cross-site
+    # <form> or a careless client would send) is not parsed as JSON.
+    outcome = call(app, chunks=(json.dumps({"token": "A" * 43}).encode(),), headers={"Content-Type": "text/plain"})
+    assert outcome.status == 422
+    assert outcome.json["error"]["code"] == "validation_error"
 
 
 def test_an_empty_body_is_left_to_normal_validation():

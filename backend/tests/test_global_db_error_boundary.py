@@ -191,9 +191,9 @@ REAL_FAILURES = [
     ("/probe/data", "data", "22P02", "-"),
     ("/probe/pending-rollback", "pending_rollback", "-", "-"),
     ("/probe/raw-driver", "driver", "23505", "dbf_raw_unique_v_key"),
-    # Dependency teardown failing after the endpoint returned (pinned FastAPI
-    # 0.115.6 still finishes the request inside ExceptionMiddleware).
-    ("/probe/teardown-commit", "integrity", "23505", "certificate_token_hash_key"),
+    # A dependency teardown failing after the endpoint returned is covered by
+    # tests/test_global_db_error_uvicorn.py: from Starlette 1.x it happens
+    # after the response started, which only a real server can observe.
 ]
 
 
@@ -612,6 +612,16 @@ _SANITIZED_ARG_HELPERS = {"_category", "_sqlstate", "_constraint", "_method", "_
 
 def test_db_errors_module_never_logs_or_echoes_an_exception():
     tree = ast.parse(Path(db_errors.__file__).read_text())
+    # The one place allowed to follow an exception chain (issue #121): it only
+    # walks __cause__/__context__ to *find* the database error, with no other
+    # call than isinstance/id/set/add, so it can never print or stringify one.
+    chain_walker = next(n for n in ast.walk(tree)
+                        if isinstance(n, ast.FunctionDef) and n.name == "_database_error_in_chain")
+    walker_nodes = {id(n) for n in ast.walk(chain_walker)}
+    for node in ast.walk(chain_walker):
+        if isinstance(node, ast.Call):
+            callee = node.func.id if isinstance(node.func, ast.Name) else getattr(node.func, "attr", None)
+            assert callee in {"isinstance", "id", "set", "add"}, callee
     logger_calls = 0
     for node in ast.walk(tree):
         if isinstance(node, (ast.Import, ast.ImportFrom)):
@@ -620,7 +630,10 @@ def test_db_errors_module_never_logs_or_echoes_an_exception():
         if isinstance(node, ast.keyword):
             assert node.arg not in {"exc_info", "stack_info", "extra"}
         if isinstance(node, ast.Attribute):
-            assert node.attr not in {"exception", "format_exc", "print_exc", "__cause__", "__context__"}
+            forbidden = {"exception", "format_exc", "print_exc"}
+            if id(node) not in walker_nodes:
+                forbidden |= {"__cause__", "__context__"}
+            assert node.attr not in forbidden, node.attr
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
             assert node.func.id not in {"str", "repr", "print", "format", "vars", "dir"}, (
                 f"line {node.lineno} stringifies something"
