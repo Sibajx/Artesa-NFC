@@ -8,3 +8,4 @@ reports/
 .env.*
 .wrangler/
 .deploy-previous-production
+public/decoders/

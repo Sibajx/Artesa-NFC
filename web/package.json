@@ -8,6 +8,8 @@
     "node": ">=22.12.0"
   },
   "scripts": {
+    "predev": "node scripts/copy-decoders.mjs",
+    "prebuild": "node scripts/copy-decoders.mjs",
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview --host 127.0.0.1 --port 4321",

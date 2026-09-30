@@ -11,6 +11,7 @@ export default defineConfig(
   {
     ignores: [
       "dist/",
+      "public/decoders/",
       ".astro/",
       "node_modules/",
       "playwright-report/",
