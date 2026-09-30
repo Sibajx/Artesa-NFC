@@ -7,3 +7,4 @@ reports/
 .env
 .env.*
 .wrangler/
+.deploy-previous-production
