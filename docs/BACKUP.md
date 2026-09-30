@@ -732,3 +732,71 @@ sudo, secretos o Cloudflare lo hace el operador.
 10. **Cierre.**
     - Revocar todo lo del host perdido: llaves SSH, conector del Tunnel, clave B2.
     - Registrar la recuperación (hora de inicio y de fin, `backup_id`, identidad usada).
+
+## 16. Originales de medios fuera del host (M3, docs/MEDIA.md §5)
+
+`media/originales/` guarda el material de campo tal como llegó y **no se puede
+volver a tomar**. `artesa-backup run` lo copia en cada ejecución, desde TOOL 1.7.0,
+si `shared/.env` tiene `MEDIA_ROOT`. Lo hace el módulo `ops/backup_media.py`.
+
+### 16.1 Qué hace `run`
+
+1. **Recorre `originales/`.** Solo toma archivos regulares; no sigue symlinks y
+   omite los nombres que empiezan con `.`. Con eso arma el índice
+   `ruta → sha256, tamaño`. El SHA-256 se guarda en caché por tamaño y mtime en
+   `state/media-hashes.json`.
+2. **Mete el índice dentro del bundle cifrado** como `media-index.json`, y el
+   manifest lleva los totales. Fuera del host no se puede leer ningún nombre de
+   archivo; el `meta.json` público no los menciona.
+3. **Sube los contenidos nuevos (con `remote.env`).** Cada contenido que todavía
+   no esté verificado se cifra con age para K1+K2 en un staging privado. Se sube
+   **una sola vez** como `<prefijo>media/originales/<sha256>.age`, se verifica
+   listándolo (tamaño y SHA-1) y el cifrado local se borra.
+   - Es incremental: un original ya subido no se vuelve a enviar, y dos archivos
+     idénticos son un solo objeto.
+   - El registro `state/offsite/media-originals.json` tiene la misma forma que el
+     de un backup, así que `remote-check` también vuelve a listar estos objetos.
+4. **Un fallo en los originales no descarta el backup de la base.** El run
+   termina con exit 31 (`MEDIA OFFSITE: FAILED`), no manda el ping al dead-man y
+   el siguiente run reintenta. `status` lo muestra y deja de estar sano.
+
+Sin `remote.env`, el índice va en el bundle, pero los originales **no** salen del
+host (`MEDIA: … NOT copied off-host`). Sin `MEDIA_ROOT`, se muestra
+`MEDIA: NOT CONFIGURED` y todo sigue igual que antes.
+
+### 16.2 Por qué bajo el prefijo de postgres
+
+La clave del servidor está restringida a `artesanfc/prod/postgres/` (§14.4, paso 4).
+Poner `media/` debajo de ese prefijo evita crear una clave nueva. Además queda
+**fuera** de las reglas de lifecycle `daily/`, `weekly/` y `monthly/`, así que
+estos objetos **no expiran**. El Object Lock (`governance`, 35 d) los protege al
+subirlos, y la clave sigue sin poder borrar.
+
+**Comprobación humana, una vez:** que ninguna regla de lifecycle del bucket tenga
+como prefijo `artesanfc/prod/postgres/` completo, ni `…/media/`:
+
+```bash
+b2 bucket get artesanfc-backups-prod   # lifecycleRules: solo …/daily/, …/weekly/, …/monthly/
+```
+
+### 16.3 Recuperar originales (máquina del operador, nunca easerver)
+
+```bash
+# 1. un backup reciente (bundle + meta) y los objetos de medios
+b2 file download b2://artesanfc-backups-prod/artesanfc/prod/postgres/daily/AAAA/MM/DD/<backup_id>/bundle.tar.age ~/m3/backup/bundle.tar.age
+b2 file download b2://artesanfc-backups-prod/artesanfc/prod/postgres/daily/AAAA/MM/DD/<backup_id>/meta.json ~/m3/backup/meta.json
+b2 sync b2://artesanfc-backups-prod/artesanfc/prod/postgres/media/originales/ ~/m3/objects/
+# 2. descifrar y verificar (pide la passphrase de K1 una vez)
+python3 qa/d10-offhost-drill/media_restore.py ~/m3/backup ~/artesa-keys/artesa-backup-K1.key.age ~/m3/objects ~/m3/originales
+```
+
+El script lee `media-index.json` del bundle y descifra cada `<sha256>.age` en su
+ruta. Después comprueba el SHA-256 contra el índice; un objeto que falte o no
+coincida hace fallar el run (exit 1). Con `--sample N` recupera solo N archivos:
+es el simulacro periódico. La identidad se descifra una sola vez en un
+directorio temporal 0700, y el script lo borra al salir.
+
+Para devolver los originales al servidor, copiar `~/m3/originales/` a
+`MEDIA_ROOT/originales/` sin sobrescribir nada (`rsync --ignore-existing`).
+`publico/` se puede regenerar volviendo a subir en Gestión, o copiarlo aparte.
+

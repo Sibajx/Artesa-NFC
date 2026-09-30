@@ -53,6 +53,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import backup_media as bm  # noqa: E402
 import backup_remote as br  # noqa: E402
 import deploy_db as ddb  # noqa: E402
 import deploy_layout as dl  # noqa: E402
@@ -75,7 +76,7 @@ _BACKUP_ID_RE = re.compile(r"\d{8}T\d{6}Z-(?:[0-9a-f]{12}|nocommit)")
 _X25519_STANZA = re.compile(rb"^-> X25519 [A-Za-z0-9+/]{43}$")
 ALLOWED_LOG_KEYS = frozenset({"ts", "run_id", "event", "backup_id", "result", "exit_code", "detail", "tool_version",
                               "encrypted_sha256", "encrypted_size", "release_id", "git_sha", "alembic", "removed",
-                              "provider", "objects", "uploaded"})
+                              "provider", "objects", "uploaded", "files", "reused"})
 
 
 # --- layout -----------------------------------------------------------------------------------
@@ -337,6 +338,7 @@ class Tool:
                 raise rc.OpsError(rc.Exit.PREFLIGHT, "there is no current release to run the database probe with")
             release = self._release(current)
             commit = release["git"]["commit"] if release else None
+            originals_dir, originals, media_error = self._scan_media(env)
             db = ddb.read_db_state(self.ctx.runner, self.layout.release_dir(current), rp.child_env(env.values))
             backup_id = f"{self.ctx.clock().strftime('%Y%m%dT%H%M%SZ')}-{commit[:12] if commit else 'nocommit'}"
             if (self.blayout.encrypted / backup_id).exists():
@@ -344,12 +346,14 @@ class Tool:
             staging = self.blayout.staging / f"{backup_id}.tmp-{os.getpid()}"
             os.mkdir(staging, 0o700)
             self.log().event("run_start", backup_id=backup_id, release_id=current, git_sha=(commit or "")[:12] or None, alembic=db.revision)
-            result = self._pipeline(backup_id, staging, env, db, current, commit, release, recipients)
+            media_index = bm.index_document(originals, rc.utc_iso(self.ctx.clock())) if originals_dir is not None else None
+            result = self._pipeline(backup_id, staging, env, db, current, commit, release, recipients, media_index)
             staging = None
             state.update({"last_result": "success", "last_success_at": rc.utc_iso(self.ctx.clock()), "last_backup_id": backup_id,
                           "last_encrypted_sha256": result["encrypted_sha256"], "last_restore_check": result["restore_check"],
                           "consecutive_failures": 0, "last_error": None})
             offsite_ok = self._offsite(state, remote_cfg, remote_error)
+            media_ok = self._offsite_media(state, remote_cfg, remote_error, originals_dir, originals, media_error, recipients)
             state["retention_warning"] = None
             try:
                 # with off-host copies configured (even if misconfigured), a backup without a verified remote copy is kept
@@ -366,13 +370,17 @@ class Tool:
                              encrypted_sha256=result["encrypted_sha256"], encrypted_size=result["encrypted_size"])
             self.ctx.say(f"BACKUP OK {backup_id}: encrypted to K1+K2 ({result['encrypted_size']} bytes, sha256 {result['encrypted_sha256'][:16]}...), "
                          f"restore-check PASS, no plaintext left")
+            self._say_media(state["media"])
             if remote_cfg is None and remote_error is None:
                 self.ctx.say("OFFSITE: NOT CONFIGURED -- D10: INCOMPLETE (off-host copies are phase D10.2)")
-                return 0
+                return 0 if media_ok else int(rc.Exit.BACKUP)
             if not offsite_ok:
                 self.ctx.say(f"OFFSITE: FAILED -- the local encrypted backup {backup_id} is kept; the upload is retried on the next run. D10: INCOMPLETE")
                 return int(rc.Exit.BACKUP)
             self.ctx.say(f"OFFSITE: VERIFIED ({state['offsite']['provider']}, bucket {state['offsite']['bucket']}) -- D10: INCOMPLETE (recovery drills: D10.3)")
+            if not media_ok:
+                self.ctx.say("MEDIA OFFSITE: FAILED -- the database backup is fine; the originals are retried on the next run")
+                return int(rc.Exit.BACKUP)
             if remote_cfg is not None and remote_cfg.deadman_url:
                 pinged = br.ping_deadman(remote_cfg.deadman_url, transport=self.ctx.http, rehearsal=self.ctx.rehearsal)
                 state["offsite"]["deadman_last_ping"] = {"at": rc.utc_iso(self.ctx.clock()), "ok": pinged}
@@ -450,6 +458,101 @@ class Tool:
             self.ctx.say(f"OFFSITE FAILED: {text}")
             return False
 
+    # -- media originals (M3, backup_media.py) ------------------------------------------------------------------
+
+    def _scan_media(self, env: rp.EnvFile) -> tuple[Path | None, list[bm.Original], str | None]:
+        """(originales dir, its files, problem). No MEDIA_ROOT: (None, [], None).
+        A problem never stops the database backup; it fails the media step."""
+        root = env.values.get("MEDIA_ROOT", "").strip()
+        if not root:
+            return None, [], None
+        originals = Path(root) / "originales"
+        if not os.path.isabs(root) or not originals.is_dir() or originals.is_symlink():
+            return originals, [], "MEDIA_ROOT/originales is not a directory"
+        cache_path = self.blayout.state_dir / bm.HASH_CACHE_NAME
+        try:
+            cache = json.loads(cache_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            cache = {}
+        if not isinstance(cache, dict):
+            cache = {}
+        try:
+            found = bm.scan(originals, cache)
+        except OSError as exc:
+            return originals, [], f"cannot read the originals ({type(exc).__name__})"
+        _write_json_atomic(cache_path, cache)
+        return originals, found, None
+
+    def _offsite_media(self, state: dict, cfg: br.RemoteConfig | None, error: rc.OpsError | None, originals_dir: Path | None,
+                       originals: list[bm.Original], problem: str | None, recipients: list[str]) -> bool:
+        totals = {"files": len(originals), "bytes": sum(o.size for o in originals), "contents": len({o.sha256 for o in originals})}
+        if originals_dir is None:
+            state["media"] = {"status": "not-configured"}
+            return True
+        previous = state.get("media") if isinstance(state.get("media"), dict) else {}
+        info = {**totals, "last_verified_at": previous.get("last_verified_at")}
+        if problem is not None:
+            info.update({"status": "failed", "last_error": {"code": int(rc.Exit.BACKUP), "message": problem}})
+            state["media"] = info
+            self._safe_event("media_failed", result="failure", exit_code=int(rc.Exit.BACKUP), detail=problem)
+            return False
+        if cfg is None and error is None:
+            info.update({"status": "local-only", "last_error": None})
+            state["media"] = info
+            return True
+        record_path = self.blayout.offsite_dir / bm.RECORD_NAME
+        staging = self.blayout.staging / f"media.tmp-{os.getpid()}"
+        try:
+            if error is not None:
+                raise error
+            store = (self.ctx.remote_store or br.make_store)(cfg)
+            store.authorize()
+            self.blayout.offsite_dir.mkdir(mode=0o700, exist_ok=True)
+            os.mkdir(staging, 0o700)
+
+            def encrypt(source: Path, target: Path) -> None:
+                result = self.ctx.runner.run([self.ctx.age, "--encrypt", "-r", recipients[0], "-r", recipients[1], "-o", str(target), str(source)],
+                                             env=_tool_env(), timeout=AGE_TIMEOUT)
+                if result.returncode != 0:
+                    raise rc.OpsError(rc.Exit.BACKUP, f"age encryption of an original failed (exit {result.returncode})")
+                os.chmod(target, 0o600)
+                problems = age_header_problems(target, expected_recipients=2)
+                if problems:
+                    raise rc.OpsError(rc.Exit.BACKUP, "an encrypted original is not valid: " + "; ".join(problems))
+
+            summary = bm.upload_missing(store, originals, originals_dir, bm.read_record(record_path), encrypt=encrypt,
+                                        digests=br._digests, staging=staging, save=lambda r: _write_json_atomic(record_path, r),
+                                        now=lambda: rc.utc_iso(self.ctx.clock()))
+            info.update({"status": "verified", "last_verified_at": rc.utc_iso(self.ctx.clock()), "uploaded_last_run": summary["uploaded"],
+                         "consecutive_failures": 0, "last_error": None})
+            state["media"] = info
+            self._safe_event("media_ok", result="verified", files=totals["files"], uploaded=summary["uploaded"], reused=summary["reused"])
+            return True
+        except (rc.OpsError, OSError, ValueError, KeyError) as exc:
+            text = self.ctx.guard.scrub(getattr(exc, "message", None) or f"{type(exc).__name__}")[:300]
+            info.update({"status": "failed", "consecutive_failures": int(previous.get("consecutive_failures") or 0) + 1,
+                         "last_error": {"code": int(getattr(exc, "code", rc.Exit.BACKUP)), "message": text}})
+            state["media"] = info
+            self._safe_event("media_failed", result="failure", exit_code=int(rc.Exit.BACKUP), detail=text[:200])
+            return False
+        finally:
+            if staging.exists():
+                _remove_tree(staging)
+
+    def _say_media(self, media: dict) -> None:
+        status = media.get("status")
+        if status == "not-configured":
+            self.ctx.say("MEDIA: NOT CONFIGURED (no MEDIA_ROOT in shared/.env)")
+            return
+        size = f"{media.get('files', 0)} original(s), {media.get('bytes', 0)} bytes"
+        if status == "verified":
+            self.ctx.say(f"MEDIA: {size}; every original VERIFIED off-host ({media.get('uploaded_last_run', 0)} uploaded this run); "
+                         "index inside the encrypted bundle")
+        elif status == "local-only":
+            self.ctx.say(f"MEDIA: {size}; indexed in the encrypted bundle, NOT copied off-host (no remote.env)")
+        else:
+            self.ctx.say(f"MEDIA: FAILED ({(media.get('last_error') or {}).get('message', '?')}); {size}")
+
     def _offsite_verified(self, backup_id: str) -> bool:
         try:
             record = json.loads(self.blayout.offsite_record(backup_id).read_text(encoding="utf-8"))
@@ -491,7 +594,7 @@ class Tool:
             return None
 
     def _pipeline(self, backup_id: str, staging: Path, env: rp.EnvFile, db: ddb.DbState, current: str, commit: str | None,
-                  release: dict | None, recipients: list[str]) -> dict:
+                  release: dict | None, recipients: list[str], media_index: dict | None = None) -> dict:
         dump = staging / "database.dump"
         digest, dump_text = self._dump_under_deploy_lock(env, db, dump)
         size = os.stat(dump).st_size
@@ -518,7 +621,11 @@ class Tool:
             "restore_check": restore,
             "encryption": {"algorithm": "age", "recipient_type": "X25519", "recipients": recipients},
             "remote": dict(self._remote_meta),
+            "media": ({"index": bm.INDEX_NAME, **media_index["totals"]} if media_index is not None
+                      else {"status": "not-configured (no MEDIA_ROOT)"}),
         }
+        if media_index is not None:
+            _write_private(staging / bm.INDEX_NAME, json.dumps(media_index, indent=2, sort_keys=True) + "\n")
         _write_private(staging / "manifest.json", json.dumps(manifest, indent=2, sort_keys=True) + "\n")
         bundle = staging / "bundle.tar"
         self._make_bundle(bundle, staging, current)
@@ -588,6 +695,8 @@ class Tool:
         manifest and recovery metadata (RELEASE.json of the active release,
         bin/TOOL.json, the deploy log). No secrets: never shared/.env."""
         members = [(staging / "database.dump", "database.dump"), (staging / "manifest.json", "manifest.json")]
+        if (staging / bm.INDEX_NAME).is_file():
+            members.append((staging / bm.INDEX_NAME, bm.INDEX_NAME))
         for source, name in ((self.layout.release_dir(current) / "RELEASE.json", "recovery/RELEASE.json"),
                              (self.layout.bin / "TOOL.json", "recovery/TOOL.json"),
                              (self.layout.deploy_log, "recovery/deploy-log.jsonl")):
@@ -746,7 +855,11 @@ class Tool:
                 if report["offsite_stale"]:
                     self.ctx.say(f"OFFSITE STALE: no verified off-host copy in the last {STALE_AFTER_HOURS} h")
                 self.ctx.say("D10: INCOMPLETE (recovery drills: D10.3)")
-        healthy = not report["stale"] and not report.get("consecutive_failures") and not report["offsite_stale"]
+        media = report.get("media") if isinstance(report.get("media"), dict) else {"status": "not-configured"}
+        if media.get("status") not in (None, "not-configured"):
+            self._say_media(media)
+        healthy = (not report["stale"] and not report.get("consecutive_failures") and not report["offsite_stale"]
+                   and media.get("status") != "failed")
         return 0 if healthy else int(rc.Exit.PREFLIGHT)
 
     def cmd_remote_check(self, ping_deadman: bool) -> int:
