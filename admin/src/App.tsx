@@ -9,6 +9,7 @@ import ArtesanoDetalle from './pages/ArtesanoDetalle';
 import Piezas from './pages/Piezas';
 import PiezaDetalle from './pages/PiezaDetalle';
 import Auditoria from './pages/Auditoria';
+import Apartado from './pages/Apartado';
 import ArtesanoForm from './pages/ArtesanoForm';
 import PiezaForm from './pages/PiezaForm';
 
@@ -33,6 +34,21 @@ const icons: Record<string, ReactElement> = {
       <polyline points="2 12 12 17 22 12"/>
     </svg>
   ),
+  Archivados: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="2" y="3" width="20" height="5" rx="1"/>
+      <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/>
+      <line x1="10" y1="12" x2="14" y2="12"/>
+    </svg>
+  ),
+  Papelera: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="3 6 5 6 21 6"/>
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+      <path d="M10 11v6"/><path d="M14 11v6"/>
+      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+    </svg>
+  ),
   Auditoría: (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -47,6 +63,8 @@ const menuItems = [
   { name: 'Resumen', path: '/resumen' },
   { name: 'Artesanos', path: '/artesanos' },
   { name: 'Piezas', path: '/piezas' },
+  { name: 'Archivados', path: '/archivados' },
+  { name: 'Papelera', path: '/papelera' },
   { name: 'Auditoría', path: '/auditoria' },
 ];
 
@@ -140,6 +158,8 @@ export default function App() {
           <Route path="/piezas/:id/editar" element={<PiezaForm />} />
           <Route path="/piezas/:id" element={<PiezaDetalle />} />
           <Route path="/piezas" element={<Piezas />} />
+          <Route path="/archivados" element={<Apartado key="archivados" mode="archivados" />} />
+          <Route path="/papelera" element={<Apartado key="papelera" mode="papelera" />} />
           <Route path="/auditoria" element={<Auditoria />} />
           <Route path="*" element={<Navigate to="/resumen" replace />} />
         </Routes>

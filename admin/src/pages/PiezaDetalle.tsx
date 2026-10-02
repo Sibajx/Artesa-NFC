@@ -26,7 +26,7 @@ export default function PiezaDetalle() {
         const p = state.data;
         return (
           <div className="flex flex-col gap-8">
-            <RecordActions kind="pieces" id={p.id} version={p.updated_at} status={p.publication_status} availability={p.availability_status} onChanged={() => setRevision((r) => r + 1)} />
+            <RecordActions kind="pieces" id={p.id} version={p.updated_at} status={p.publication_status} trashedAt={p.trashed_at} purgeBlocker={p.purge_blocker} availability={p.availability_status} onChanged={() => setRevision((r) => r + 1)} />
             <PublishChecklist kind="pieces" record={p} />
             <article className="bg-white rounded-xl border border-botanica-gris/15 overflow-hidden shadow-sm">
               <header className="bg-[#FCFBF9] border-b border-botanica-gris/15 p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">

@@ -27,7 +27,7 @@ export default function ArtesanoDetalle() {
         const place = [a.locality, a.municipality, a.state, a.country].filter(Boolean).join(', ');
         return (
           <div className="flex flex-col gap-8">
-            <RecordActions kind="artisans" id={a.id} version={a.updated_at} status={a.publication_status} onChanged={() => setRevision((r) => r + 1)} />
+            <RecordActions kind="artisans" id={a.id} version={a.updated_at} status={a.publication_status} trashedAt={a.trashed_at} purgeBlocker={a.purge_blocker} onChanged={() => setRevision((r) => r + 1)} />
             <PublishChecklist kind="artisans" record={a} />
             <article className="bg-white rounded-xl border border-botanica-gris/15 overflow-hidden shadow-sm">
               <header className="bg-[#FCFBF9] border-b border-botanica-gris/15 p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">

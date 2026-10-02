@@ -557,3 +557,15 @@ def test_role_can_change_within_the_owner_roles_and_file_type(client, db_session
     changes = db_session.execute(select(AuditEvent.event_metadata).where(
         AuditEvent.entity_id == uuid.UUID(asset["id"]), AuditEvent.action == "media.updated")).scalar_one()
     assert changes == {"changes": {"role": {"from": "gallery", "to": "hero"}}}
+
+
+def test_list_cover_falls_back_to_the_first_photo_and_prefers_hero(client, media_root, piece):
+    upload(client, "pieces", piece, jpeg(size=(10, 10)), "gallery")
+    artisan = client.get(f"/api/admin/v1/artisans/{piece['artisan']['id']}", headers=auth(make_token())).json()
+    act(client, "artisans", artisan, "publish")
+    act(client, "pieces", piece, "publish")
+    cover = lambda: next(p for p in TestClient(app).get("/api/v1/pieces").json()["data"]  # noqa: E731
+                         if p["slug"] == "mascara-de-tigre")["cover_media"]
+    assert cover()["url"] == "/media/piezas/mascara-de-tigre/gallery-01.jpg"
+    upload(client, "pieces", piece, jpeg(size=(10, 10)), "hero")
+    assert cover()["url"] == "/media/piezas/mascara-de-tigre/hero-01.jpg"

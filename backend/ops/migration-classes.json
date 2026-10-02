@@ -20,6 +20,10 @@
     "904d7f9d6509": {
       "class": "additive",
       "note": "Creates the append-only audit_event table (enum types, indexes, UPDATE/DELETE/TRUNCATE-rejecting triggers); no existing object changes. Older code never reads or writes it."
+    },
+    "a7c3e91d2b40": {
+      "class": "additive",
+      "note": "Adds nullable artisan.trashed_at and piece.trashed_at (Gestión papelera). Older code never reads or writes them; a trashed record is never published, so older code serves the same public data."
     }
   }
 }

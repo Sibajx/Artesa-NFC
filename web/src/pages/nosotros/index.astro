@@ -1,0 +1,97 @@
+---
+// /nosotros — "Colectivo": mission, the people behind the project as
+// contact cards with a chip, and the company's channels.
+import "@/styles/pages.css";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import Greca from "@/components/home/Greca.astro";
+import Channels from "@/components/about/Channels.astro";
+import { aboutCopy } from "@/content/site";
+const { hero, mission, team, company } = aboutCopy;
+const anyProvisional = team.members.some((m) => m.provisional);
+---
+
+<BaseLayout
+  title="Nosotros"
+  description="El equipo de ArtesaNFC: quiénes somos, nuestra misión y cómo contactarnos."
+  canonicalPath="/nosotros/"
+  headerTone="dark"
+>
+  <section class="night-hero on-dark" aria-labelledby="about-title" data-header-dark-zone>
+    <div class="night-hero__grid" aria-hidden="true"></div>
+    <div class="container night-hero__inner rise">
+      <p class="hud-label">{hero.eyebrow}</p>
+      <h1 id="about-title" class="display-l night-hero__title">
+        {hero.title}
+      </h1>
+      <p class="lead">{hero.lead}</p>
+    </div>
+    <Greca />
+  </section>
+
+  <section class="section container" aria-labelledby="mission-title">
+    <div class="mission">
+      <div data-reveal>
+        <p class="eyebrow">{mission.eyebrow}</p>
+        <h2 id="mission-title" class="display-l">
+          {mission.title}
+        </h2>
+      </div>
+      <div data-reveal>
+        <p class="lead">{mission.body}</p>
+      </div>
+    </div>
+    <ul class="mission__values" role="list">
+      {mission.values.map((v) => (
+        <li data-reveal>
+          <strong>{v.term}</strong>
+          <span class="muted">{v.description}</span>
+        </li>
+      ))}
+    </ul>
+  </section>
+
+  <section class="section quote-section" aria-labelledby="team-title">
+    <div class="container">
+      <p class="eyebrow">{team.eyebrow}</p>
+      <h2 id="team-title" class="heading-1">
+        {team.title}
+      </h2>
+      {anyProvisional && (
+        <p class="placeholder-note" data-provisional="team">
+          Datos del equipo provisionales
+        </p>
+      )}
+      <ul class="crew" role="list">
+        {team.members.map((m) => (
+          <li>
+            <article class="crew-card" aria-label={m.name}>
+              <span class="crew-card__chip" aria-hidden="true"></span>
+              <div class="crew-card__top">
+                <div class="crew-card__avatar" aria-hidden={m.photo ? undefined : "true"}>
+                  {m.photo ? <img src={m.photo} alt={`Retrato de ${m.name}`} /> : m.initials}
+                </div>
+                <div>
+                  <h3 class="crew-card__name">{m.name}</h3>
+                  <p class="crew-card__role">{m.role}</p>
+                </div>
+              </div>
+              <p class="crew-card__bio">{m.bio}</p>
+              <Channels channels={m.channels} owner={m.name} />
+            </article>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+
+  <section id="contacto" class="section container" aria-labelledby="channels-title">
+    <div class="channels on-dark">
+      <p class="hud-label">{company.eyebrow}</p>
+      <h2 id="channels-title" class="display-l">
+        {company.title}
+      </h2>
+      <p class="lead">{company.body}</p>
+      <Channels channels={company.channels} owner="ArtesaNFC" />
+    </div>
+  </section>
+</BaseLayout>

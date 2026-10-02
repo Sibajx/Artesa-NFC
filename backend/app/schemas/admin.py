@@ -31,6 +31,7 @@ class AdminArtisanSummary(BaseModel):
     publication_status: str
     piece_count: int
     updated_at: datetime
+    trashed_at: datetime | None = None
 
 
 class AdminPieceSummary(BaseModel):
@@ -43,6 +44,7 @@ class AdminPieceSummary(BaseModel):
     publication_status: str
     availability_status: str
     updated_at: datetime
+    trashed_at: datetime | None = None
 
 
 class AdminMedia(BaseModel):
@@ -76,6 +78,10 @@ class AdminArtisanDetail(BaseModel):
     updated_at: datetime
     media: list[AdminMedia]
     pieces: list[AdminPieceSummary]
+    # Papelera: when set, the record is in the trash. `purge_blocker` is None
+    # when it can be deleted for good, else the reason code (services/trash.py).
+    trashed_at: datetime | None = None
+    purge_blocker: str | None = None
 
 
 class AdminArtisanRef(BaseModel):
@@ -83,6 +89,7 @@ class AdminArtisanRef(BaseModel):
     slug: str
     full_name: str
     publication_status: str
+    trashed_at: datetime | None = None
 
 
 class AdminCertificate(BaseModel):
@@ -131,6 +138,10 @@ class AdminPieceDetail(BaseModel):
     certificates: list[AdminCertificate]
     # Newest first; at most one is programmed/locked (restriction B).
     nfc_tags: list[AdminNfcTag]
+    # Papelera: when set, the record is in the trash. `purge_blocker` is None
+    # when it can be deleted for good, else the reason code (services/trash.py).
+    trashed_at: datetime | None = None
+    purge_blocker: str | None = None
 
 
 class AdminAuditEvent(BaseModel):

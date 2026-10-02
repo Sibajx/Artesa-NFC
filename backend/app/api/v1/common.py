@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models.artisan import Artisan
 from app.models.enums import PublicationStatus
-from app.models.media_asset import MediaAsset, MediaAssetStatus, MediaRole
+from app.models.media_asset import MediaAsset, MediaAssetStatus, MediaRole, MediaType
 from app.models.piece import Piece
 from app.schemas.artisan import ArtisanPieceSummary
 from app.schemas.media import MediaAssetPublic, media_asset_to_public
@@ -81,7 +81,7 @@ def fetch_piece_summaries(db: Session, pieces: Sequence[Piece]) -> list[ArtisanP
                 select(MediaAsset)
                 .where(
                     MediaAsset.piece_id.in_([p.id for p in pieces]),
-                    MediaAsset.role == MediaRole.hero,
+                    MediaAsset.media_type == MediaType.image,
                     MediaAsset.status == MediaAssetStatus.active,
                 )
                 .order_by(*media_order_by())
@@ -89,8 +89,13 @@ def fetch_piece_summaries(db: Session, pieces: Sequence[Piece]) -> list[ArtisanP
             .scalars()
             .all()
         )
+        # The cover is the first active "hero" photo; a piece without one
+        # falls back to its first active photo (2026-10: pieces uploaded only
+        # with gallery photos showed no image in the lists).
         for media in cover_media_rows:
-            cover_by_piece_id.setdefault(media.piece_id, media)
+            current = cover_by_piece_id.get(media.piece_id)
+            if current is None or (media.role == MediaRole.hero and current.role != MediaRole.hero):
+                cover_by_piece_id[media.piece_id] = media
 
     return [
         ArtisanPieceSummary(

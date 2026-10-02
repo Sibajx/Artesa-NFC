@@ -11,9 +11,9 @@ const path = Astro.url.pathname;
 const links = [
   { href: "/piezas/", label: "Piezas" },
   { href: "/artesanos/", label: "Artesanos" },
-  { href: "/#contacto", label: "Contacto" },
+  { href: "/nosotros/", label: "Nosotros" },
 ];
-const isCurrent = (href: string) => href !== "/#contacto" && path.startsWith(href);
+const isCurrent = (href: string) => path.startsWith(href);
 ---
 
 <header class="site-header" data-tone={tone} data-initial-tone={tone} data-hidden="false">

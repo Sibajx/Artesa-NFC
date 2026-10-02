@@ -58,6 +58,10 @@ class Piece(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
+    # Gestión trash (2026-10): set while the record is in the Papelera. Only
+    # draft or archived records go there; publishing or editing is refused
+    # until it is restored, and only never-public records can be purged.
+    trashed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     artisan: Mapped["Artisan"] = relationship(back_populates="pieces")
     media_assets: Mapped[list["MediaAsset"]] = relationship(back_populates="piece")
