@@ -53,7 +53,7 @@ type Props = { kind: 'artisans'; record: ArtisanDetail } | { kind: 'pieces'; rec
 
 export function PublishChecklist(props: Props) {
   const { kind, record } = props;
-  if (record.publication_status === 'archived') return null;
+  if (record.publication_status === 'archived' || record.trashed_at) return null;
   const visible = kind === 'artisans' ? record.publication_status === 'published' : props.record.publicly_visible;
   const checks = kind === 'artisans' ? artisanChecks(props.record) : pieceChecks(props.record);
   const missing = checks.filter((c) => !c.ok);

@@ -7,8 +7,10 @@ Every write:
   ``expected_updated_at`` (sent by the UI as If-Match) with the stored value,
   so a change made from a stale screen is refused instead of overwriting
   someone else's edit;
-- never deletes: "archive" is a publication state, and archived records can
-  be restored to draft;
+- never deletes here: "archive" is a publication state, and archived
+  records can be restored to draft. The Papelera (services/trash.py) is
+  separate: a trashed record refuses every write in this module until it
+  is restored, and only never-public records can be purged from it;
 - never touches certificates or NFC tags (ADR-026: CLI only).
 
 Errors never carry database text (docs/SECURITY.md section 13): unique
@@ -157,10 +159,13 @@ def _flush(db: Session) -> None:
         raise
 
 
-def _locked(db: Session, model: type, entity_id: uuid.UUID, expected_updated_at: datetime, kind: str):
+def _locked(db: Session, model: type, entity_id: uuid.UUID, expected_updated_at: datetime, kind: str,
+            *, allow_trashed: bool = False):
     row = db.execute(select(model).where(model.id == entity_id).with_for_update()).scalar_one_or_none()
     if row is None:
         raise ContentNotFound("not_found", "The requested resource does not exist.")
+    if not allow_trashed and getattr(row, "trashed_at", None) is not None:
+        raise ContentConflict("trashed", f"This {kind} is in the trash. Restore it first.")
     if row.updated_at != expected_updated_at:
         raise StaleWrite(
             "stale",
@@ -268,6 +273,8 @@ def _require_artisan(db: Session, artisan_id: uuid.UUID) -> Artisan:
         raise ContentConflict("unknown_artisan", "The artisan does not exist.", "artisan_id")
     if artisan.publication_status == PublicationStatus.archived:
         raise ContentConflict("archived_artisan", "Pieces cannot be assigned to an archived artisan.", "artisan_id")
+    if artisan.trashed_at is not None:
+        raise ContentConflict("trashed_artisan", "Pieces cannot be assigned to an artisan in the trash.", "artisan_id")
     return artisan
 
 

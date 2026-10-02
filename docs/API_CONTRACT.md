@@ -126,8 +126,9 @@ Reglas de mapeo desde `DATA_MODEL.md` §2.1:
   necesario para enlazar y previsualizar (ADR-003: relación
   bidireccional). Es `[]` si el artesano no tiene piezas publicadas.
 - `cover_media` dentro de cada resumen de `pieces` es un objeto
-  `MEDIA_ASSET` público (sección 6) con `role = hero`, o `null` si la
-  pieza no tiene uno.
+  `MEDIA_ASSET` público (sección 6): la primera foto activa con
+  `role = hero`; si no hay, la primera foto activa de la pieza en su orden
+  (2026-10); `null` si la pieza no tiene fotos.
 
 Campos que **no** se exponen (ver también sección 11):
 

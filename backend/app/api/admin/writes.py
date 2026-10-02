@@ -17,7 +17,7 @@ import uuid
 from datetime import datetime
 from urllib.parse import urlsplit
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
 from app.api.admin import router as reads
@@ -33,7 +33,10 @@ from app.schemas.admin_write import (
     TransitionBody,
     provided,
 )
-from app.services import content
+from pathlib import Path
+
+from app.core.config import get_settings
+from app.services import content, trash
 from app.services.content import Actor, ContentError
 
 ADMIN_WRITE_HEADER = "X-Artesa-Admin"
@@ -95,6 +98,50 @@ router = APIRouter(
 
 _ARTISAN_NEVER_NULL = ("full_name", "slug", "languages_public")
 _PIECE_NEVER_NULL = ("name", "slug", "public_code", "artisan_id")
+
+
+# --- Papelera (services/trash.py) -------------------------------------------------------
+# Declared before the generic /{action} transitions so these paths win.
+
+
+def _media_root_or_none() -> Path | None:
+    settings = get_settings()
+    return Path(settings.media_root) if settings.media_enabled else None
+
+
+def _trash_routes(kind: str, plural: str, read, model):
+    @router.post(f"/{plural}/{{entity_id}}/trash", response_model=model,
+                 name=f"trash_{kind}")
+    def trash_entity(entity_id: uuid.UUID, body: TransitionBody, expected: datetime = Depends(expected_version),
+                     who: Actor = Depends(actor), db: Session = Depends(get_db)):
+        try:
+            trash.trash(db, who, kind, entity_id, expected)
+        except ContentError as exc:
+            raise _fail(exc) from None
+        return read(entity_id, db)
+
+    @router.post(f"/{plural}/{{entity_id}}/untrash", response_model=model,
+                 name=f"untrash_{kind}")
+    def untrash_entity(entity_id: uuid.UUID, body: TransitionBody, expected: datetime = Depends(expected_version),
+                       who: Actor = Depends(actor), db: Session = Depends(get_db)):
+        try:
+            trash.untrash(db, who, kind, entity_id, expected)
+        except ContentError as exc:
+            raise _fail(exc) from None
+        return read(entity_id, db)
+
+    @router.post(f"/{plural}/{{entity_id}}/purge", status_code=204, name=f"purge_{kind}")
+    def purge_entity(entity_id: uuid.UUID, body: TransitionBody, expected: datetime = Depends(expected_version),
+                     who: Actor = Depends(actor), db: Session = Depends(get_db)) -> Response:
+        try:
+            trash.purge(db, who, _media_root_or_none(), kind, entity_id, expected)
+        except ContentError as exc:
+            raise _fail(exc) from None
+        return Response(status_code=204)
+
+
+_trash_routes("artisan", "artisans", reads.get_artisan, AdminArtisanDetail)
+_trash_routes("piece", "pieces", reads.get_piece, AdminPieceDetail)
 
 
 @router.post("/artisans", status_code=201, response_model=AdminArtisanDetail)

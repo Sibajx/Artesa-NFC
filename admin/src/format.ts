@@ -47,6 +47,14 @@ const ROLE_LABELS: Record<string, string> = {
   model_3d: 'Modelo 3D',
 };
 
+// Why a trashed record cannot be deleted for good (services/trash.py codes).
+export const PURGE_BLOCKERS: Record<string, string> = {
+  may_have_been_public: 'Ya estuvo publicado: puede quedarse en la papelera, pero no eliminarse definitivamente.',
+  has_certificate: 'Tiene un certificado emitido (CLI): no se puede eliminar.',
+  has_nfc_tag: 'Tiene una etiqueta NFC asignada (CLI): no se puede eliminar.',
+  has_pieces: 'Tiene piezas: elimínalas primero desde la papelera.',
+};
+
 export const labels = {
   role: (s: string) => ROLE_LABELS[s] ?? s,
   publication: (s: PublicationStatus) => PUBLICATION_LABELS[s] ?? s,
@@ -83,7 +91,14 @@ const CONFLICT_TEXT: Record<string, string> = {
   video_has_location: 'El video guarda la ubicación GPS. Expórtalo de nuevo sin ubicación.',
   invalid_video: 'El video está dañado o no es un MP4 válido.',
   invalid_model: 'El modelo 3D no es un archivo GLB (glTF 2.0) válido.',
-  may_have_been_public: 'Este medio ya pudo verse en el sitio, así que no se puede eliminar: archívalo para ocultarlo.',
+  trashed: 'Está en la papelera. Restáuralo primero.',
+  trashed_artisan: 'Su artesano está en la papelera. Restáuralo primero.',
+  published: 'Está publicado: pásalo a borrador antes de enviarlo a la papelera.',
+  has_pieces: 'Primero envía a la papelera (o elimina) las piezas de este artesano.',
+  has_certificate: 'La pieza tiene un certificado (se gestiona con la CLI); no se puede eliminar.',
+  has_nfc_tag: 'La pieza tiene una etiqueta NFC (se gestiona con la CLI); no se puede eliminar.',
+  not_trashed: 'Primero envíalo a la papelera.',
+  may_have_been_public: 'Ya pudo verse en el sitio, así que no se puede eliminar definitivamente: archívalo o déjalo en la papelera.',
 };
 
 const DUPLICATE_TEXT: Record<string, string> = {
