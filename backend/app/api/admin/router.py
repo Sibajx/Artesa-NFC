@@ -39,6 +39,7 @@ from app.schemas.admin import (
 from app.schemas.common import ListEnvelope, ListMeta
 from app.schemas.media import media_asset_to_public
 from app.services import media as media_service
+from app.services import trash as trash_service
 
 router = APIRouter(prefix="/api/admin/v1", tags=["admin"], dependencies=[Depends(require_admin)])
 
@@ -78,6 +79,7 @@ def _piece_summaries(db: Session, pieces: list[Piece]) -> list[AdminPieceSummary
             publication_status=p.publication_status.value,
             availability_status=p.availability_status.value,
             updated_at=p.updated_at,
+            trashed_at=p.trashed_at,
         )
         for p in pieces
     ]
@@ -92,9 +94,12 @@ def me(identity: AdminIdentity = Depends(require_admin)) -> AdminMe:
 def list_artisans(
     publication_status: PublicationStatus | None = None,
     q: str | None = Query(default=None, max_length=_MAX_QUERY_LENGTH),
+    trashed: bool = False,
     db: Session = Depends(get_db),
 ) -> ListEnvelope[AdminArtisanSummary]:
-    stmt = select(Artisan)
+    # The Papelera is its own list: ?trashed=true shows only trashed records,
+    # every other list leaves them out.
+    stmt = select(Artisan).where(Artisan.trashed_at.is_not(None) if trashed else Artisan.trashed_at.is_(None))
     if publication_status is not None:
         stmt = stmt.where(Artisan.publication_status == publication_status)
     if q and q.strip():
@@ -123,6 +128,7 @@ def list_artisans(
             publication_status=a.publication_status.value,
             piece_count=counts[a.id],
             updated_at=a.updated_at,
+            trashed_at=a.trashed_at,
         )
         for a in artisans
     ]
@@ -157,6 +163,8 @@ def get_artisan(artisan_id: uuid.UUID, db: Session = Depends(get_db)) -> AdminAr
         updated_at=artisan.updated_at,
         media=_admin_media(db, artisan_id=artisan.id),
         pieces=_piece_summaries(db, list(pieces)),
+        trashed_at=artisan.trashed_at,
+        purge_blocker=trash_service.purge_blocker(db, "artisan", artisan) if artisan.trashed_at else None,
     )
 
 
@@ -165,9 +173,10 @@ def list_pieces(
     publication_status: PublicationStatus | None = None,
     artisan_id: uuid.UUID | None = None,
     q: str | None = Query(default=None, max_length=_MAX_QUERY_LENGTH),
+    trashed: bool = False,
     db: Session = Depends(get_db),
 ) -> ListEnvelope[AdminPieceSummary]:
-    stmt = select(Piece)
+    stmt = select(Piece).where(Piece.trashed_at.is_not(None) if trashed else Piece.trashed_at.is_(None))
     if publication_status is not None:
         stmt = stmt.where(Piece.publication_status == publication_status)
     if artisan_id is not None:
@@ -221,7 +230,10 @@ def get_piece(piece_id: uuid.UUID, db: Session = Depends(get_db)) -> AdminPieceD
             slug=artisan.slug,
             full_name=artisan.full_name,
             publication_status=artisan.publication_status.value,
+            trashed_at=artisan.trashed_at,
         ),
+        trashed_at=piece.trashed_at,
+        purge_blocker=trash_service.purge_blocker(db, "piece", piece) if piece.trashed_at else None,
         media=_admin_media(db, piece_id=piece.id),
         certificates=[
             AdminCertificate(

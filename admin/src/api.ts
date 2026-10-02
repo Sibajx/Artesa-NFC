@@ -21,6 +21,7 @@ export interface ArtisanSummary {
   publication_status: PublicationStatus;
   piece_count: number;
   updated_at: string;
+  trashed_at?: string | null;
 }
 
 export interface PieceSummary {
@@ -33,6 +34,7 @@ export interface PieceSummary {
   publication_status: PublicationStatus;
   availability_status: string;
   updated_at: string;
+  trashed_at?: string | null;
 }
 
 export type MediaRole = 'hero' | 'gallery' | 'detail' | 'process' | 'portrait' | 'model_3d';
@@ -86,6 +88,10 @@ export interface ArtisanDetail {
   updated_at: string;
   media: AdminMedia[];
   pieces: PieceSummary[];
+  // Papelera: set while in the trash; purge_blocker is null when it can be
+  // deleted for good, else the reason code.
+  trashed_at?: string | null;
+  purge_blocker?: string | null;
 }
 
 export interface Certificate {
@@ -125,10 +131,12 @@ export interface PieceDetail {
   publicly_visible: boolean;
   created_at: string;
   updated_at: string;
-  artisan: { id: string; slug: string; full_name: string; publication_status: PublicationStatus };
+  artisan: { id: string; slug: string; full_name: string; publication_status: PublicationStatus; trashed_at?: string | null };
   media: AdminMedia[];
   certificates: Certificate[];
   nfc_tags: NfcTag[];
+  trashed_at?: string | null;
+  purge_blocker?: string | null;
 }
 
 export interface AuditEvent {
@@ -273,10 +281,10 @@ export interface PieceInput {
 
 export const adminApi = {
   me: (signal?: AbortSignal) => get<{ email: string }>('/me', undefined, signal),
-  artisans: (params: { publication_status?: string; q?: string }, signal?: AbortSignal) =>
+  artisans: (params: { publication_status?: string; q?: string; trashed?: string }, signal?: AbortSignal) =>
     get<ListEnvelope<ArtisanSummary>>('/artisans', params, signal),
   artisan: (id: string, signal?: AbortSignal) => get<ArtisanDetail>(`/artisans/${encodeURIComponent(id)}`, undefined, signal),
-  pieces: (params: { publication_status?: string; artisan_id?: string; q?: string }, signal?: AbortSignal) =>
+  pieces: (params: { publication_status?: string; artisan_id?: string; q?: string; trashed?: string }, signal?: AbortSignal) =>
     get<ListEnvelope<PieceSummary>>('/pieces', params, signal),
   piece: (id: string, signal?: AbortSignal) => get<PieceDetail>(`/pieces/${encodeURIComponent(id)}`, undefined, signal),
   auditEvents: (params: { entity_type?: string; entity_id?: string; limit?: string }, signal?: AbortSignal) =>
@@ -293,6 +301,11 @@ export const adminApi = {
     request<PieceDetail>('PATCH', `/pieces/${encodeURIComponent(id)}`, { body, version }),
   transitionPiece: (id: string, version: string, action: Transition, reason?: string) =>
     request<PieceDetail>('POST', `/pieces/${encodeURIComponent(id)}/${action}`, { body: reason ? { reason } : {}, version }),
+  // Papelera: trash / untrash return the record; purge deletes it (204).
+  trashAction: (kind: 'artisans' | 'pieces', id: string, version: string, action: 'trash' | 'untrash') =>
+    request<ArtisanDetail | PieceDetail>('POST', `/${kind}/${encodeURIComponent(id)}/${action}`, { body: {}, version }),
+  purge: (kind: 'artisans' | 'pieces', id: string, version: string) =>
+    request<void>('POST', `/${kind}/${encodeURIComponent(id)}/purge`, { body: {}, version }),
   setAvailability: (id: string, version: string, availability_status: string) =>
     request<PieceDetail>('POST', `/pieces/${encodeURIComponent(id)}/availability`, { body: { availability_status }, version }),
 

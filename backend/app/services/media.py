@@ -311,12 +311,16 @@ def _owner(db: Session, owner_type: str, owner_id: uuid.UUID) -> tuple[Any, str,
             raise ContentNotFound("not_found", "The requested resource does not exist.")
         if artisan.publication_status == PublicationStatus.archived:
             raise ContentConflict("archived", "Restore the artisan before adding media.")
+        if artisan.trashed_at is not None:
+            raise ContentConflict("trashed", "Restore the artisan from the trash before adding media.")
         return artisan, artisan.slug, f"{artisan.slug}/_artesano"
     piece = db.get(Piece, owner_id)
     if piece is None:
         raise ContentNotFound("not_found", "The requested resource does not exist.")
     if piece.publication_status == PublicationStatus.archived:
         raise ContentConflict("archived", "Restore the piece before adding media.")
+    if piece.trashed_at is not None:
+        raise ContentConflict("trashed", "Restore the piece from the trash before adding media.")
     artisan = db.get(Artisan, piece.artisan_id)
     return piece, piece.slug, f"{artisan.slug}/{piece.slug}"
 
@@ -430,40 +434,51 @@ def _plain(value: Any) -> Any:
     return value.value if isinstance(value, enum.Enum) else value
 
 
-def _owner_chain(db: Session, asset: MediaAsset) -> list[tuple[str, Any]]:
-    """The records whose publication decides whether ``asset`` is public:
-    the artisan for artisan media; the piece and its artisan for piece media."""
-    if asset.piece_id is not None:
-        piece = db.get(Piece, asset.piece_id)
-        return [("piece", piece), ("artisan", db.get(Artisan, piece.artisan_id))]
-    if asset.artisan_id is not None:
-        return [("artisan", db.get(Artisan, asset.artisan_id))]
-    return []
+def ever_published(db: Session, kind: str, row: Any, since: datetime) -> bool:
+    """Whether ``row`` (an artisan or a piece) was published at any moment
+    since ``since``, replayed from its audited publication transitions.
+
+    Every publication change is a content transition whose audit event
+    records ``from`` and ``to``: the state at ``since`` is the ``from`` of the
+    first transition after it (or the current state if there was none), and
+    each later transition moves it on. An event without that metadata makes
+    the answer conservatively True.
+    """
+    if row.publication_status == PublicationStatus.published:
+        return True
+    events = db.execute(select(AuditEvent.event_metadata).where(
+        AuditEvent.entity_id == row.id,
+        AuditEvent.action.in_([f"{kind}.{past}" for past in _OWNER_TRANSITIONS]),
+        AuditEvent.occurred_at >= since,
+    ).order_by(AuditEvent.occurred_at)).scalars().all()
+    for metadata in events:
+        if not isinstance(metadata, dict) or "from" not in metadata or "to" not in metadata:
+            return True
+        if PublicationStatus.published.value in (metadata["from"], metadata["to"]):
+            return True
+    return False
 
 
 def may_delete(db: Session, asset: MediaAsset) -> bool:
     """True only when ``asset`` can never have been public.
 
-    Media are public while active and their whole owner chain is published.
-    Every publication change is a content transition with an audit event, so
-    if no record of the chain changed state since the asset was created, its
-    state now is its state at upload; and if the chain is not fully published
-    now, the asset was never visible. Conservative by design: any transition
-    since the upload (even publish then unpublish) keeps it archive-only.
+    Media are public while active and their owner chain is published. For
+    artisan media that is the artisan; for piece media we only look at the
+    piece (conservative: a piece published while its artisan was a draft was
+    not visible, but a piece may also have changed artisan while a draft, so
+    the piece alone is the safe test). Archived-then-restored or archived
+    owners that were never published stay deletable.
     """
-    chain = _owner_chain(db, asset)
-    if not chain or all(row.publication_status == PublicationStatus.published for _, row in chain):
-        return False
-    actions = [f"{kind}.{past}" for kind, _ in chain for past in _OWNER_TRANSITIONS]
-    changed = db.execute(select(func.count()).select_from(AuditEvent).where(
-        AuditEvent.entity_id.in_([row.id for _, row in chain]),
-        AuditEvent.action.in_(actions),
-        AuditEvent.occurred_at >= asset.created_at,
-    )).scalar_one()
-    return changed == 0
+    if asset.piece_id is not None:
+        owner = db.get(Piece, asset.piece_id)
+        return owner is not None and not ever_published(db, "piece", owner, asset.created_at)
+    if asset.artisan_id is not None:
+        owner = db.get(Artisan, asset.artisan_id)
+        return owner is not None and not ever_published(db, "artisan", owner, asset.created_at)
+    return False
 
 
-def _original_of(db: Session, media_root: Path, asset: MediaAsset) -> Path | None:
+def original_of(db: Session, media_root: Path, asset: MediaAsset) -> Path | None:
     """The private original of ``asset``, found by the SHA-256 the upload
     recorded in its audit event (the row itself does not store the path)."""
     digest = db.execute(select(AuditEvent.event_metadata).where(
@@ -486,7 +501,7 @@ def delete(db: Session, actor: Actor, media_root: Path, media_id: uuid.UUID, exp
                               "This media item may have been public: archive it instead of deleting it.")
     public_root = media_root / "publico"
     published = public_root / asset.storage_path
-    original = _original_of(db, media_root, asset)
+    original = original_of(db, media_root, asset)
     owner_type, owner_id = owner_of(asset)
     _audit(db, actor, "media_asset", asset.id, "media.deleted", {
         "owner_type": owner_type,
@@ -500,6 +515,11 @@ def delete(db: Session, actor: Actor, media_root: Path, media_id: uuid.UUID, exp
     db.commit()
     # Files go after the commit: a crash here leaves an unreferenced file,
     # never a row without its file (same rule as upload).
+    remove_files(public_root, published, original)
+
+
+def remove_files(public_root: Path, published: Path, original: Path | None) -> None:
+    """Remove a deleted asset's files, leaving the number-reserving tombstone."""
     if published.is_file() and published.resolve().is_relative_to(public_root.resolve()):
         tombstone = published.with_suffix(".deleted")
         try:
