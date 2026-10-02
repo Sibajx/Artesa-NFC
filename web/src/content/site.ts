@@ -155,3 +155,94 @@ export const homeCopy = {
     contactNote: "Muy pronto habilitaremos un canal directo de contacto.",
   },
 } as const;
+
+// /nosotros — "Colectivo" (2026-10). PROVISIONAL: members and channels are
+// placeholders until the team sends the real data. A `null` link is shown
+// as "por confirmar"; nothing here is a real person or account yet.
+export type ChannelKind =
+  "email" | "instagram" | "facebook" | "tiktok" | "whatsapp" | "linkedin" | "github" | "web";
+
+export interface Channel {
+  readonly kind: ChannelKind;
+  readonly label: string;
+  /** Full URL (mailto:, https://wa.me/…) or null while not confirmed. */
+  readonly href: string | null;
+}
+
+export interface Member {
+  readonly name: string;
+  readonly role: string;
+  readonly bio: string;
+  /** Initials for the avatar while there is no authorised photo. */
+  readonly initials: string;
+  readonly photo: string | null;
+  readonly channels: readonly Channel[];
+  readonly provisional: boolean;
+}
+
+export const aboutCopy = {
+  hero: {
+    eyebrow: "Nosotros · Colectivo",
+    title: "Quienes conectamos cada pieza con su origen.",
+    lead: "ArtesaNFC une el oficio de artesanas y artesanos de Oaxaca con una identidad digital verificable, para que cada pieza cuente quién la hizo, dónde y cómo.",
+  },
+  mission: {
+    eyebrow: "Misión",
+    title: "La artesanía con nombre propio.",
+    body: "Documentamos el origen, el oficio y la autoría de piezas únicas y los dejamos al alcance de quien las sostiene: basta acercar el teléfono. La tecnología acompaña; la pieza y su autor son los protagonistas.",
+    values: [
+      {
+        term: "Origen",
+        description: "Cada pieza conserva su comunidad, su material y su historia.",
+      },
+      { term: "Autoría", description: "El nombre de quien la creó viaja con ella." },
+      {
+        term: "Confianza",
+        description: "Un certificado verificable por NFC respalda su autenticidad.",
+      },
+    ],
+  },
+  team: {
+    eyebrow: "El equipo",
+    title: "Las personas detrás del proyecto.",
+    members: [
+      {
+        name: "Integrante por confirmar",
+        role: "Rol por confirmar",
+        bio: "Breve presentación pendiente.",
+        initials: "A",
+        photo: null,
+        channels: [
+          { kind: "email", label: "Correo", href: null },
+          { kind: "instagram", label: "Instagram", href: null },
+          { kind: "linkedin", label: "LinkedIn", href: null },
+        ],
+        provisional: true,
+      },
+      {
+        name: "Integrante por confirmar",
+        role: "Rol por confirmar",
+        bio: "Breve presentación pendiente.",
+        initials: "N",
+        photo: null,
+        channels: [
+          { kind: "email", label: "Correo", href: null },
+          { kind: "github", label: "GitHub", href: null },
+        ],
+        provisional: true,
+      },
+    ] satisfies Member[],
+  },
+  company: {
+    eyebrow: "Contacto",
+    title: "Hablemos.",
+    body: "Para artesanos, coleccionistas y proyectos culturales. Escríbenos por el canal que prefieras.",
+    channels: [
+      { kind: "email", label: "Correo", href: null },
+      { kind: "instagram", label: "Instagram", href: null },
+      { kind: "facebook", label: "Facebook", href: null },
+      { kind: "whatsapp", label: "WhatsApp", href: null },
+      { kind: "tiktok", label: "TikTok", href: null },
+    ] satisfies Channel[],
+  },
+} as const;

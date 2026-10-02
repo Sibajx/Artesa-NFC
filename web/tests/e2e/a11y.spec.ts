@@ -8,6 +8,8 @@ const pages = [
   ["piezas", "/piezas/", ".piece-card"],
   ["pieza", `/piezas/${piece.slug}/`, ".passport"],
   ["artesanos", "/artesanos/", ".artisan-list"],
+  ["artesano", `/artesanos/${piece.artisan.slug}/`, ".stats"],
+  ["nosotros", "/nosotros/", ".crew-card"],
   ["certificado", `/c/${TOKEN}`, ".passport"],
   ["404", "/no-existe", "h1"],
 ] as const;

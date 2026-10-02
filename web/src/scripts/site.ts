@@ -30,17 +30,25 @@ function initHeader(): void {
   );
 
   // Pages that open on a dark hero: light-on-dark header while the hero is
-  // under it, regular header afterwards.
-  const darkZone = document.querySelector("[data-header-dark-zone]");
-  if (header.dataset.initialTone === "dark" && darkZone && "IntersectionObserver" in window) {
-    const observer = new IntersectionObserver(
+  // under it, regular header afterwards. Islands render their hero after
+  // the API answers, so they announce it with an "artesa:dark-zone" event.
+  let watched: Element | null = null;
+  let observer: IntersectionObserver | null = null;
+  const watch = () => {
+    const darkZone = document.querySelector("[data-header-dark-zone]");
+    if (!darkZone || darkZone === watched || !("IntersectionObserver" in window)) return;
+    observer?.disconnect();
+    watched = darkZone;
+    observer = new IntersectionObserver(
       ([entry]) => {
         header.dataset.tone = entry?.isIntersecting ? "dark" : "light";
       },
       { rootMargin: "-64px 0px 0px 0px", threshold: 0 },
     );
     observer.observe(darkZone);
-  }
+  };
+  if (header.dataset.initialTone === "dark") watch();
+  window.addEventListener("artesa:dark-zone", watch);
 }
 
 function initReveal(): void {
@@ -63,5 +71,30 @@ function initReveal(): void {
   targets.forEach((target) => observer.observe(target));
 }
 
+// Vitrine spotlight: the light of a piece card follows the pointer.
+function initSpotlight(): void {
+  if (reducedMotion.matches) return;
+  document.addEventListener(
+    "pointermove",
+    (event) => {
+      const card = (event.target as Element | null)?.closest<HTMLElement>(
+        ".vitrine-page .piece-card",
+      );
+      if (!card) return;
+      const rect = card.getBoundingClientRect();
+      card.style.setProperty(
+        "--sx",
+        `${(((event.clientX - rect.left) / rect.width) * 100).toFixed(1)}%`,
+      );
+      card.style.setProperty(
+        "--sy",
+        `${(((event.clientY - rect.top) / rect.height) * 100).toFixed(1)}%`,
+      );
+    },
+    { passive: true },
+  );
+}
+
 initHeader();
 initReveal();
+initSpotlight();

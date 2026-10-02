@@ -1,0 +1,33 @@
+---
+// A list of contact channels; unconfirmed ones show as "por confirmar".
+import ChannelIcon from "@/components/about/ChannelIcon.astro";
+import type { Channel } from "@/content/site";
+interface Props {
+  channels: readonly Channel[];
+  owner: string;
+}
+const { channels, owner } = Astro.props;
+---
+
+<ul class="contact-links" role="list">
+  {channels.map((c) => (
+    <li>
+      {c.href ? (
+        <a
+          href={c.href}
+          rel={c.href.startsWith("http") ? "noopener noreferrer" : undefined}
+          target={c.href.startsWith("http") ? "_blank" : undefined}
+          aria-label={`${c.label} de ${owner}`}
+        >
+          <ChannelIcon kind={c.kind} />
+          {c.label}
+        </a>
+      ) : (
+        <span>
+          <ChannelIcon kind={c.kind} />
+          {c.label} · por confirmar
+        </span>
+      )}
+    </li>
+  ))}
+</ul>

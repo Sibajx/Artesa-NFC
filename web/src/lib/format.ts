@@ -81,3 +81,33 @@ export function formatBytes(bytes: number | null | undefined): string | null {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   return `${numberFormat.format(bytes / (1024 * 1024))} MB`;
 }
+
+// Long texts (biographies, histories) are split for reading: a short
+// excerpt cut at a sentence end for heroes, and a first sentence for a
+// pull-quote. Both return the full text when it is already short.
+const SENTENCE_END = /[.!?…](?=\s|$)/g;
+
+export function excerpt(text: string, max = 260): { text: string; truncated: boolean } {
+  const clean = text.trim();
+  if (clean.length <= max) return { text: clean, truncated: false };
+  let cut = 0;
+  for (const match of clean.matchAll(SENTENCE_END)) {
+    const end = (match.index ?? 0) + 1;
+    if (end > max) break;
+    cut = end;
+  }
+  if (cut === 0) cut = clean.lastIndexOf(" ", max) > 0 ? clean.lastIndexOf(" ", max) : max;
+  const head = clean.slice(0, cut).trim();
+  return { text: /[.!?…]$/.test(head) ? head : `${head}…`, truncated: true };
+}
+
+export function splitLead(text: string, max = 240): { lead: string; rest: string } {
+  const clean = text.trim();
+  SENTENCE_END.lastIndex = 0;
+  const match = SENTENCE_END.exec(clean);
+  const end = match ? (match.index ?? 0) + 1 : clean.length;
+  if (end > max || end >= clean.length) {
+    return clean.length <= max ? { lead: clean, rest: "" } : { lead: "", rest: clean };
+  }
+  return { lead: clean.slice(0, end).trim(), rest: clean.slice(end).trim() };
+}

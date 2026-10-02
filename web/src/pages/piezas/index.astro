@@ -1,7 +1,11 @@
 ---
+// /piezas — "Vitrina": a lit display case. Cards catch a spotlight that
+// follows the pointer and a foil sheen on hover (styles/pages.css).
 import "@/styles/islands.css";
+import "@/styles/pages.css";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import NoScript from "@/components/ui/NoScript.astro";
+import Greca from "@/components/home/Greca.astro";
 import PieceGallery from "@/components/islands/PieceGallery";
 ---
 
@@ -9,18 +13,27 @@ import PieceGallery from "@/components/islands/PieceGallery";
   title="Piezas"
   description="Colección de piezas artesanales únicas de Oaxaca, con su artesano, su comunidad y su proceso."
   canonicalPath="/piezas/"
+  headerTone="dark"
 >
-  <section class="section container page-top" aria-labelledby="pieces-title">
-    <header class="page-header">
-      <p class="eyebrow">Colección</p>
-      <h1 id="pieces-title" class="display-l">
-        Piezas
-      </h1>
-      <p class="lead muted">
-        Cada pieza es única. Las marcadas con 3D pueden recorrerse en el navegador.
-      </p>
-    </header>
-    <NoScript>La colección se carga con JavaScript desde el registro de ArtesaNFC.</NoScript>
-    <PieceGallery client:only="react" />
-  </section>
+  <div class="vitrine-page" data-header-dark-zone>
+    <section class="night-hero on-dark" aria-labelledby="pieces-title">
+      <div class="night-hero__grid" aria-hidden="true"></div>
+      <div class="container night-hero__inner rise">
+        <p class="hud-label">Colección · Piezas únicas</p>
+        <h1 id="pieces-title" class="display-l night-hero__title">
+          Piezas
+        </h1>
+        <p class="lead">
+          Cada pieza es única y lleva su registro. Las marcadas con 3D pueden recorrerse en el
+          navegador.
+        </p>
+      </div>
+      <Greca />
+    </section>
+
+    <section class="section container on-dark" aria-label="Colección">
+      <NoScript>La colección se carga con JavaScript desde el registro de ArtesaNFC.</NoScript>
+      <PieceGallery client:only="react" />
+    </section>
+  </div>
 </BaseLayout>
