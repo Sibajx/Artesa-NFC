@@ -4,9 +4,19 @@
 **Fecha:** 2026-09-28
 **Relación:** cierra el diseño de PEND-033 / P-019 ("definir la capa de medios"); `docs/API_CONTRACT.md` §6 y §6.1; `docs/DEPLOYMENT.md`; `docs/OPERATIONS.md` (regla A).
 
-## 1. Problema
+## 1. Estado actual
 
-La API ya devuelve `url = "/media/{storage_path}"` para cada `media_asset` (§6.1), pero **nadie sirve `/media/`**: la app no monta esa ruta y la regla A de Cloudflare solo deja pasar `/api/v1/*`. Resultado: ninguna foto real puede verse hoy, ni en `frontend/` ni en `web/`.
+La fase 4 de Gestión implementa la carga, procesamiento y registro de media.
+Cuando `MEDIA_ROOT` está configurado, FastAPI sirve únicamente los derivados de
+`publico/` bajo `/media/`; sin esa variable, `/media/` responde 404 y las cargas
+administrativas responden 503. La regla A de Cloudflare fue ampliada y
+verificada externamente el 2026-09-30 para permitir solo `GET|HEAD /media/*`
+(`OPERATIONS.md` §8).
+
+Los originales permanecen privados. `artesa-backup` contiene el flujo M3 para
+copiarlos cifrados fuera del host cuando existen `MEDIA_ROOT` y `remote.env`
+(`BACKUP.md` §16), pero el repositorio no registra su activación ni una
+restauración M3. Tampoco contiene ni prueba qué archivos reales están cargados.
 
 Decisión del PO (2026-09-28): las fotos viven **en el servidor actual**, en carpetas por artesano y por pieza.
 
@@ -16,7 +26,7 @@ Fuera de `releases/` (un despliegue nunca las toca) y fuera de `shared/` (que es
 
 ```text
 /home/energias/artesa-nfc/media/
-├── originales/                      0700 · PRIVADO · nunca se sirve · con backup
+├── originales/                      0700 · PRIVADO · nunca se sirve · soporte M3
 │   └── {artesano-slug}/
 │       ├── _artesano/               retrato, taller, entrevista (tal como llegan)
 │       └── {pieza-slug}/            fotos de cámara, clips, capturas 3D (tal como llegan)
@@ -25,17 +35,16 @@ Fuera de `releases/` (un despliegue nunca las toca) y fuera de `shared/` (que es
     ├── artesanos/{artesano-slug}/
     │   ├── portrait-01.jpg
     │   └── process-01.jpg
-    ├── piezas/{pieza-slug}/
+    └── piezas/{pieza-slug}/
     │   ├── hero-01.jpg
     │   ├── gallery-01.jpg · gallery-02.jpg …
     │   ├── detail-01.jpg
     │   ├── process-01.jpg
     │   └── model-01.glb
-    └── sitio/                       home: hero en video, póster, entrada a la colección
-        ├── hero-horizontal-01.mp4 · .webm
-        ├── hero-vertical-01.mp4 · .webm
-        └── hero-poster-01.jpg
 ```
+
+Los assets de la home se preparan con `web/scripts/prepare-site-media.sh` y se
+publican con el build de `web/`; la carga de Gestión no acepta un owner `sitio`.
 
 `storage_path` en la base de datos = ruta relativa a `publico/`, p. ej. `piezas/mascara-cuilapam-01/hero-01.jpg` → URL `https://api.artesanfc.com/media/piezas/mascara-cuilapam-01/hero-01.jpg`.
 
@@ -60,41 +69,59 @@ Las fotos de celular llevan metadatos **EXIF**, entre ellos **la ubicación GPS*
 - Videos: sin pista de audio y sin metadatos de ubicación; ≤ 4 MB por archivo.
 - GLB: 2–8 MB, texturas 1024–2048 px.
 
-El procesado lo hará una herramienta (§6), no una edición a mano.
+El backend de Gestión realiza el procesado (§6); no depende de una edición a
+mano.
 
-## 4. Cómo se sirve — opción recomendada para el piloto **[PO]**
+## 4. Cómo se sirve — implementación del piloto
 
-**Opción A (recomendada): la propia API sirve `/media/` desde `publico/`.**
+**Implementado: la propia API sirve `/media/` desde `publico/`.**
 
 ```text
 navegador ─► api.artesanfc.com/media/…  (Cloudflare, caché en el borde)
-          ─► Tunnel ─► Uvicorn/FastAPI  StaticFiles(directory=MEDIA_PUBLIC_ROOT)
+          ─► Tunnel ─► Uvicorn/FastAPI  (MEDIA_ROOT/publico)
 ```
 
-- Cero cambios en el contrato, en `web/` y en `frontend/`: ya resuelven `/media/…` contra el origen de la API.
-- Cambios necesarios:
-  1. **Backend (código, PR normal):** montar `/media` con `StaticFiles` solo si existe `MEDIA_PUBLIC_ROOT` (sin él, igual que hoy), sin listado de directorios, lista blanca de extensiones (`.jpg .jpeg .webp .avif .png .mp4 .webm .glb`), `Cache-Control: public, max-age=31536000, immutable`, `X-Content-Type-Options: nosniff`, `Access-Control-Allow-Origin` para los orígenes de `CORS_ALLOWED_ORIGINS` (lo necesita `model-viewer` para el GLB). Pruebas de path traversal y de que `originales/` es inalcanzable.
-  2. **Servidor (humano):** crear las carpetas y añadir `MEDIA_PUBLIC_ROOT=/home/energias/artesa-nfc/media/publico` a `shared/.env` (hay que ampliar la allowlist de variables de D18/`deploy`), reiniciar con la herramienta.
-  3. **Cloudflare (humano):** ampliar la regla A para permitir `GET`/`HEAD` en `/media/*` (el resto sigue bloqueado). Opcional: regla de caché "Cache Everything" para `/media/*`.
+- `web/` y `frontend/` resuelven `/media/…` contra el origen de la API.
+- `MEDIA_ROOT` apunta al directorio que contiene `originales/` y `publico/`.
+- `backend/app/core/media_files.py` permite los formatos aprobados, no lista
+  directorios, bloquea traversal, aplica caché inmutable y nunca sirve
+  `originales/`.
+- La regla A permite `GET` y `HEAD` en `/media/*`; el resto del host conserva la
+  allowlist de `OPERATIONS.md` §8.
 - Carga: tras el primer acceso, Cloudflare sirve desde su caché; Python casi no interviene.
 
 **Opción B (evolución):** `media.artesanfc.com` con un servidor estático propio (Caddy) detrás del mismo Tunnel, o Cloudflare R2. Más limpio a escala, pero más infraestructura; el backend solo cambiaría cómo arma `url` (cambio no disruptivo, §13). No hace falta para el piloto.
 
 ## 5. Backups **[PO]**
 
-**Implementado (M3, 2026-09-30):** `artesa-backup` copia `originales/` fuera del host, cifrado con K1+K2, de forma incremental y direccionada por contenido. El índice va dentro del bundle cifrado de la base. Ver `docs/BACKUP.md` §16; la restauración se hace con `qa/d10-offhost-drill/media_restore.py`.
+**Código implementado (M3, 2026-09-30):** `artesa-backup` puede copiar
+`originales/` fuera del host, cifrado con K1+K2, de forma incremental y
+direccionada por contenido. El índice va dentro del bundle cifrado de la base.
+Ver `docs/BACKUP.md` §16; la restauración se hace con
+`qa/d10-offhost-drill/media_restore.py`. No hay un registro versionado de
+activación, primer run o restore sample de M3.
 
 
-- `originales/` es **irrecuperable** (el material de campo): debe entrar en el backup fuera del host (D10.2, B2) con su propio job (`rsync`/`restic` cifrado), no en `pg_dump`.
-- `publico/` es regenerable desde `originales/` + la herramienta: backup opcional.
+- `originales/` es material irremplazable y puede entrar en el backup fuera del
+  host mediante `artesa-backup` cuando `MEDIA_ROOT`, `remote.env` y el flujo M3
+  están activos; no forma parte de `pg_dump`.
+- `publico/` no se respalda. El repo tampoco contiene un procedimiento
+  determinista que reconstruya las rutas ya referenciadas por la base; recuperar
+  solo DB + originales requiere reconciliar o volver a registrar derivados.
 - Tamaño estimado del piloto: < 2 GB.
 
 ## 6. Registro en la base de datos
 
-**Decisión del PO (2026-09-29):** la subida se hace desde **Gestión** (`gestion.artesanfc.com`), no con la CLI que proponía este apartado. El servidor hace el procesado de §3, guarda el original y registra el `media_asset` con su `audit_event` (API_CONTRACT §14.3). Diferencias con lo propuesto: el video no se re-codifica, se **rechaza** si trae audio o ubicación; `webm`, AVIF/WebP publicados y la carpeta `sitio/` quedan fuera de la subida por ahora. La propuesta original queda abajo como historia.
+**Decisión del PO (2026-09-29), implementada:** la subida se hace desde
+**Gestión** (`gestion.artesanfc.com`). El servidor procesa el archivo, guarda el
+original y registra el `media_asset` con su `audit_event` (API_CONTRACT §14.3).
+El video no se recodifica: se rechaza si trae audio o ubicación; `webm`,
+AVIF/WebP publicados y la carpeta `sitio/` quedan fuera de la subida actual.
 
+### 6.1 Historia: propuesta de CLI descartada
 
-Hoy **no hay forma soportada** de crear filas `media_asset` (no hay API admin; el seed es solo demo). Propuesta: CLI local, al estilo de `app.cli.provision`:
+Antes de Gestión se propuso una CLI local, al estilo de
+`app.cli.provision`:
 
 ```bash
 python -m app.cli.media add --piece mascara-cuilapam-01 --role hero \
@@ -107,7 +134,7 @@ python -m app.cli.media add --piece mascara-cuilapam-01 --role hero \
 3. inserta el `media_asset` con `storage_path`, `position`, `format` (ancho/alto/mime o tamaño del GLB) en una transacción;
 4. `--dry-run` obligatorio primero; `list`, `archive` (retira sin borrar).
 
-Implementación: después de aprobar este documento (backend + tests; sin migraciones: el modelo ya existe).
+Esta propuesta se conserva como historia y no describe la interfaz vigente.
 
 ## 7. Después del piloto
 
@@ -121,5 +148,5 @@ Implementación: después de aprobar este documento (backend + tests; sin migrac
 | M1 | Ruta base en el servidor | `/home/energias/artesa-nfc/media/{originales,publico}` |
 | M2 | Cómo se sirve | Opción A (API + regla A ampliada a `GET /media/*`) |
 | M3 | Backup de `originales/` | Job cifrado fuera del host junto a D10.2 |
-| M4 | Herramienta de registro | CLI `app.cli.media` (§6) |
+| M4 | Herramienta de registro | Gestión (`admin/` + API administrativa), decisión que reemplazó la propuesta de CLI |
 | M5 | Tamaño máximo publicado | Fotos ≤ 1600 px; video ≤ 4 MB; GLB ≤ 8 MB |

@@ -47,7 +47,10 @@ Sin un token de Access, el backend local responde 404 (admin sin configurar) o
 401. Para revisar pantallas sin backend, sirve `dist/` con un stub que responda
 `/api/admin/v1/*` con el contrato de `docs/API_CONTRACT.md` §14.1.
 
-## Despliegue (gate humano)
+## Despliegue y verificación (gate humano)
+
+El repositorio documenta fase 1 desplegada; no permite verificar el estado vivo
+de los despliegues posteriores. Esta lista sirve para activar o auditar Gestión.
 
 1. **Backend:** un release que incluya ADR-029, desplegado con
    `--allow-migration` (crea `audit_event`).
@@ -79,7 +82,7 @@ Sin un token de Access, el backend local responde 404 (admin sin configurar) o
    - con otro email, aparece "Sin acceso";
    - `https://api.artesanfc.com/api/admin/v1/me` sigue bloqueado por la regla A.
 
-### Fase 4: medios (gate humano, una vez)
+### Fase 4: medios (activación o auditoría)
 
 1. Carpetas en el servidor:
    ```bash
@@ -91,8 +94,10 @@ Sin un token de Access, el backend local responde 404 (admin sin configurar) o
    deploy (TOOL 1.6.0) lo acepta y exige que sea absoluto y contenga las dos
    carpetas.
 3. Deploy del release (sin migración) e `install-tools`, que pasa de 1.5.0 a 1.6.0.
-4. Cloudflare: ampliar la **regla A** para permitir `GET` y `HEAD` en
-   `api.artesanfc.com/media/*`. Sin esto, el sitio y las vistas previas de
-   Gestión no pueden cargar las fotos.
-5. Backup: `originales/` es irrecuperable. Hasta que el job cifrado a B2
-   (decisión M3) esté activo, respaldarlo a mano.
+4. Cloudflare: verificar que la **regla A** permite `GET` y `HEAD` en
+   `api.artesanfc.com/media/*`. `docs/OPERATIONS.md` registra esa verificación
+   externa el 2026-09-30.
+5. Backup: el código de `artesa-backup` incorpora `originales/` al respaldo
+   cifrado fuera del host cuando `MEDIA_ROOT` y `remote.env` están configurados.
+   `docs/BACKUP.md` §16 describe el flujo, sin registrar su activación o un
+   restore sample M3.

@@ -229,9 +229,9 @@ del lanzamiento final) y la política de reinicio de la unit.
 
 ## ADR-028 — Frontend público en Astro, migración incremental
 
-**Estado:** Aceptado para implementación en `web/`; **no desplegado**. La
-adopción en producción requiere staging, aprobación visual y assets reales
-autorizados (gate humano).
+**Estado:** Implementado en `web/` y desplegado en el proyecto Pages de staging;
+el dominio propio de staging figura pendiente. Producción conserva `frontend/`
+hasta la aprobación visual, los assets autorizados y el gate humano.
 
 **Fecha:** 2026-09-28
 
@@ -259,16 +259,15 @@ datos, contra F-08/ADR-019); Three.js directo (más peso y código sin
 necesidad demostrada); reescritura big-bang.
 
 **Consecuencias:** `web/README.md` documenta arquitectura, estados, despliegue,
-staging y rollback; CI propio (`.github/workflows/web-ci.yml`). Pendientes: capa
-de media/CDN (PEND-033), assets reales autorizados, staging con su hostname en
-`api-config` y CORS, y el cambio de configuración de build del proyecto de
-Pages (dashboard, no versionado).
+staging y rollback; CI propio (`.github/workflows/web-ci.yml`). La capa
+`/media/` ya está implementada. Siguen pendientes los assets reales autorizados,
+activar el dominio propio de staging y el cambio manual de producción.
 
 ## ADR-029 — Gestión: API administrativa web detrás de Cloudflare Access
 
-**Estado:** Aceptado (PO, 2026-09-28). Fase 1 (solo lectura) implementada;
-**no desplegada**. La configuración de Access, el hostname y el Tunnel son un
-gate humano.
+**Estado:** Fases 1–4 implementadas. El registro versionado documenta fase 1
+desplegada; el estado vivo de Access, el hostname, el Tunnel y los despliegues
+posteriores no se infiere solo desde este ADR.
 
 **Fecha:** 2026-09-28
 
@@ -310,7 +309,10 @@ admin bajo `/api/v1/admin` (quedaría dentro del prefijo público de la regla A)
 
 **Actualización (2026-09-29):** fase 1 desplegada con R8. Fases 2 y 3, escrituras de artesano y pieza, implementadas juntas (API_CONTRACT §14.2): CSRF (cabecera propia, JSON y `Origin`), `If-Match` con `updated_at` y auditoría en la misma transacción.
 
-**Consecuencias:** fases 2 y 3 (escrituras de artesano y pieza, con auditoría);
-fase 4 (media), que depende de la capa de media. El despliegue requiere una
-aplicación de Access, su AUD y el team domain en `shared/.env`, y un hostname en
-el Tunnel (paso humano).
+**Actualización (2026-09-30):** fase 4 implementa carga, procesamiento,
+publicación y archivado de media desde Gestión (`MEDIA.md`, API_CONTRACT §14.3).
+
+**Consecuencias:** Gestión cubre lectura/escritura de artesanos y piezas,
+auditoría y media. Certificados/NFC permanecen en la CLI. La operación requiere
+Access, su AUD y team domain, `ADMIN_EMAILS`, `MEDIA_ROOT` y el routing del
+Tunnel documentado en `admin/README.md`.

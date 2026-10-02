@@ -1,13 +1,12 @@
 # ArtesaNFC — Backups cifrados de la base de datos (D10, #126)
 
-> **Estado: D10.1 — base local cifrada, más el código de D10.2 (copias fuera del host,
-> §14), que no está configurado en producción.** Esto **no** es D10 completo:
-> - no hay cuenta, bucket ni credencial reales;
-> - no hay recuperación demostrada con la clave offline (D10.3).
->
-> Sin `shared/backup/remote.env`, `artesa-backup status` dice `OFFSITE: NOT CONFIGURED`.
-> Siempre dice `D10: INCOMPLETE`. #126 sigue abierto hasta cumplir la Definition of Done
-> (§11).
+> **Estado documentado al 2026-09-30:** D10.1 local cifrado, D10.2 fuera del
+> host en B2 y D10.3 con restauración remota mediante K1 y K2 están activos o
+> demostrados según §§13–15. Desde TOOL 1.7.0, el mismo flujo puede respaldar
+> originales de media cuando `MEDIA_ROOT` y `remote.env` están configurados
+> (§16); no hay un registro versionado de activación o restore sample de M3.
+> Estos son registros operativos fechados; el repositorio no consulta el estado
+> vivo del servidor ni de B2.
 
 ## 1. Decisiones aprobadas (2026-09-27)
 
@@ -18,7 +17,7 @@
 | Cifrado | `age`, en el cliente, antes de que nada salga del host. En el servidor solo hay **destinatarios públicos**; las claves privadas nunca están en easerver |
 | Destinatarios | **K1** (principal: gestor de contraseñas + copia offline) y **K2** (independiente: otra ubicación física o custodia separada). Cada backup se cifra para los dos |
 | Plaintext | **Cero backups persistentes en claro** (§4) |
-| Fuera del host | Backblaze B2, **provisional**: sujeto a una prueba de egress real desde easerver (inspección TLS de Fortinet). Pertenece a D10.2; **no está activo** |
+| Fuera del host | Backblaze B2, activado y verificado según el registro fechado de §14.6; credencial del servidor sin capacidad de borrado |
 | Herramienta | `artesa-backup`, separada de `artesa-deploy` (su propio lock, estado y ciclo de vida) |
 | Programación | systemd `artesa-backup.service` + `.timer`, a diario ~03:30 America/Mexico_City |
 | Pruebas de restauración | restore-check local en **cada** backup; simulacro fuera del host con la clave offline mensual los 3 primeros meses del piloto y trimestral después; prueba de K2 semestral |
@@ -35,7 +34,10 @@ investigando (issue #134). Finanzas queda fuera.
 - **No:**
   - releases y artifacts (reproducibles byte a byte desde Git + CI);
   - venvs;
-  - media (no existe en disco hoy);
+  - derivados públicos de media. El repo no contiene una regeneración
+    determinista que preserve los `storage_path` ya guardados; después de una
+    pérdida requieren restauración aparte o reconciliación. Los originales
+    cuentan con el flujo opcional de §16;
   - **ningún secreto**: `shared/.env` no entra en el backup. La contraseña de la base se
     regenera al recrear el rol y el token del Tunnel se reemite desde Cloudflare;
   - roles y grants de PostgreSQL (se recrean, §9).
@@ -130,7 +132,7 @@ copia en claro, cualquier restauración (también la local) necesita K1 o K2.
 
 `meta.json`, junto al cifrado y **sin datos sensibles**: `backup_id`, fecha, versión,
 `encrypted` (nombre, tamaño, sha256), `encryption` (destinatarios públicos),
-`restore_check.ok` y `remote.status`. Es el contrato que D10.2 subirá junto al cifrado.
+`restore_check.ok` y `remote.status`. Es el contrato que D10.2 sube junto al cifrado.
 
 **Nunca** contienen `DATABASE_URL`, contraseñas, claves privadas ni secretos de proveedor.
 
@@ -139,7 +141,7 @@ copia en claro, cualquier restauración (también la local) necesita K1 o K2.
 | Comando | Qué hace |
 |---|---|
 | `artesa-backup run [--scheduled]` | La tubería de §4. No necesita TTY (systemd) |
-| `artesa-backup status [--json]` | Último intento y último éxito, restore-check, antigüedad, fallos seguidos, cifrado, `OFFSITE: NOT CONFIGURED`, `D10: INCOMPLETE`; `STALE` si pasan más de 26 h sin éxito. Exit 0 si está al día; 11 si está `STALE` o el último intento falló |
+| `artesa-backup status [--json]` | Último intento y último éxito, restore-check, antigüedad, fallos seguidos, cifrado y estado off-site/media; `STALE` si pasan más de 26 h sin éxito. Exit 0 si está al día; 11 si está `STALE` o el último intento falló |
 | `artesa-backup verify [<id> \| --all]` | **Sin clave privada:** archivos, tamaño y sha256 frente a `meta.json`, cabecera age con 2 destinatarios, modos, coherencia con el estado. No prueba que el contenido descifre: eso solo lo demuestra una restauración (D10.3) |
 | `artesa-backup restore-test <ruta>` | restore-check sobre un plaintext **dado explícitamente**: un dump de `artesa-deploy` con su `.json`, o un bundle ya descifrado **fuera del servidor** y extraído (`database.dump` + `manifest.json`). **Nunca descifra**: el servidor no tiene claves privadas |
 | `artesa-backup remote-check [--ping-deadman]` | D10.2, **solo lectura**. Comprueba el destino fuera del host: TLS verificado, capacidades **reales** de la credencial y sus restricciones (modelo sin borrado). No sube nada. Con `--ping-deadman` envía un ping de prueba al dead-man's switch. Es la prueba de egress desde easerver |
@@ -184,7 +186,7 @@ age-keygen -y artesa-backup-K1.key     # vuelve a mostrar la pública
 - Un fallo de la retención queda como aviso en el estado y no borra el backup recién
   creado.
 
-## 9. Recuperación: límites de D10.1
+## 9. Recuperación: límites del diseño D10.1
 
 - La herramienta **no descifra ni restaura sobre producción**. Una restauración real es
   manual (`DEPLOYMENT.md` §11.5) y ahora requiere además descifrar con K1 o K2 **fuera
@@ -237,6 +239,9 @@ del host con K1 **y** con K2 → solo entonces `enable --now` del timer.
 
 ## 11. Definition of Done de #126 (D10 completo)
 
+Los registros de §§13–15 documentan el cumplimiento de estos puntos. La lista
+se conserva como criterio auditable para futuras verificaciones.
+
 #126 se cierra solo cuando:
 - el timer de backup está activo;
 - el último backup tiene menos de 26 h;
@@ -265,7 +270,10 @@ del host con K1 **y** con K2 → solo entonces `enable --now` del timer.
   descifrar con K1 **y** con K2, `restore-test` del bundle descifrado, retención, rechazos
   (falta K2, dump corrupto, lock ocupado) y limpieza. Se ejecuta en Release CI.
 
-## 13. Runbook de activación de D10.1 (manual; después de R6)
+## 13. Runbook histórico de activación de D10.1
+
+Esta sección conserva el procedimiento usado para activar D10.1. El resultado
+actual documentado está en §§14.6–15.
 
 Requisito: estar en un release con `TOOL_VERSION` ≥ 1.3.1 (R6) y con su tooling
 instalado. `bin/artesa-backup` tiene que existir (#137). Cada bloque indica **dónde** se
@@ -453,7 +461,7 @@ journalctl -u artesa-backup.service --since yesterday --no-pager | tail -20
 **Vuelta atrás** (sin pérdida): `sudo systemctl disable --now artesa-backup.timer`. Los
 backups cifrados y `backup.env` se quedan; la herramienta no se toca.
 
-### 13.9 Qué deja D10.1 activo y qué no
+### 13.9 Alcance al terminar D10.1 (corte histórico)
 
 - **Activo:** un backup diario cifrado a K1+K2, restore-check local en cada ejecución,
   7 backups locales y `status`.
@@ -462,11 +470,11 @@ backups cifrados y `backup.env` se quedan; la herramienta no se toca.
   - runbook de host nuevo y simulacros periódicos (D10.3).
 - `status` sigue mostrando `OFFSITE: NOT CONFIGURED` y `D10: INCOMPLETE`. #126 sigue abierto.
 
-## 14. D10.2 — copias fuera del host (código listo; sin configurar en producción)
+## 14. D10.2 — copias fuera del host
 
-`TOOL_VERSION` 1.4.0 (`ops/backup_remote.py`, solo stdlib). **No hay cuenta, bucket ni
-credencial reales.** Sin `shared/backup/remote.env`, todo se comporta exactamente como en
-D10.1.
+La base se implementó en `TOOL_VERSION` 1.4.0 (`ops/backup_remote.py`, solo
+stdlib) y se activó según el registro de §14.6. En cualquier instalación sin
+`shared/backup/remote.env`, el comportamiento vuelve al modo local de D10.1.
 
 ### 14.1 Qué hace `run` con `remote.env`
 
@@ -601,7 +609,7 @@ Falta la prueba con credencial: `remote-check`, paso 5 de §14.4. Los hosts de s
    - el simulacro de D10.3 descarga una copia **remota** y la restaura con K1 y con K2
      (`qa/d10-offhost-drill/drill.py`).
 
-### 14.5 Decisiones pendientes del PO para D10.2
+### 14.5 Decisiones previas a la activación
 
 | # | Decisión | Recomendación |
 |---|---|---|
@@ -661,9 +669,10 @@ Cada simulacro se registra con fecha, `backup_id` e identidad.
 - **RTO objetivo: 4 h** hasta tener la API pública en un host nuevo. Es un objetivo,
   **no está medido**. El próximo simulacro de host nuevo tiene que cronometrar el §15.3
   completo.
-- **Fuera del alcance del backup:** la media (no hay capa de media todavía), la
-  configuración de Cloudflare (reglas A/B/C, Tunnel, DNS; ver `OPERATIONS.md`) y los
-  secretos (`shared/.env`, que se recrean).
+- **Fuera del alcance del backup:** los derivados públicos de media, la
+  configuración de Cloudflare (reglas A/B/C, Tunnel, DNS; ver `OPERATIONS.md`) y
+  los secretos (`shared/.env`, que se recrean). Los originales sí se respaldan
+  mediante el flujo separado de §16 cuando `MEDIA_ROOT` está configurado.
 
 ### 15.3 Runbook: recuperar en un host nuevo (easerver perdido)
 
@@ -736,8 +745,10 @@ sudo, secretos o Cloudflare lo hace el operador.
 ## 16. Originales de medios fuera del host (M3, docs/MEDIA.md §5)
 
 `media/originales/` guarda el material de campo tal como llegó y **no se puede
-volver a tomar**. `artesa-backup run` lo copia en cada ejecución, desde TOOL 1.7.0,
-si `shared/.env` tiene `MEDIA_ROOT`. Lo hace el módulo `ops/backup_media.py`.
+volver a tomar**. Desde TOOL 1.7.0, `artesa-backup run` prepara su índice si
+`shared/.env` tiene `MEDIA_ROOT` y lo copia fuera del host cuando también existe
+`remote.env`. Lo hace el módulo `ops/backup_media.py`. El repositorio documenta
+la implementación, pero no una activación ni un restore sample de M3.
 
 ### 16.1 Qué hace `run`
 
@@ -798,5 +809,7 @@ directorio temporal 0700, y el script lo borra al salir.
 
 Para devolver los originales al servidor, copiar `~/m3/originales/` a
 `MEDIA_ROOT/originales/` sin sobrescribir nada (`rsync --ignore-existing`).
-`publico/` se puede regenerar volviendo a subir en Gestión, o copiarlo aparte.
-
+`publico/` no forma parte de este respaldo. Volver a subir en Gestión crea
+nuevas rutas/registros y no restaura por sí solo los `storage_path` existentes;
+un recovery debe copiar `publico/` desde una fuente aparte o reconciliar la base
+con los nuevos derivados.
