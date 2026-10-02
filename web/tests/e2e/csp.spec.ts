@@ -24,6 +24,8 @@ test("no page triggers a CSP violation", async ({ page }) => {
     "/piezas/",
     `/piezas/${piece.slug}`,
     "/artesanos/",
+    `/artesanos/${piece.artisan.slug}`,
+    "/nosotros/",
     "/no-existe",
     `/c/${TOKEN}`,
   ]) {

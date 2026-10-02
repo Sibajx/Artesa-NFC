@@ -94,12 +94,33 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform var(--duration-scene) var(--ease-out);
 }
 
-.piece-card__link:hover .piece-card__media img,
-.piece-card__link:focus-visible .piece-card__media img {
-  transform: scale(1.025);
+/* Card pop (2026-10): the card lifts and its photo grows with a spring. */
+@media (prefers-reduced-motion: no-preference) {
+  .piece-card__link {
+    transition: transform var(--duration-pop) var(--ease-pop);
+  }
+
+  .piece-card__media {
+    transition: box-shadow var(--duration-pop) var(--ease-out);
+  }
+
+  .piece-card__link:is(:hover, :focus-visible) {
+    transform: translateY(-6px);
+  }
+
+  .piece-card__link:is(:hover, :focus-visible) .piece-card__media {
+    box-shadow: 0 22px 40px -24px rgb(92 63 40 / 0.65);
+  }
+
+  .artisan-list__link h2 {
+    transition: transform var(--duration-pop) var(--ease-pop);
+  }
+
+  .artisan-list__link:is(:hover, :focus-visible) h2 {
+    transform: translateX(10px);
+  }
 }
 
 .piece-card__title {
@@ -150,7 +171,7 @@
 
 .piece-viewer__stage {
   aspect-ratio: 4 / 5;
-  background: radial-gradient(circle at 50% 40%, #f3eee4, var(--color-paper));
+  background: radial-gradient(circle at 50% 40%, var(--color-soft-white), var(--color-paper));
 }
 
 .piece-viewer__stage > img,
@@ -180,7 +201,7 @@
 }
 
 .piece-viewer .piece-viewer__launch:hover {
-  background: var(--color-text-inverse);
+  background: var(--color-soft-white);
   color: var(--color-surface-dark);
 }
 

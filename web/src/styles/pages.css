@@ -1,0 +1,1016 @@
+/* ArtesaNFC web — section identities (2026-10). One visual language shared
+   with the Home (warm night, dye-named lights, greca, HUD labels, pop
+   motion), but each section has its own scene:
+   - Artesanos  "Las manos"   numbered editorial rows, duotone portraits;
+   - Artesano   "Retrato"     scanned portrait in a HUD frame, counters,
+                              history as an editorial quote;
+   - Piezas     "Vitrina"     lit display case, pointer spotlight, foil;
+   - Pieza      "Expediente"  piece in a vitrine with a seal, holographic
+                              passport, film strip gallery;
+   - Nosotros   "Colectivo"   people as contact cards with a chip.
+   Everything decorative is aria-hidden; reduced motion leaves final states. */
+
+/* --- Shared: dark page hero --------------------------------------------- */
+
+.night-hero {
+  position: relative;
+  overflow: hidden;
+  color: var(--color-text-inverse);
+  background:
+    radial-gradient(
+      ellipse at 85% 10%,
+      color-mix(in srgb, var(--color-cempasuchil) 16%, transparent),
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse at 0% 100%,
+      color-mix(in srgb, var(--color-grana) 12%, transparent),
+      transparent 50%
+    ),
+    var(--color-night);
+  padding-top: calc(var(--space-xl) + 24px);
+}
+
+.night-hero .lead {
+  color: color-mix(in srgb, var(--color-text-inverse) 82%, transparent);
+}
+
+.night-hero__inner {
+  display: grid;
+  gap: var(--space-sm);
+  padding-bottom: var(--space-lg);
+}
+
+.night-hero__title {
+  max-width: 16ch;
+}
+
+.night-hero__grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.22;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--color-fiber) 25%, transparent) 1px, transparent 1px),
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--color-fiber) 25%, transparent) 1px,
+      transparent 1px
+    );
+  background-size: 64px 64px;
+  mask-image: radial-gradient(ellipse at 70% 30%, #000 0%, transparent 70%);
+}
+
+.hud-coords {
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  letter-spacing: 0.12em;
+  color: color-mix(in srgb, var(--color-text-inverse) 60%, transparent);
+}
+
+/* Title words rise in (same motion as the Home hero). */
+.rise > * {
+  animation: rise-in var(--duration-editorial) var(--ease-out) both;
+}
+
+.rise > *:nth-child(2) {
+  animation-delay: 90ms;
+}
+.rise > *:nth-child(3) {
+  animation-delay: 180ms;
+}
+.rise > *:nth-child(4) {
+  animation-delay: 270ms;
+}
+.rise > *:nth-child(5) {
+  animation-delay: 360ms;
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.6em);
+    filter: blur(5px);
+  }
+}
+
+/* --- Artesanos: "Las manos" -------------------------------------------- */
+
+.hands {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: hand;
+}
+
+.hands__item {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-sm) var(--space-md);
+  align-items: center;
+  padding-block: var(--space-md);
+  border-top: 1px solid var(--color-rule);
+  text-decoration: none;
+}
+
+.hands li:last-child .hands__item {
+  border-bottom: 1px solid var(--color-rule);
+}
+
+.hands__index {
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  color: var(--color-clay);
+  align-self: start;
+}
+
+.hands__portrait {
+  grid-column: 1 / -1;
+  aspect-ratio: 4 / 3;
+  border-radius: 2px;
+  overflow: hidden;
+  background: var(--color-wood);
+  position: relative;
+}
+
+.hands__portrait img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: grayscale(1) contrast(1.05);
+  transition:
+    filter var(--duration-editorial) var(--ease-out),
+    transform var(--duration-pop) var(--ease-pop);
+}
+
+/* Duotone: the cempasúchil light washes over the portrait until hover. */
+.hands__portrait::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(160deg, var(--color-cempasuchil), var(--color-grana));
+  mix-blend-mode: multiply;
+  opacity: 0.55;
+  transition: opacity var(--duration-editorial) var(--ease-out);
+}
+
+.hands__text {
+  display: grid;
+  gap: var(--space-2xs);
+}
+
+.hands__name {
+  font-size: var(--text-heading-1);
+  transition: transform var(--duration-pop) var(--ease-pop);
+}
+
+.hands__meta {
+  color: var(--color-text-muted);
+}
+
+.hands__arrow {
+  justify-self: end;
+  font-size: 1.5rem;
+  color: var(--color-clay);
+  transition: transform var(--duration-pop) var(--ease-pop);
+}
+
+.hands__item:is(:hover, :focus-visible) .hands__portrait img {
+  filter: none;
+}
+
+.hands__item:is(:hover, :focus-visible) .hands__portrait::after {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hands__item:is(:hover, :focus-visible) .hands__name {
+    transform: translateX(12px);
+  }
+
+  .hands__item:is(:hover, :focus-visible) .hands__arrow {
+    transform: translateX(6px) scale(1.15);
+  }
+
+  .hands__item:is(:hover, :focus-visible) .hands__portrait img {
+    transform: scale(1.05);
+  }
+}
+
+@media (min-width: 760px) {
+  .hands__item {
+    grid-template-columns: 3rem minmax(180px, 280px) 1fr auto;
+  }
+
+  .hands__portrait {
+    grid-column: auto;
+  }
+}
+
+/* --- Artesano: "Retrato" ------------------------------------------------ */
+
+.portrait-hero__grid {
+  display: grid;
+  gap: var(--space-lg);
+  align-items: center;
+  padding-bottom: var(--space-lg);
+}
+
+.portrait-hero__frame {
+  position: relative;
+  aspect-ratio: 4 / 5;
+  max-width: 460px;
+  width: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: var(--color-night-raised);
+}
+
+.portrait-hero__frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Scan: a line of light reads the portrait once, revealing it. */
+@media (prefers-reduced-motion: no-preference) {
+  .portrait-hero__frame img {
+    animation: scan-reveal 1.6s var(--ease-out) 0.2s both;
+  }
+
+  .portrait-hero__frame::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    top: 0;
+    background: var(--color-cempasuchil);
+    box-shadow: 0 0 18px 4px color-mix(in srgb, var(--color-cempasuchil) 60%, transparent);
+    animation: scan-line 1.6s var(--ease-out) 0.2s both;
+  }
+}
+
+@keyframes scan-reveal {
+  from {
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes scan-line {
+  0% {
+    top: 0;
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
+}
+
+.portrait-hero__text {
+  display: grid;
+  gap: var(--space-sm);
+  justify-items: start;
+}
+
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  margin-top: var(--space-xs);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--color-rule-dark);
+}
+
+.stats div {
+  display: grid;
+  gap: 2px;
+}
+
+.stats dt {
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--color-text-inverse) 60%, transparent);
+}
+
+.stats dd {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 2.6rem;
+  line-height: 1;
+  color: var(--color-cempasuchil);
+  font-variant-numeric: tabular-nums;
+}
+
+.stats dd small {
+  display: block;
+  font-family: var(--font-ui);
+  font-size: var(--text-small);
+  color: color-mix(in srgb, var(--color-text-inverse) 80%, transparent);
+  max-width: 22ch;
+}
+
+@media (min-width: 900px) {
+  .portrait-hero__grid {
+    grid-template-columns: 5fr 7fr;
+  }
+}
+
+/* History as an editorial quote. */
+.quote-section {
+  background: var(--color-paper);
+}
+
+.quote {
+  position: relative;
+  max-width: 54rem;
+  margin: 0 auto;
+  padding-left: var(--space-md);
+  border-left: 2px solid var(--color-grana);
+}
+
+.quote::before {
+  content: "“";
+  position: absolute;
+  left: -0.1em;
+  top: -0.55em;
+  font-family: var(--font-display);
+  font-size: 7rem;
+  line-height: 1;
+  color: color-mix(in srgb, var(--color-grana) 35%, transparent);
+  pointer-events: none;
+}
+
+.quote p {
+  font-family: var(--font-display);
+  font-size: clamp(1.4rem, 2.6vw, 2.1rem);
+  line-height: 1.35;
+}
+
+.quote p::first-letter {
+  color: var(--color-clay);
+}
+
+/* Workshop: masonry of photos. */
+.masonry {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  columns: 2 220px;
+  column-gap: var(--space-sm);
+}
+
+.masonry li {
+  break-inside: avoid;
+  margin-bottom: var(--space-sm);
+}
+
+.masonry img {
+  width: 100%;
+  height: auto;
+}
+
+/* --- Piezas: "Vitrina" --------------------------------------------------- */
+
+.vitrine-page {
+  background: var(--color-night);
+  color: var(--color-text-inverse);
+}
+
+.vitrine-page .piece-card__meta,
+.vitrine-page .muted {
+  color: color-mix(in srgb, var(--color-text-inverse) 72%, transparent);
+}
+
+.vitrine-page .piece-card {
+  position: relative;
+  padding: var(--space-sm);
+  border: 1px solid var(--color-rule-dark);
+  border-radius: 6px;
+  background:
+    radial-gradient(
+      circle at var(--sx, 50%) var(--sy, 0%),
+      color-mix(in srgb, var(--color-cempasuchil) 18%, transparent),
+      transparent 55%
+    ),
+    var(--color-night-raised);
+  transition:
+    border-color var(--duration-ui) var(--ease-out),
+    box-shadow var(--duration-ui) var(--ease-out);
+}
+
+.vitrine-page .piece-card:hover {
+  border-color: color-mix(in srgb, var(--color-cempasuchil) 60%, transparent);
+  box-shadow: 0 0 34px -10px color-mix(in srgb, var(--color-cempasuchil) 55%, transparent);
+}
+
+/* Foil sheen across the photo on hover. */
+.vitrine-page .piece-card__media::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    color-mix(in srgb, var(--color-cempasuchil) 30%, transparent) 45%,
+    color-mix(in srgb, var(--color-anil) 30%, transparent) 55%,
+    transparent 70%
+  );
+  background-size: 250% 100%;
+  background-position: 120% 0;
+  mix-blend-mode: screen;
+  transition: background-position 900ms var(--ease-out);
+}
+
+.vitrine-page .piece-card:hover .piece-card__media::after {
+  background-position: -20% 0;
+}
+
+.vitrine-page .piece-card__code {
+  color: var(--color-cempasuchil);
+}
+
+.vitrine-page .status-view,
+.vitrine-page .lead {
+  color: color-mix(in srgb, var(--color-text-inverse) 82%, transparent);
+}
+
+/* --- Pieza: "Expediente" -------------------------------------------------- */
+
+.dossier-hero__grid {
+  display: grid;
+  gap: var(--space-lg);
+  align-items: center;
+  padding-bottom: var(--space-lg);
+}
+
+.vitrine {
+  position: relative;
+  padding: clamp(14px, 3vw, 28px);
+  border-radius: 4px;
+  background:
+    radial-gradient(
+      ellipse at 50% 0%,
+      color-mix(in srgb, var(--color-cempasuchil) 22%, transparent),
+      transparent 65%
+    ),
+    var(--color-night-raised);
+}
+
+.vitrine .piece__photo,
+.vitrine .piece-viewer {
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.vitrine__seal {
+  position: absolute;
+  right: -18px;
+  bottom: -18px;
+  width: 92px;
+  height: 92px;
+  pointer-events: none;
+}
+
+.vitrine__seal circle {
+  fill: var(--color-night);
+  stroke: color-mix(in srgb, var(--color-cempasuchil) 60%, transparent);
+  stroke-width: 1;
+}
+
+.vitrine__seal text {
+  font-family: var(--font-mono);
+  font-size: 7px;
+  letter-spacing: 0.22em;
+  fill: color-mix(in srgb, var(--color-text-inverse) 80%, transparent);
+}
+
+.vitrine__seal path {
+  fill: none;
+  stroke: var(--color-cempasuchil);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .vitrine__seal .vitrine__seal-text {
+    transform-origin: 50px 50px;
+    animation: seal-spin 30s linear infinite;
+  }
+}
+
+@keyframes seal-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.dossier-hero__text {
+  display: grid;
+  gap: var(--space-sm);
+  justify-items: start;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.3em 0.8em;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.chip::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.chip--available {
+  color: #7fd69a;
+}
+.chip--reserved {
+  color: var(--color-cempasuchil);
+}
+.chip--exhibited {
+  color: #9aa8ff;
+}
+.chip--archived {
+  color: color-mix(in srgb, var(--color-text-inverse) 60%, transparent);
+}
+
+@media (min-width: 900px) {
+  .dossier-hero__grid {
+    grid-template-columns: 6fr 5fr;
+  }
+}
+
+/* Holographic passport (public variant on the piece page). */
+.dossier .passport {
+  position: relative;
+  overflow: hidden;
+  color: var(--color-text-inverse);
+  background: linear-gradient(160deg, var(--color-night-raised), var(--color-night));
+  border: 1px solid color-mix(in srgb, var(--color-cempasuchil) 45%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--color-cempasuchil) 45%, transparent);
+  border-radius: 12px;
+  box-shadow: 0 0 40px -14px color-mix(in srgb, var(--color-cempasuchil) 45%, transparent);
+}
+
+.dossier .passport::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    transparent 25%,
+    color-mix(in srgb, var(--color-cempasuchil) 18%, transparent) 40%,
+    color-mix(in srgb, var(--color-grana) 14%, transparent) 50%,
+    color-mix(in srgb, var(--color-anil) 18%, transparent) 60%,
+    transparent 75%
+  );
+  background-size: 260% 260%;
+  mix-blend-mode: screen;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dossier .passport::before {
+    animation: foil-drift 9s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes foil-drift {
+  from {
+    background-position: 0% 0%;
+  }
+  to {
+    background-position: 100% 100%;
+  }
+}
+
+.dossier .passport .eyebrow,
+.dossier .passport__row dt {
+  font-family: var(--font-mono);
+  color: var(--color-cempasuchil);
+}
+
+.dossier .passport__row {
+  border-color: var(--color-rule-dark);
+}
+
+.dossier .passport a {
+  color: var(--color-text-inverse);
+}
+
+.dossier .passport .muted {
+  color: color-mix(in srgb, var(--color-text-inverse) 65%, transparent);
+}
+
+/* Film strip gallery: horizontal, scroll-snapped, keyboard scrollable. */
+.film {
+  display: flex;
+  gap: var(--space-sm);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding: var(--space-sm) 0 var(--space-md);
+  list-style: none;
+  margin: 0;
+  scrollbar-color: var(--color-clay) transparent;
+}
+
+.film li {
+  flex: 0 0 min(78vw, 520px);
+  scroll-snap-align: start;
+  position: relative;
+}
+
+.film li::before,
+.film li::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 10px;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent 0 10px,
+    color-mix(in srgb, var(--color-wood) 40%, transparent) 10px 18px
+  );
+  z-index: 1;
+}
+
+.film li::before {
+  top: 0;
+}
+.film li::after {
+  bottom: 0;
+}
+
+.film .media-frame {
+  aspect-ratio: 4 / 3;
+}
+
+.film-wrap:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 4px;
+}
+
+/* "Hecha por": artisan card. */
+.maker {
+  display: grid;
+  gap: var(--space-md);
+  align-items: center;
+  padding: var(--space-md);
+  border: 1px solid var(--color-rule);
+  border-radius: 6px;
+  background: var(--color-soft-white);
+}
+
+.maker__portrait {
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  overflow: hidden;
+  box-shadow:
+    0 0 0 4px var(--color-bg),
+    0 0 0 5px var(--color-clay);
+}
+
+.maker__portrait img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.maker__text {
+  display: grid;
+  gap: var(--space-xs);
+  justify-items: start;
+}
+
+@media (min-width: 760px) {
+  .maker {
+    grid-template-columns: auto 1fr;
+  }
+}
+
+/* --- Nosotros: "Colectivo" ----------------------------------------------- */
+
+.mission {
+  display: grid;
+  gap: var(--space-md);
+}
+
+.mission__values {
+  display: grid;
+  gap: var(--space-sm);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mission__values li {
+  padding: var(--space-sm);
+  border-left: 2px solid var(--color-cempasuchil);
+  background: color-mix(in srgb, var(--color-soft-white) 60%, transparent);
+}
+
+.mission__values strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 400;
+}
+
+@media (min-width: 900px) {
+  .mission {
+    grid-template-columns: 5fr 6fr;
+  }
+
+  .mission__values {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Members as contact cards with a chip. */
+.crew {
+  display: grid;
+  gap: var(--space-md);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+@media (min-width: 700px) {
+  .crew {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  }
+}
+
+.crew-card {
+  position: relative;
+  display: grid;
+  gap: var(--space-sm);
+  height: 100%;
+  padding: var(--space-md);
+  border-radius: 14px;
+  overflow: hidden;
+  color: var(--color-text-inverse);
+  background:
+    radial-gradient(
+      circle at 100% 0%,
+      color-mix(in srgb, var(--color-anil) 25%, transparent),
+      transparent 55%
+    ),
+    linear-gradient(160deg, var(--color-night-raised), var(--color-night));
+  border: 1px solid var(--color-rule-dark);
+  transition:
+    transform var(--duration-pop) var(--ease-pop),
+    box-shadow var(--duration-ui) var(--ease-out),
+    border-color var(--duration-ui) var(--ease-out);
+}
+
+.crew-card:hover {
+  border-color: color-mix(in srgb, var(--color-cempasuchil) 55%, transparent);
+  box-shadow:
+    0 20px 40px -24px rgb(0 0 0 / 0.8),
+    0 0 30px -12px color-mix(in srgb, var(--color-cempasuchil) 50%, transparent);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .crew-card:hover {
+    transform: translateY(-6px) rotate(-0.6deg);
+  }
+}
+
+.crew-card__top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.crew-card__avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  color: var(--color-night);
+  background: linear-gradient(135deg, var(--color-cempasuchil), var(--color-grana));
+  overflow: hidden;
+  flex: none;
+}
+
+.crew-card__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.crew-card__name {
+  font-family: var(--font-display);
+  font-size: 1.7rem;
+  line-height: 1.1;
+}
+
+.crew-card__role {
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-cempasuchil);
+}
+
+.crew-card__bio {
+  color: color-mix(in srgb, var(--color-text-inverse) 78%, transparent);
+  font-size: var(--text-small);
+}
+
+/* The chip in the corner: the card is "a business card with NFC". */
+.crew-card__chip {
+  position: absolute;
+  top: var(--space-sm);
+  right: var(--space-sm);
+  width: 30px;
+  height: 22px;
+  border-radius: 4px;
+  background: linear-gradient(135deg, #e9c27a, #b3863c);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.25);
+}
+
+.crew-card__chip::after {
+  content: "";
+  position: absolute;
+  inset: 5px 8px;
+  border: 1px solid rgb(0 0 0 / 0.3);
+  border-radius: 2px;
+}
+
+/* Contact links (people and company). */
+.contact-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.contact-links a,
+.contact-links span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  min-height: var(--touch-target-min);
+  padding: 0 0.9em;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  font-size: var(--text-small);
+  text-decoration: none;
+  transition:
+    transform var(--duration-pop) var(--ease-pop),
+    background-color var(--duration-ui) var(--ease-out),
+    color var(--duration-ui) var(--ease-out);
+}
+
+.contact-links svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.contact-links a:hover {
+  background: var(--color-cempasuchil);
+  border-color: var(--color-cempasuchil);
+  color: var(--color-night);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .contact-links a:hover {
+    transform: translateY(-2px) scale(1.05);
+  }
+}
+
+.contact-links span {
+  border-style: dashed;
+  opacity: 0.75;
+}
+
+/* Company channels: a big lit panel. */
+.channels {
+  display: grid;
+  gap: var(--space-md);
+  padding: clamp(24px, 5vw, 56px);
+  border-radius: 6px;
+  color: var(--color-text-inverse);
+  background:
+    radial-gradient(
+      ellipse at 0% 0%,
+      color-mix(in srgb, var(--color-cempasuchil) 18%, transparent),
+      transparent 55%
+    ),
+    var(--color-night);
+}
+
+.channels .contact-links a,
+.channels .contact-links span {
+  font-size: var(--text-body);
+  min-height: 52px;
+  padding: 0 1.2em;
+}
+
+/* HUD labels on light surfaces use clay (AA on cream), not cempasúchil. */
+.hands .hud-label,
+.quote-section .hud-label,
+.hud-label.light-hud {
+  color: var(--color-wood); /* 6.2:1 on paper, 7.5:1 on cream */
+}
+
+/* The list keeps .artisan-list for its semantics; .hands owns the look. */
+.hands.artisan-list {
+  border-top: 0;
+}
+
+/* Island pages that open on a dark hero: the hero carries the top spacing
+   (it sits under the header), so the shell's padding goes away. */
+.page-top:has(.night-hero) {
+  padding-top: 0;
+}
+
+/* Long texts: pull-quote + readable columns. */
+.story {
+  display: grid;
+  gap: var(--space-md);
+}
+
+.story__body {
+  columns: 1;
+  column-gap: var(--space-lg);
+  max-width: 72rem;
+  font-size: var(--text-body-l);
+  line-height: 1.7;
+}
+
+.story__body p + p {
+  margin-top: 1em;
+}
+
+@media (min-width: 1000px) {
+  .story__body {
+    columns: 2;
+  }
+}
+
+.hero-more {
+  font-size: var(--text-small);
+}
+
+/* Technique chips under the counters. */
+.craft-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.craft-tags li {
+  padding: 0.3em 0.8em;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--color-cempasuchil) 45%, transparent);
+  font-size: var(--text-small);
+  color: color-mix(in srgb, var(--color-text-inverse) 88%, transparent);
+}
+
+.mission__values {
+  margin-top: var(--space-lg);
+}
+
+.crew {
+  margin-top: var(--space-md);
+}

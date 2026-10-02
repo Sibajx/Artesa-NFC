@@ -1,10 +1,12 @@
 ---
 // Home block 4 — closing call for artisans, collectors and cultural projects.
+import Greca from "@/components/home/Greca.astro";
 import { homeCopy } from "@/content/site";
 const { closing } = homeCopy;
 ---
 
 <section id="contacto" class="closing section" aria-labelledby="closing-title">
+  <Greca tone="light" class="closing__greca" />
   <div class="container closing__grid">
     <div data-reveal>
       <p class="eyebrow">{closing.eyebrow}</p>
@@ -26,7 +28,14 @@ const { closing } = homeCopy;
 
 <style>
   .closing {
+    position: relative;
     background: var(--color-paper);
+  }
+
+  .closing :global(.closing__greca) {
+    position: absolute;
+    top: 0;
+    left: 0;
   }
 
   .closing__grid {
@@ -39,12 +48,47 @@ const { closing } = homeCopy;
     gap: var(--space-md);
   }
 
+  .closing__audiences > div {
+    position: relative;
+    padding: var(--space-md) var(--space-sm) var(--space-sm);
+    border-top: 1px solid var(--color-clay);
+    background: color-mix(in srgb, var(--color-bg) 60%, transparent);
+    transition:
+      background-color var(--duration-ui) var(--ease-out),
+      box-shadow var(--duration-ui) var(--ease-out),
+      transform var(--duration-ui) var(--ease-out);
+  }
+
+  /* Node on the trace: each audience is a point where the greca connects. */
+  .closing__audiences > div::before {
+    content: "";
+    position: absolute;
+    top: -4px;
+    left: var(--space-sm);
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--color-grana);
+    transition: box-shadow var(--duration-ui) var(--ease-out);
+  }
+
+  .closing__audiences > div:hover {
+    background: var(--color-bg);
+    transform: translateY(-3px);
+    box-shadow: 0 18px 30px -22px rgb(92 63 40 / 0.6);
+  }
+
+  .closing__audiences > div:hover::before {
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--color-grana) 25%, transparent);
+  }
+
   .closing__audiences dt {
     font-family: var(--font-display);
     font-size: 1.6rem;
   }
 
   .closing__audiences dd {
+    margin-top: var(--space-2xs);
     color: var(--color-text-muted);
     max-width: 30ch;
   }

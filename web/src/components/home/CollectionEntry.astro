@@ -1,26 +1,62 @@
 ---
 // Home block 3 — visual entry to the collection. Static on purpose: the home
 // shows no API data, so it communicates fully without JavaScript or the API.
+//
+// 2026-10: the image carries an illustrative holographic certificate card
+// (labelled "Ejemplo", never a real piece). With a fine pointer the card tilts
+// and its foil follows the cursor; with touch or reduced motion it stays still
+// with a static sheen. The card is a real figure with readable text.
 import ResponsivePicture from "@/components/ui/ResponsivePicture.astro";
 import { collectionEntryImage, homeCopy } from "@/content/site";
 const { collection } = homeCopy;
+const { certificate } = collection;
 ---
 
 <section class="collection section on-dark" aria-labelledby="collection-title">
   <div class="container collection__grid">
-    <a
-      class="collection__media media-frame"
-      href={collection.cta.href}
-      tabindex="-1"
-      aria-hidden="true"
-    >
-      <ResponsivePicture
-        image={collectionEntryImage}
-        sizes="(min-width: 900px) 50vw, 100vw"
-        decorative
-      />
-      {collectionEntryImage.provisional && <span class="placeholder-note">Imagen provisional</span>}
-    </a>
+    <div class="collection__visual">
+      <a
+        class="collection__media media-frame"
+        href={collection.cta.href}
+        tabindex="-1"
+        aria-hidden="true"
+      >
+        <ResponsivePicture
+          image={collectionEntryImage}
+          sizes="(min-width: 900px) 50vw, 100vw"
+          decorative
+        />
+        {collectionEntryImage.provisional && (
+          <span class="placeholder-note">Imagen provisional</span>
+        )}
+      </a>
+
+      <figure class="cert" data-holo aria-label={`${certificate.label} (${certificate.example})`}>
+        <div class="cert__card">
+          <span class="cert__foil" aria-hidden="true"></span>
+          <div class="cert__head">
+            <span class="cert__label">{certificate.label}</span>
+            <span class="cert__example">{certificate.example}</span>
+          </div>
+          <p class="cert__title">{certificate.title}</p>
+          <dl class="cert__rows">
+            {certificate.rows.map((row) => (
+              <div>
+                <dt>{row.term}</dt>
+                <dd>{row.value}</dd>
+              </div>
+            ))}
+          </dl>
+          <div class="cert__foot">
+            <span class="cert__serial">{certificate.serial}</span>
+            <svg class="cert__nfc" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M7 8a6 6 0 0 1 0 8M11 5a10 10 0 0 1 0 14M15 2a14 14 0 0 1 0 20"></path>
+            </svg>
+          </div>
+        </div>
+      </figure>
+    </div>
+
     <div class="collection__text" data-reveal>
       <p class="eyebrow">{collection.eyebrow}</p>
       <h2 id="collection-title" class="display-l">
@@ -28,7 +64,7 @@ const { collection } = homeCopy;
       </h2>
       <p class="lead">{collection.body}</p>
       <div class="collection__links">
-        <a class="button" href={collection.cta.href}>
+        <a class="button button--glow" href={collection.cta.href}>
           {collection.cta.label}
         </a>
         <a class="editorial-link" href={collection.secondary.href}>
@@ -39,34 +75,214 @@ const { collection } = homeCopy;
   </div>
 </section>
 
+<script>
+  // Pointer-driven tilt + foil position, written as CSS custom properties
+  // (CSSOM, allowed by the CSP). Only for a fine pointer and allowed motion.
+  const card = document.querySelector<HTMLElement>("[data-holo]");
+  const fine = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (card && fine && !reduced) {
+    const area = card.closest<HTMLElement>(".collection__visual") ?? card;
+    let frame = 0;
+    area.addEventListener("pointermove", (e) => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const r = card.getBoundingClientRect();
+        const x = Math.min(Math.max((e.clientX - r.left) / r.width, 0), 1);
+        const y = Math.min(Math.max((e.clientY - r.top) / r.height, 0), 1);
+        card.style.setProperty("--mx", `${(x * 100).toFixed(1)}%`);
+        card.style.setProperty("--my", `${(y * 100).toFixed(1)}%`);
+        card.style.setProperty("--ry", `${((x - 0.5) * 16).toFixed(2)}deg`);
+        card.style.setProperty("--rx", `${((0.5 - y) * 12).toFixed(2)}deg`);
+        card.classList.add("is-active");
+      });
+    });
+    area.addEventListener("pointerleave", () => {
+      cancelAnimationFrame(frame);
+      card.classList.remove("is-active");
+      for (const p of ["--mx", "--my", "--rx", "--ry"]) card.style.removeProperty(p);
+    });
+  }
+</script>
+
 <style>
   .collection {
-    background: var(--color-surface-dark);
+    background:
+      radial-gradient(
+        ellipse at 15% 80%,
+        color-mix(in srgb, var(--color-grana) 14%, transparent),
+        transparent 50%
+      ),
+      var(--color-night);
     color: var(--color-text-inverse);
   }
 
   .collection__grid {
     display: grid;
-    gap: var(--space-md);
+    gap: var(--space-lg);
     align-items: center;
+  }
+
+  .collection__visual {
+    position: relative;
+    padding-bottom: var(--space-lg);
   }
 
   .collection__media {
     aspect-ratio: 4 / 5;
     display: block;
     background: var(--color-wood);
+    width: 85%;
+  }
+
+  /* The certificate card sits over the bottom of the image. */
+  .collection__media :global(.placeholder-note) {
+    top: var(--space-xs);
+    bottom: auto;
   }
 
   .collection__media :global(img) {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transition: transform var(--duration-scene) var(--ease-out);
   }
 
-  .collection__media:hover :global(img) {
-    transform: scale(1.02);
+  /* --- Holographic certificate card ------------------------------------- */
+
+  .cert {
+    --mx: 30%;
+    --my: 20%;
+    --rx: 4deg;
+    --ry: -8deg;
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: min(320px, 72%);
+    margin: 0;
+    perspective: 900px;
   }
+
+  .cert__card {
+    position: relative;
+    display: grid;
+    gap: var(--space-sm);
+    padding: 22px;
+    border-radius: 14px;
+    overflow: hidden;
+    color: var(--color-text-inverse);
+    background: linear-gradient(
+      160deg,
+      color-mix(in srgb, var(--color-night-raised) 92%, transparent),
+      color-mix(in srgb, var(--color-night) 96%, transparent)
+    );
+    border: 1px solid color-mix(in srgb, var(--color-cempasuchil) 45%, transparent);
+    box-shadow:
+      0 30px 60px -20px rgb(0 0 0 / 0.7),
+      0 0 30px -8px color-mix(in srgb, var(--color-cempasuchil) 40%, transparent);
+    transform: rotateX(var(--rx)) rotateY(var(--ry));
+    transform-style: preserve-3d;
+    transition: transform var(--duration-editorial) var(--ease-out);
+    backdrop-filter: blur(8px);
+  }
+
+  .cert:global(.is-active) .cert__card {
+    transition-duration: 120ms;
+  }
+
+  /* Foil in dye colours: cempasúchil, grana, añil. */
+  .cert__foil {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(circle at var(--mx) var(--my), rgb(255 255 255 / 0.22), transparent 40%),
+      linear-gradient(
+        115deg,
+        transparent 20%,
+        color-mix(in srgb, var(--color-cempasuchil) 35%, transparent) 38%,
+        color-mix(in srgb, var(--color-grana) 30%, transparent) 50%,
+        color-mix(in srgb, var(--color-anil) 35%, transparent) 62%,
+        transparent 80%
+      );
+    background-size:
+      100% 100%,
+      240% 240%;
+    background-position:
+      0 0,
+      var(--mx) var(--my);
+    mix-blend-mode: screen;
+    opacity: 0.55;
+  }
+
+  .cert__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-xs);
+  }
+
+  .cert__label,
+  .cert__example,
+  .cert__serial {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .cert__label {
+    color: var(--color-cempasuchil);
+  }
+
+  .cert__example {
+    padding: 0.2em 0.5em;
+    border: 1px dashed currentColor;
+    border-radius: 2px;
+    color: color-mix(in srgb, var(--color-text-inverse) 80%, transparent);
+  }
+
+  .cert__title {
+    font-family: var(--font-display);
+    font-size: 2rem;
+    line-height: 1;
+  }
+
+  .cert__rows {
+    display: grid;
+    gap: 6px;
+  }
+
+  .cert__rows div {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--color-rule-dark);
+    font-size: var(--text-small);
+  }
+
+  .cert__rows dt {
+    color: color-mix(in srgb, var(--color-text-inverse) 72%, transparent);
+  }
+
+  .cert__foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: color-mix(in srgb, var(--color-text-inverse) 72%, transparent);
+  }
+
+  .cert__nfc {
+    width: 22px;
+    height: 22px;
+    fill: none;
+    stroke: var(--color-cempasuchil);
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    filter: drop-shadow(0 0 4px var(--color-cempasuchil));
+  }
+
+  /* --- Text column -------------------------------------------------------- */
 
   .collection__text {
     display: grid;
@@ -86,10 +302,15 @@ const { collection } = homeCopy;
     margin-top: var(--space-xs);
   }
 
+  @media (prefers-reduced-motion: reduce) {
+    .cert__card {
+      transform: none;
+    }
+  }
+
   @media (min-width: 900px) {
     .collection__grid {
       grid-template-columns: 1fr 1fr;
-      gap: var(--space-lg);
     }
   }
 </style>

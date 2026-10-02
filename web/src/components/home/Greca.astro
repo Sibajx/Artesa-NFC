@@ -1,0 +1,79 @@
+---
+// Stepped-fret band (xicalcoliuhqui, the greca of Mitla) drawn as a circuit
+// trace: a dim base line plus light pulses that travel along it. It is the
+// Home's bridge between craft and technology. Purely decorative (aria-hidden);
+// with reduced motion the pulses stop and the band stays as a static line.
+interface Props {
+  tone?: "dark" | "light";
+  class?: string;
+}
+
+const { tone = "dark", class: className } = Astro.props;
+
+const UNIT = 48;
+const UNITS = 60; // wide enough that `slice` only ever crops the edges
+const unit = (x: number) =>
+  `M${x} 28H${x + 6}V22H${x + 12}V16H${x + 18}V10H${x + 24}V4H${x + 42}V24H${x + 30}V12H${x + 36}V18`;
+const width = UNIT * UNITS;
+const d = `M0 31H${width}` + Array.from({ length: UNITS }, (_, i) => unit(i * UNIT)).join("");
+---
+
+<div class:list={["greca", `greca--${tone}`, className]} aria-hidden="true">
+  <svg viewBox={`0 0 ${width} 34`} preserveAspectRatio="xMidYMid slice" focusable="false">
+    <path class="greca__base" d={d}></path>
+    <path class="greca__pulse" d={d}></path>
+  </svg>
+</div>
+
+<style>
+  .greca {
+    height: 34px;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  .greca svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .greca path {
+    fill: none;
+    stroke-width: 1.25;
+    stroke-linejoin: miter;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .greca--dark .greca__base {
+    stroke: color-mix(in srgb, var(--color-fiber) 35%, transparent);
+  }
+
+  .greca--light .greca__base {
+    stroke: color-mix(in srgb, var(--color-clay) 45%, transparent);
+  }
+
+  .greca__pulse {
+    stroke: var(--color-cempasuchil);
+    stroke-width: 2;
+    stroke-dasharray: 5 59;
+    filter: drop-shadow(0 0 4px var(--color-cempasuchil));
+    animation: greca-flow 6s linear infinite;
+  }
+
+  .greca--light .greca__pulse {
+    stroke: var(--color-grana);
+    filter: none;
+  }
+
+  @keyframes greca-flow {
+    to {
+      stroke-dashoffset: -640;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .greca__pulse {
+      display: none;
+    }
+  }
+</style>
