@@ -11,6 +11,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
+from app.models.media_asset import MediaRole
 from app.models.piece import AvailabilityStatus
 
 Slug = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$", max_length=60)]
@@ -112,6 +113,8 @@ AltText = Annotated[str, StringConstraints(strip_whitespace=True, max_length=300
 class MediaUpdate(_Body):
     alt_text: AltText | None = None
     position: int | None = Field(default=None, ge=0, le=999)
+    # The service checks it against the owner's roles and the file's type.
+    role: MediaRole | None = None
 
     _blank = field_validator("alt_text", mode="before")(_blank_to_none)
 

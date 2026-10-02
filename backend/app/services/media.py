@@ -15,8 +15,15 @@ What reaches ``publico/``:
 
 The type is sniffed from the bytes, never taken from the client. A published
 file is never overwritten: a new upload of the same role gets the next number
-(Cloudflare and browsers cache /media/ as immutable). Nothing is deleted:
-archiving hides an asset from the public API but leaves its file in place.
+(Cloudflare and browsers cache /media/ as immutable). Archiving hides an
+asset from the public API but leaves its file in place.
+
+Deleting (2026-10, PO decision) is only for media that were never public: a
+photo uploaded by mistake to a record that has not been published since.
+It removes the row, the published file and the original; an empty
+``{role}-{nn}.deleted`` tombstone keeps that number taken, so a later upload
+never reuses a name a browser or Cloudflare may have cached. Anything that
+may ever have been public can only be archived.
 
 Files are written before the database row. When the insert fails both files
 are removed; a crash in between leaves an unreferenced file, never a row
@@ -42,6 +49,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.artisan import Artisan
+from app.models.audit_event import AuditEvent
 from app.models.enums import PublicationStatus
 from app.models.media_asset import MediaAsset, MediaAssetStatus, MediaRole, MediaType
 from app.models.piece import Piece
@@ -372,10 +380,18 @@ def update(db: Session, actor: Actor, media_id: uuid.UUID, expected: datetime, c
     asset = _locked(db, MediaAsset, media_id, expected, "media item")
     if "alt_text" in changes and changes["alt_text"] is None and asset.media_type == MediaType.image:
         raise MediaError("alt_text_required", "A photo needs a description (alternative text).", "alt_text")
+    if "role" in changes:
+        changes = {**changes, "role": MediaRole(changes["role"])}
+        allowed = ROLES[owner_of(asset)[0]]
+        if changes["role"] not in allowed:
+            raise MediaError("invalid_role", f"The role {changes['role'].value} is not available here.", "role")
+        if asset.media_type not in allowed[changes["role"]]:
+            raise MediaError("wrong_type_for_role",
+                             f"The role {changes['role'].value} does not take this kind of file.", "role")
     diff = {}
-    for field in ("alt_text", "position"):
+    for field in ("alt_text", "position", "role"):
         if field in changes and getattr(asset, field) != changes[field]:
-            diff[field] = {"from": getattr(asset, field), "to": changes[field]}
+            diff[field] = {"from": _plain(getattr(asset, field)), "to": _plain(changes[field])}
             setattr(asset, field, changes[field])
     if diff:
         _touch(db, asset)
@@ -403,6 +419,96 @@ def transition(db: Session, actor: Actor, media_id: uuid.UUID, expected: datetim
     db.commit()
     db.refresh(asset)
     return asset
+
+
+# --- delete (never-public media only) -----------------------------------------------
+
+_OWNER_TRANSITIONS = ("published", "unpublished", "archived", "restored")
+
+
+def _plain(value: Any) -> Any:
+    return value.value if isinstance(value, enum.Enum) else value
+
+
+def _owner_chain(db: Session, asset: MediaAsset) -> list[tuple[str, Any]]:
+    """The records whose publication decides whether ``asset`` is public:
+    the artisan for artisan media; the piece and its artisan for piece media."""
+    if asset.piece_id is not None:
+        piece = db.get(Piece, asset.piece_id)
+        return [("piece", piece), ("artisan", db.get(Artisan, piece.artisan_id))]
+    if asset.artisan_id is not None:
+        return [("artisan", db.get(Artisan, asset.artisan_id))]
+    return []
+
+
+def may_delete(db: Session, asset: MediaAsset) -> bool:
+    """True only when ``asset`` can never have been public.
+
+    Media are public while active and their whole owner chain is published.
+    Every publication change is a content transition with an audit event, so
+    if no record of the chain changed state since the asset was created, its
+    state now is its state at upload; and if the chain is not fully published
+    now, the asset was never visible. Conservative by design: any transition
+    since the upload (even publish then unpublish) keeps it archive-only.
+    """
+    chain = _owner_chain(db, asset)
+    if not chain or all(row.publication_status == PublicationStatus.published for _, row in chain):
+        return False
+    actions = [f"{kind}.{past}" for kind, _ in chain for past in _OWNER_TRANSITIONS]
+    changed = db.execute(select(func.count()).select_from(AuditEvent).where(
+        AuditEvent.entity_id.in_([row.id for _, row in chain]),
+        AuditEvent.action.in_(actions),
+        AuditEvent.occurred_at >= asset.created_at,
+    )).scalar_one()
+    return changed == 0
+
+
+def _original_of(db: Session, media_root: Path, asset: MediaAsset) -> Path | None:
+    """The private original of ``asset``, found by the SHA-256 the upload
+    recorded in its audit event (the row itself does not store the path)."""
+    digest = db.execute(select(AuditEvent.event_metadata).where(
+        AuditEvent.entity_id == asset.id, AuditEvent.action == "media.uploaded",
+    )).scalars().first()
+    digest = (digest or {}).get("original_sha256")
+    originals = media_root / "originales"
+    if not digest or not originals.is_dir():
+        return None
+    for path in originals.rglob("*"):
+        if path.is_file() and not path.is_symlink() and hashlib.sha256(path.read_bytes()).hexdigest() == digest:
+            return path
+    return None
+
+
+def delete(db: Session, actor: Actor, media_root: Path, media_id: uuid.UUID, expected: datetime) -> None:
+    asset = _locked(db, MediaAsset, media_id, expected, "media item")
+    if not may_delete(db, asset):
+        raise ContentConflict("may_have_been_public",
+                              "This media item may have been public: archive it instead of deleting it.")
+    public_root = media_root / "publico"
+    published = public_root / asset.storage_path
+    original = _original_of(db, media_root, asset)
+    owner_type, owner_id = owner_of(asset)
+    _audit(db, actor, "media_asset", asset.id, "media.deleted", {
+        "owner_type": owner_type,
+        "owner_id": str(owner_id),
+        "role": asset.role.value,
+        "media_type": asset.media_type.value,
+        "storage_path": asset.storage_path,
+        "original_removed": original is not None,
+    })
+    db.delete(asset)
+    db.commit()
+    # Files go after the commit: a crash here leaves an unreferenced file,
+    # never a row without its file (same rule as upload).
+    if published.is_file() and published.resolve().is_relative_to(public_root.resolve()):
+        tombstone = published.with_suffix(".deleted")
+        try:
+            _write_new(tombstone, b"", 0o644)
+        except FileExistsError:
+            pass
+        published.unlink(missing_ok=True)
+    if original is not None:
+        original.unlink(missing_ok=True)
 
 
 def owner_of(asset: MediaAsset) -> tuple[str, uuid.UUID]:

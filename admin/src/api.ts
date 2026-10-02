@@ -51,6 +51,8 @@ export interface AdminMedia {
   status: 'active' | 'archived';
   updated_at: string;
   media: MediaPublic;
+  // True only for media that were never public: they can be deleted for good.
+  deletable: boolean;
 }
 
 // Published files live under /media/ on the public API host (docs/MEDIA.md
@@ -228,6 +230,7 @@ async function request<T>(method: string, path: string, init: RequestInit_ = {})
     }
     throw new ApiError(kindFor(response.status), response.status, body);
   }
+  if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
 
@@ -298,8 +301,10 @@ export const adminApi = {
       params: { role, alt_text: altText },
       file: { data: file, contentType },
     }),
-  updateMedia: (id: string, version: string, body: { alt_text?: string | null; position?: number }) =>
+  updateMedia: (id: string, version: string, body: { alt_text?: string | null; position?: number; role?: MediaRole }) =>
     request<AdminMedia>('PATCH', `/media/${encodeURIComponent(id)}`, { body, version }),
+  deleteMedia: (id: string, version: string) =>
+    request<void>('DELETE', `/media/${encodeURIComponent(id)}`, { body: {}, version }),
   transitionMedia: (id: string, version: string, action: 'archive' | 'restore') =>
     request<AdminMedia>('POST', `/media/${encodeURIComponent(id)}/${action}`, { body: {}, version }),
 };

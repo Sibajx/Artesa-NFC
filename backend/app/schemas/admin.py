@@ -51,6 +51,9 @@ class AdminMedia(BaseModel):
     # The version to send back as If-Match (phase 4 media edits).
     updated_at: datetime
     media: MediaAssetPublic
+    # True only for media that can never have been public (they may be
+    # deleted for good); everything else can only be archived.
+    deletable: bool = False
 
 
 class AdminArtisanDetail(BaseModel):

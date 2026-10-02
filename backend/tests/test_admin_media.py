@@ -477,3 +477,83 @@ def test_any_other_range_is_ignored_and_the_whole_file_served(video_file, header
     r = TestClient(app).get("/media/piezas/mascara/process-01.mp4", headers={"Range": header})
     assert r.status_code == 200
     assert r.content == video_file
+
+
+# --- delete (never-public only) and role changes (2026-10) ---------------------------
+
+
+def admin_piece(client, piece) -> dict:
+    return client.get(f"/api/admin/v1/pieces/{piece['id']}", headers=auth(make_token())).json()
+
+
+def delete(client, asset, **headers):
+    return client.request("DELETE", f"/api/admin/v1/media/{asset['id']}", json={},
+                          headers=H(**{"If-Match": asset["updated_at"], **headers}))
+
+
+def test_never_public_media_is_deleted_with_its_files_and_its_number_stays_taken(client, db_session, media_root, piece):
+    asset = upload(client, "pieces", piece, jpeg(size=(10, 10)), "gallery").json()
+    assert asset["deletable"] is True
+    assert admin_piece(client, piece)["media"][0]["deletable"] is True
+    assert any(p.startswith("originales/") for p in files_under(media_root))
+
+    r = delete(client, asset)
+    assert r.status_code == 204, r.text
+    assert admin_piece(client, piece)["media"] == []
+    assert files_under(media_root) == ["publico/piezas/mascara-de-tigre/gallery-01.deleted"]
+    actions = db_session.execute(select(AuditEvent.action).where(AuditEvent.entity_id == uuid.UUID(asset["id"]))
+                                 .order_by(AuditEvent.occurred_at)).scalars().all()
+    assert actions == ["media.uploaded", "media.deleted"]
+
+    # The tombstone keeps "01" taken: a cached URL is never reused.
+    again = upload(client, "pieces", piece, jpeg(size=(10, 10)), "gallery").json()
+    assert again["media"]["url"].endswith("/gallery-02.jpg")
+
+
+def test_media_of_a_published_record_can_only_be_archived(client, media_root, piece):
+    artisan = client.get(f"/api/admin/v1/artisans/{piece['artisan']['id']}", headers=auth(make_token())).json()
+    act(client, "artisans", artisan, "publish")
+    act(client, "pieces", piece, "publish")
+    asset = upload(client, "pieces", piece, jpeg(size=(10, 10)), "hero").json()
+    assert asset["deletable"] is False
+    r = delete(client, asset)
+    assert r.status_code == 409 and r.json()["error"]["code"] == "may_have_been_public"
+    assert (media_root / "publico/piezas/mascara-de-tigre/hero-01.jpg").exists()
+
+
+def test_media_that_was_public_once_stays_archive_only(client, media_root, piece):
+    asset = upload(client, "pieces", piece, jpeg(size=(10, 10)), "hero").json()
+    artisan = client.get(f"/api/admin/v1/artisans/{piece['artisan']['id']}", headers=auth(make_token())).json()
+    artisan = act(client, "artisans", artisan, "publish").json()
+    published = act(client, "pieces", piece, "publish").json()
+    act(client, "pieces", published, "unpublish")
+    item = admin_piece(client, piece)["media"][0]
+    assert item["deletable"] is False
+    assert delete(client, item).status_code == 409
+
+
+def test_a_draft_artisans_photo_is_deletable_and_delete_needs_the_version(client, media_root):
+    artisan = new_artisan(client, name="Taller Prueba")
+    asset = upload(client, "artisans", artisan, jpeg(size=(10, 10)), "portrait").json()
+    assert asset["deletable"] is True
+    edited = client.patch(f"/api/admin/v1/media/{asset['id']}", json={"position": 3},
+                          headers=H(**{"If-Match": asset["updated_at"]})).json()
+    assert delete(client, asset).status_code == 412
+    assert client.request("DELETE", f"/api/admin/v1/media/{asset['id']}", json={}, headers=H()).status_code == 428
+    assert delete(client, edited).status_code == 204
+    assert delete(client, edited).status_code == 404
+
+
+def test_role_can_change_within_the_owner_roles_and_file_type(client, db_session, media_root, piece):
+    asset = upload(client, "pieces", piece, jpeg(size=(10, 10)), "gallery").json()
+    r = client.patch(f"/api/admin/v1/media/{asset['id']}", json={"role": "hero"},
+                     headers=H(**{"If-Match": asset["updated_at"]}))
+    assert r.status_code == 200, r.text
+    assert r.json()["media"]["role"] == "hero"
+    for role, code in (("model_3d", "wrong_type_for_role"), ("portrait", "invalid_role")):
+        bad = client.patch(f"/api/admin/v1/media/{asset['id']}", json={"role": role},
+                           headers=H(**{"If-Match": r.json()["updated_at"]}))
+        assert bad.status_code == 422 and bad.json()["error"]["code"] == code, (role, bad.text)
+    changes = db_session.execute(select(AuditEvent.event_metadata).where(
+        AuditEvent.entity_id == uuid.UUID(asset["id"]), AuditEvent.action == "media.updated")).scalar_one()
+    assert changes == {"changes": {"role": {"from": "gallery", "to": "hero"}}}
