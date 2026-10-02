@@ -38,6 +38,7 @@ from app.schemas.admin import (
 )
 from app.schemas.common import ListEnvelope, ListMeta
 from app.schemas.media import media_asset_to_public
+from app.services import media as media_service
 
 router = APIRouter(prefix="/api/admin/v1", tags=["admin"], dependencies=[Depends(require_admin)])
 
@@ -52,11 +53,12 @@ def _like(q: str) -> str:
 def _admin_media(db: Session, *, piece_id: uuid.UUID | None = None, artisan_id: uuid.UUID | None = None) -> list[AdminMedia]:
     owner = MediaAsset.piece_id == piece_id if piece_id is not None else MediaAsset.artisan_id == artisan_id
     rows = db.execute(select(MediaAsset).where(owner).order_by(*media_order_by())).scalars().all()
-    return [admin_media(m) for m in rows]
+    return [admin_media(db, m) for m in rows]
 
 
-def admin_media(asset: MediaAsset) -> AdminMedia:
-    return AdminMedia(id=asset.id, status=asset.status.value, updated_at=asset.updated_at, media=media_asset_to_public(asset))
+def admin_media(db: Session, asset: MediaAsset) -> AdminMedia:
+    return AdminMedia(id=asset.id, status=asset.status.value, updated_at=asset.updated_at,
+                      media=media_asset_to_public(asset), deletable=media_service.may_delete(db, asset))
 
 
 def _piece_summaries(db: Session, pieces: list[Piece]) -> list[AdminPieceSummary]:

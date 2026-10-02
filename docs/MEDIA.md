@@ -47,6 +47,7 @@ Fuera de `releases/` (un despliegue nunca las toca) y fuera de `shared/` (que es
 | Archivo = **rol + número** (`hero`, `gallery`, `detail`, `process`, `portrait`, `model`) | Son los roles de `media_asset.role`; el nombre de la pieza ya lo da la carpeta |
 | Minúsculas, `a-z 0-9 -`, sin espacios ni acentos | URLs limpias; nada que codificar |
 | **Nunca sobrescribir** un archivo publicado: una foto nueva es `hero-02.jpg` | Cloudflare y los navegadores cachean `/media/` de forma inmutable (§4) |
+| Borrar solo lo que **nunca fue público**; al borrar queda `hero-01.deleted` (vacío) | Una foto subida por error se elimina por completo, pero su número no se reutiliza: una URL ya cacheada nunca apunta a otra foto. Lo que pudo verse solo se archiva (2026-10) |
 | Las piezas van en `piezas/`, no dentro del artesano | Una pieza pertenece a un artesano en el MVP (ADR-004), pero su URL no debe romperse si eso cambia |
 
 En `originales/` sí se agrupa por artesano (como lo propuso el PO): es el archivo de trabajo humano.

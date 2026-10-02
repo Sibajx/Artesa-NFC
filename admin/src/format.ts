@@ -83,6 +83,7 @@ const CONFLICT_TEXT: Record<string, string> = {
   video_has_location: 'El video guarda la ubicación GPS. Expórtalo de nuevo sin ubicación.',
   invalid_video: 'El video está dañado o no es un MP4 válido.',
   invalid_model: 'El modelo 3D no es un archivo GLB (glTF 2.0) válido.',
+  may_have_been_public: 'Este medio ya pudo verse en el sitio, así que no se puede eliminar: archívalo para ocultarlo.',
 };
 
 const DUPLICATE_TEXT: Record<string, string> = {

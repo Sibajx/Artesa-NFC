@@ -7,8 +7,10 @@ cross-site page cannot send ``X-Artesa-Admin`` nor an ``image/*``,
 ``video/mp4`` or ``model/gltf-binary`` body without a CORS preflight, which
 the admin API never grants.
 
-Edits (alt text, position) and archive/restore are ordinary JSON writes with
-``If-Match``.
+Edits (alt text, position, role) and archive/restore are ordinary JSON writes
+with ``If-Match``. DELETE (with ``If-Match``) removes a media item for good,
+only when it can never have been public (services/media.py ``may_delete``);
+otherwise it answers 409 ``may_have_been_public``.
 """
 from __future__ import annotations
 
@@ -17,7 +19,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
@@ -102,7 +104,7 @@ async def upload_media(
         asset = await run_in_threadpool(media.upload, db, who, root, owner_type, owner_id, role, text, data)
     except ContentError as exc:
         raise _fail(exc) from None
-    return admin_media(asset)
+    return admin_media(db, asset)
 
 
 router = APIRouter(
@@ -119,7 +121,7 @@ def update_media(media_id: uuid.UUID, body: MediaUpdate, expected: datetime = De
         asset = media.update(db, who, media_id, expected, provided(body, never_null=("position",)))
     except ContentError as exc:
         raise _fail(exc) from None
-    return admin_media(asset)
+    return admin_media(db, asset)
 
 
 @router.post("/media/{media_id}/{action}", response_model=AdminMedia)
@@ -130,4 +132,15 @@ def transition_media(media_id: uuid.UUID, action: media.MediaAction, body: Trans
         asset = media.transition(db, who, media_id, expected, action.value)
     except ContentError as exc:
         raise _fail(exc) from None
-    return admin_media(asset)
+    return admin_media(db, asset)
+
+
+@router.delete("/media/{media_id}", status_code=204)
+def delete_media(media_id: uuid.UUID, expected: datetime = Depends(expected_version),
+                 who: Actor = Depends(actor), db: Session = Depends(get_db)) -> Response:
+    root = _media_root()
+    try:
+        media.delete(db, who, root, media_id, expected)
+    except ContentError as exc:
+        raise _fail(exc) from None
+    return Response(status_code=204)
