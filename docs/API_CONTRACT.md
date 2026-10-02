@@ -877,13 +877,18 @@ Archivos: el original, byte a byte, en `originales/{artesano}/{_artesano|pieza}/
 
 | Método y ruta | Efecto |
 |---|---|
-| `PATCH /api/admin/v1/media/{id}` | JSON `{"alt_text"?, "position"? (0–999)}` con `If-Match`. Una foto no puede quedar sin `alt_text` |
+| `PATCH /api/admin/v1/media/{id}` | JSON `{"alt_text"?, "position"? (0–999), "role"?}` con `If-Match`. Una foto no puede quedar sin `alt_text`. `role` debe ser un rol del dueño que acepte el tipo del archivo (`422 invalid_role` / `wrong_type_for_role`); el nombre del archivo publicado no cambia |
 | `POST /api/admin/v1/media/{id}/{archive\|restore}` | JSON `{}` con `If-Match`. Archivar lo quita de la API pública; el archivo **no** se borra |
+| `DELETE /api/admin/v1/media/{id}` | JSON `{}` con `If-Match` → `204`. Solo para medios que **nunca pudieron ser públicos** (`deletable: true`); si no, `409 may_have_been_public` y hay que archivar. Borra la fila, el archivo publicado y el original; deja una lápida vacía `{rol}-{nn}.deleted` para que ese número no se reutilice (2026-10, decisión del PO) |
 
 **Auditoría** (`entity_type = "media_asset"`): `media.uploaded` (dueño, rol,
 tipo, `storage_path`, bytes, sha256 del original), `media.updated` (diff),
-`media.archived`, `media.restored`. Las listas `media` del detalle admin (§14.1)
-traen ahora `updated_at`.
+`media.archived`, `media.restored`, `media.deleted` (dueño, rol, `storage_path`,
+si se borró el original). Las listas `media` del detalle admin (§14.1) traen
+`updated_at` y `deletable`: `true` solo si la cadena de dueños (artesano; o
+pieza y artesano) no está publicada ahora **y** no tuvo ninguna transición de
+publicación desde que se subió el medio (conservador: publicar y despublicar
+después de subir ya lo vuelve solo archivable).
 
 **Servir:** `GET|HEAD /media/{artesanos|piezas|sitio}/{slug}/{nombre}.{ext}` desde
 `publico/`. Solo rutas con esa forma exacta (minúsculas, extensiones de la lista
