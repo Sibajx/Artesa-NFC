@@ -5,6 +5,7 @@ import type { AdminMedia, MediaRole } from './api';
 import { labels, writeErrorMessage } from './format';
 import { FormError, Select, TextArea } from './forms';
 import { PhotoEditor } from './PhotoEditor';
+import { useConfirm, useToast } from './feedback-context';
 import { Badge } from './ui';
 
 type Kind = 'artisans' | 'pieces';
@@ -126,6 +127,7 @@ let pendingKey = 0;
 
 function UploadForm({ kind, ownerId, onUploaded }: { kind: Kind; ownerId: string; onUploaded: () => void }) {
   const roles = ROLES[kind];
+  const toast = useToast();
   const [items, setItems] = useState<Pending[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -174,7 +176,10 @@ function UploadForm({ kind, ownerId, onUploaded }: { kind: Kind; ownerId: string
       }
     }
     setBusy(false);
-    if (uploaded > 0) onUploaded();
+    if (uploaded > 0) {
+      toast(uploaded === 1 ? 'Archivo subido' : `${uploaded} archivos subidos`);
+      onUploaded();
+    }
   }
 
   return (
@@ -360,6 +365,8 @@ function MediaCard({ kind, ownerId, item, ownerArchived, onChanged, index, count
   index: number; count: number; disabled: boolean; onMove: (to: number) => void;
 }) {
   const [mode, setMode] = useState<Mode>('view');
+  const confirm = useConfirm();
+  const toast = useToast();
   const [alt, setAlt] = useState(item.media.alt_text ?? '');
   const [role, setRole] = useState<MediaRole>(item.media.role as MediaRole);
   const [file, setFile] = useState<File | null>(null);
@@ -372,13 +379,14 @@ function MediaCard({ kind, ownerId, item, ownerArchived, onChanged, index, count
   const newPreview = usePreview(file);
   const locked = busy || disabled;
 
-  async function run(call: () => Promise<unknown>) {
+  async function run(call: () => Promise<unknown>, done?: string) {
     setBusy(true);
     setError(null);
     try {
       await call();
       setMode('view');
       setFile(null);
+      if (done) toast(done);
       onChanged();
     } catch (e) {
       setError(messageFor(e));
@@ -404,7 +412,7 @@ function MediaCard({ kind, ownerId, item, ownerArchived, onChanged, index, count
     }
     const body: { alt_text: string | null; role?: MediaRole } = { alt_text: alt.trim() || null };
     if (role !== item.media.role) body.role = role;
-    void run(() => adminApi.updateMedia(item.id, item.updated_at, body));
+    void run(() => adminApi.updateMedia(item.id, item.updated_at, body), 'Cambios guardados');
   }
 
   // Starts from the published photo (≤ 1600 px). For the best quality,
@@ -448,17 +456,24 @@ function MediaCard({ kind, ownerId, item, ownerArchived, onChanged, index, count
     });
   }
 
-  function toggleArchive() {
-    const question = archived
-      ? '¿Restaurar este medio? Volverá a verse en el sitio si el registro está publicado.'
-      : '¿Archivar este medio? Dejará de verse en el sitio; el archivo no se borra.';
-    if (!window.confirm(question)) return;
-    void run(() => adminApi.transitionMedia(item.id, item.updated_at, archived ? 'restore' : 'archive'));
+  async function toggleArchive() {
+    const answer = await confirm(archived
+      ? { title: '¿Restaurar este medio?', body: 'Volverá a verse en el sitio si el registro está publicado.', confirmLabel: 'Restaurar' }
+      : { title: '¿Archivar este medio?', body: 'Dejará de verse en el sitio; el archivo no se borra y podrás restaurarlo.', confirmLabel: 'Archivar' });
+    if (answer === null) return;
+    void run(() => adminApi.transitionMedia(item.id, item.updated_at, archived ? 'restore' : 'archive'),
+      archived ? 'Medio restaurado' : 'Medio archivado');
   }
 
-  function remove() {
-    if (!window.confirm('¿Eliminar este medio definitivamente? Se borran la foto publicada y el original. No se puede deshacer.')) return;
-    void run(() => adminApi.deleteMedia(item.id, item.updated_at));
+  async function remove() {
+    const answer = await confirm({
+      title: '¿Eliminar este medio definitivamente?',
+      body: 'Se borran la foto publicada y el original. No se puede deshacer.',
+      confirmLabel: 'Eliminar',
+      tone: 'danger',
+    });
+    if (answer === null) return;
+    void run(() => adminApi.deleteMedia(item.id, item.updated_at), 'Medio eliminado');
   }
 
   return (
@@ -536,10 +551,9 @@ function MediaCard({ kind, ownerId, item, ownerArchived, onChanged, index, count
               {!archived && !ownerArchived && (
                 <button type="button" disabled={locked} onClick={() => setMode('replace')} className="btn-secondary">Reemplazar o recortar</button>
               )}
-              <button type="button" disabled={locked} onClick={toggleArchive} className="btn-secondary">{archived ? 'Restaurar' : 'Archivar'}</button>
+              <button type="button" disabled={locked} onClick={() => void toggleArchive()} className="btn-secondary">{archived ? 'Restaurar' : 'Archivar'}</button>
               {item.deletable && (
-                <button type="button" disabled={locked} onClick={remove}
-                  className="btn-secondary text-red-700 border-red-200 hover:bg-red-50">Eliminar</button>
+                <button type="button" disabled={locked} onClick={() => void remove()} className="btn-danger">Eliminar</button>
               )}
             </div>
           </>

@@ -4,12 +4,15 @@ import { formatDate, labels } from '../format';
 import { useListFilters, useLoad } from '../hooks';
 import { ListFilters } from '../ListFilters';
 import { ErrorState, Loading, PageHeader, PublicationBadge } from '../ui';
+import { QuickPublish } from '../QuickPublish';
+import { useState } from 'react';
 
 export default function Piezas() {
   const filters = useListFilters();
+  const [revision, setRevision] = useState(0);
   const [params] = useSearchParams();
   const artisanId = params.get('artesano') ?? '';
-  const state = useLoad(`pieces:${filters.status}:${filters.q}:${artisanId}`, (signal) =>
+  const state = useLoad(`pieces:${revision}:${filters.status}:${filters.q}:${artisanId}`, (signal) =>
     adminApi.pieces(
       { publication_status: filters.status || undefined, q: filters.q || undefined, artisan_id: artisanId || undefined },
       signal,
@@ -42,6 +45,7 @@ export default function Piezas() {
                   <th scope="col" className="py-4 px-6 font-medium">Publicación</th>
                   <th scope="col" className="py-4 px-6 font-medium">Disponibilidad</th>
                   <th scope="col" className="py-4 px-6 font-medium">Actualizada</th>
+                  <th scope="col" className="py-4 px-6 font-medium"><span className="sr-only">Acciones</span></th>
                 </tr>
               </thead>
               <tbody className="text-sm text-botanica-grafito">
@@ -59,6 +63,7 @@ export default function Piezas() {
                     <td className="py-4 px-6"><PublicationBadge status={piece.publication_status} /></td>
                     <td className="py-4 px-6">{labels.availability(piece.availability_status)}</td>
                     <td className="py-4 px-6">{formatDate(piece.updated_at)}</td>
+                    <td className="py-4 px-6 text-right"><QuickPublish kind="pieces" id={piece.id} version={piece.updated_at} name={piece.name} status={piece.publication_status} onChanged={() => setRevision((r) => r + 1)} /></td>
                   </tr>
                 ))}
               </tbody>

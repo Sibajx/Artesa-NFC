@@ -4,10 +4,13 @@ import { formatDate } from '../format';
 import { useListFilters, useLoad } from '../hooks';
 import { ListFilters } from '../ListFilters';
 import { ErrorState, Loading, PageHeader, PublicationBadge } from '../ui';
+import { QuickPublish } from '../QuickPublish';
+import { useState } from 'react';
 
 export default function Artesanos() {
   const filters = useListFilters();
-  const state = useLoad(`artisans:${filters.status}:${filters.q}`, (signal) =>
+  const [revision, setRevision] = useState(0);
+  const state = useLoad(`artisans:${revision}:${filters.status}:${filters.q}`, (signal) =>
     adminApi.artisans({ publication_status: filters.status || undefined, q: filters.q || undefined }, signal),
   );
 
@@ -36,6 +39,7 @@ export default function Artesanos() {
                   <th scope="col" className="py-4 px-6 font-medium">Piezas</th>
                   <th scope="col" className="py-4 px-6 font-medium">Estado</th>
                   <th scope="col" className="py-4 px-6 font-medium">Actualizado</th>
+                  <th scope="col" className="py-4 px-6 font-medium"><span className="sr-only">Acciones</span></th>
                 </tr>
               </thead>
               <tbody className="text-sm text-botanica-grafito">
@@ -50,6 +54,7 @@ export default function Artesanos() {
                     <td className="py-4 px-6 tabular-nums">{artisan.piece_count}</td>
                     <td className="py-4 px-6"><PublicationBadge status={artisan.publication_status} /></td>
                     <td className="py-4 px-6">{formatDate(artisan.updated_at)}</td>
+                    <td className="py-4 px-6 text-right"><QuickPublish kind="artisans" id={artisan.id} version={artisan.updated_at} name={artisan.full_name} status={artisan.publication_status} onChanged={() => setRevision((r) => r + 1)} /></td>
                   </tr>
                 ))}
               </tbody>
