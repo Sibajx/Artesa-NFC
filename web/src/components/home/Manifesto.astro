@@ -1,11 +1,40 @@
 ---
 // Home block 2 — short manifesto on origin, craft and authorship, shown as an
-// NFC reading: a phone meets the piece, waves go out and the three points
-// (origen, oficio, autoría) are "read" one after another. The points are a
-// real <dl>; the phone, tag and waves are decorative. Without JS or with
-// reduced motion everything is shown in its final, read state.
+// NFC reading. The scene (2026-10): the phone arrives and floats, the chip in
+// the piece emits frequency waves, the phone's screen lights up and draws a
+// pixel-art (bitmap) mask row by row, then shows only "Pieza verificada ·
+// Certificado de autenticidad". After it, the three points (origen, oficio,
+// autoría) are read one by one. The points are a real <dl>; the scene is one
+// role="img" with a text alternative. Without JS or with reduced motion the
+// final, read state is shown.
 import { homeCopy } from "@/content/site";
 const { manifesto } = homeCopy;
+const { reader } = manifesto;
+
+// 12 × 13 bitmap of a Oaxacan-style mask (horns, eyes, cheeks, whiskers,
+// teeth), mirrored around the centre. o = cempasúchil, r = grana, b = añil,
+// w = cream, . = empty.
+const MASK = [
+  ".o........o.",
+  ".oo......oo.",
+  "..oooooooo..",
+  ".oorrrrrroo.",
+  "oorwwoowwroo",
+  "oorwboobwroo",
+  "ooorroorrooo",
+  ".oooowwoooo.",
+  ".oobooooboo.",
+  "..orrrrrro..",
+  "..rwrwwrwr..",
+  "...rrrrrr...",
+  "....oooo....",
+];
+const PX = 3.5;
+const MASK_X = 246 - (12 * PX) / 2;
+const MASK_Y = 40;
+const pixels = MASK.flatMap((row, y) =>
+  [...row].flatMap((c, x) => (c === "." ? [] : [{ x: MASK_X + x * PX, y: MASK_Y + y * PX, c }])),
+);
 ---
 
 <section class="manifesto section" aria-labelledby="manifesto-title">
@@ -25,22 +54,60 @@ const { manifesto } = homeCopy;
         <p class="reader__caption">{manifesto.reader.caption}</p>
       </div>
 
-      <div class="reader__scene" aria-hidden="true">
-        <svg viewBox="0 0 320 150" focusable="false">
+      <div class="reader__scene">
+        <svg viewBox="0 0 320 175" focusable="false" role="img" aria-label={reader.sceneAlt}>
+          <defs>
+            <radialGradient id="reader-screen-light" cx="50%" cy="38%" r="75%">
+              <stop offset="0%" stop-color="#3a2a14"></stop>
+              <stop offset="100%" stop-color="#120d0a"></stop>
+            </radialGradient>
+          </defs>
+
           <g class="reader__tag">
-            <circle cx="96" cy="75" r="34"></circle>
-            <circle cx="96" cy="75" r="22"></circle>
-            <path d="M80 86H86V80H92V74H98V64H112V84H104V72H108V78"></path>
+            <circle class="reader__tag-ring" cx="96" cy="88" r="34"></circle>
+            <circle cx="96" cy="88" r="22"></circle>
+            <path d="M80 99H86V93H92V87H98V77H112V97H104V85H108V91"></path>
           </g>
+
           <g class="reader__waves">
-            <path d="M140 52a34 34 0 0 1 0 46"></path>
-            <path d="M156 40a52 52 0 0 1 0 70"></path>
-            <path d="M172 28a70 70 0 0 1 0 94"></path>
+            <path d="M136 66a32 32 0 0 1 0 44"></path>
+            <path d="M136 66a32 32 0 0 1 0 44"></path>
+            <path d="M136 66a32 32 0 0 1 0 44"></path>
           </g>
+
           <g class="reader__phone">
-            <rect x="214" y="16" width="70" height="118" rx="12"></rect>
-            <path d="M238 26h22"></path>
-            <rect class="reader__screen" x="222" y="36" width="54" height="80" rx="4"></rect>
+            <g class="reader__phone-body">
+              <rect class="reader__case" x="206" y="6" width="80" height="162" rx="14"></rect>
+              <rect class="reader__screen" x="213" y="22" width="66" height="138" rx="6"></rect>
+              <rect
+                class="reader__screen-light"
+                x="213"
+                y="22"
+                width="66"
+                height="138"
+                rx="6"
+                fill="url(#reader-screen-light)"
+              ></rect>
+              <path class="reader__notch" d="M237 14h18"></path>
+              <g class="reader__mask">
+                {pixels.map((p) => (
+                  <rect class={`px px--${p.c}`} x={p.x} y={p.y} width={PX} height={PX}></rect>
+                ))}
+              </g>
+              <g class="reader__screen-text">
+                <text class="reader__screen-title" x="246" y="104">
+                  {reader.screenTitle.split(" ")[0]}
+                </text>
+                <text class="reader__screen-title" x="246" y="114">
+                  {reader.screenTitle.split(" ").slice(1).join(" ")}
+                </text>
+                <circle class="reader__screen-check" cx="246" cy="128" r="5"></circle>
+                <path class="reader__screen-tick" d="M243.6 128.2l1.7 1.7 3.2-3.4"></path>
+                <text class="reader__screen-sub" x="246" y="144">
+                  {reader.screenSubtitle}
+                </text>
+              </g>
+            </g>
           </g>
         </svg>
       </div>
@@ -58,11 +125,6 @@ const { manifesto } = homeCopy;
           </div>
         ))}
       </dl>
-
-      <p class="reader__status">
-        <span class="reader__check" aria-hidden="true"></span>
-        {manifesto.reader.status}
-      </p>
     </div>
   </div>
 </section>
@@ -144,41 +206,130 @@ const { manifesto } = homeCopy;
   .reader__scene svg {
     width: 100%;
     height: auto;
+    overflow: visible;
   }
 
-  .reader__scene path,
-  .reader__scene rect,
-  .reader__scene circle {
+  .reader__scene :is(path, circle, rect) {
     fill: none;
     stroke-width: 1.5;
     stroke-linecap: round;
   }
 
-  .reader__tag circle,
-  .reader__tag path {
+  /* SVG transforms in CSS use the viewBox as reference. */
+  .reader__scene :is(g, path, rect) {
+    transform-box: view-box;
+  }
+
+  /* Chip in the piece */
+  .reader__tag :is(circle, path) {
     stroke: color-mix(in srgb, var(--color-fiber) 80%, transparent);
   }
 
-  .reader__tag circle:first-child {
+  .reader__tag .reader__tag-ring {
     stroke: var(--color-cempasuchil);
     filter: drop-shadow(0 0 6px var(--color-cempasuchil));
   }
 
+  /* Frequency waves: final state = three arcs at rest between chip and phone */
   .reader__waves path {
     stroke: var(--color-cempasuchil);
     stroke-width: 2;
+    transform-origin: 96px 88px;
+    filter: drop-shadow(0 0 4px var(--color-cempasuchil));
   }
 
-  .reader__phone rect,
-  .reader__phone path {
-    stroke: color-mix(in srgb, var(--color-text-inverse) 80%, transparent);
+  .reader__waves path:nth-child(1) {
+    opacity: 0.9;
   }
 
-  .reader__phone .reader__screen {
-    fill: color-mix(in srgb, var(--color-anil) 25%, transparent);
+  .reader__waves path:nth-child(2) {
+    transform: translateX(18px) scale(1.25);
+    opacity: 0.6;
+  }
+
+  .reader__waves path:nth-child(3) {
+    transform: translateX(36px) scale(1.5);
+    opacity: 0.3;
+  }
+
+  /* Phone */
+  .reader__case {
+    stroke: color-mix(in srgb, var(--color-text-inverse) 85%, transparent);
+    fill: #0a0807 !important;
+    transition: filter var(--duration-ui) var(--ease-out);
+    filter: drop-shadow(0 0 10px color-mix(in srgb, var(--color-cempasuchil) 55%, transparent));
+  }
+
+  .reader__notch {
+    stroke: color-mix(in srgb, var(--color-text-inverse) 70%, transparent);
+  }
+
+  .reader__screen {
+    fill: #120f14 !important;
     stroke: none;
   }
 
+  .reader__screen-light {
+    fill: url("#reader-screen-light") !important;
+    stroke: none;
+  }
+
+  .reader__mask .px {
+    stroke: none;
+  }
+
+  .px--o {
+    fill: var(--color-cempasuchil) !important;
+  }
+
+  .px--r {
+    fill: var(--color-grana) !important;
+  }
+
+  .px--b {
+    fill: var(--color-anil) !important;
+  }
+
+  .px--w {
+    fill: var(--color-soft-white) !important;
+  }
+
+  .reader__mask {
+    filter: drop-shadow(0 0 3px color-mix(in srgb, var(--color-cempasuchil) 60%, transparent));
+  }
+
+  .reader__screen-text text {
+    text-anchor: middle;
+    font-family: var(--font-mono);
+    stroke: none;
+  }
+
+  .reader__screen-title {
+    font-size: 7.4px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    fill: var(--color-soft-white);
+  }
+
+  .reader__screen-sub {
+    font-size: 4.3px;
+    letter-spacing: 0.04em;
+    fill: var(--color-cempasuchil);
+  }
+
+  .reader__screen-check {
+    stroke: var(--color-cempasuchil);
+    stroke-width: 1;
+  }
+
+  .reader__screen-tick {
+    stroke: var(--color-cempasuchil);
+    stroke-width: 1.1;
+    stroke-linejoin: round;
+  }
+
+  /* Points */
   .reader__points {
     display: grid;
   }
@@ -224,51 +375,33 @@ const { manifesto } = homeCopy;
     transform-origin: left;
   }
 
-  .reader__status {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.6em;
-    font-family: var(--font-mono);
-    font-size: var(--text-micro);
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--color-cempasuchil);
-  }
-
-  .reader__check {
-    position: relative;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    border: 1px solid currentColor;
-    box-shadow: var(--glow-cempasuchil);
-  }
-
-  .reader__check::after {
-    content: "";
-    position: absolute;
-    left: 5px;
-    top: 3px;
-    width: 5px;
-    height: 9px;
-    border: solid currentColor;
-    border-width: 0 1.5px 1.5px 0;
-    transform: rotate(45deg);
-  }
-
-  /* --- Reading choreography (only after JS adds .nfc-ready) -------------- */
+  /* --- Reading choreography (only after JS adds .nfc-ready) --------------
+     0.0 s  phone arrives          1.8 s  screen lights up
+     0.9 s  chip emits waves        2.1 s  mask drawn row by row (13 steps)
+     3.1 s  "Pieza verificada"      3.6–4.6 s  the three points are read   */
 
   .reader:global(.nfc-ready) .reader__phone {
-    transform: translateX(60px);
-    opacity: 0.4;
+    transform: translate(70px, 10px) rotate(8deg);
+    transform-origin: 246px 87px;
+    opacity: 0.35;
     transition:
-      transform var(--duration-scene) var(--ease-out),
+      transform var(--duration-scene) var(--ease-pop),
       opacity var(--duration-scene) var(--ease-out);
   }
 
-  .reader:global(.nfc-ready) .reader__waves path,
-  .reader:global(.nfc-ready) .reader__point,
-  .reader:global(.nfc-ready) .reader__status {
+  .reader:global(.nfc-ready) .reader__case {
+    filter: none;
+  }
+
+  .reader:global(.nfc-ready) :is(.reader__waves path, .reader__screen-light, .reader__screen-text) {
+    opacity: 0;
+  }
+
+  .reader:global(.nfc-ready) .reader__mask {
+    clip-path: inset(0 0 100% 0);
+  }
+
+  .reader:global(.nfc-ready) .reader__point {
     opacity: 0;
   }
 
@@ -276,21 +409,54 @@ const { manifesto } = homeCopy;
     transform: scaleX(0);
   }
 
+  /* Arrival, then a gentle float */
   .reader:global(.is-reading) .reader__phone {
     transform: none;
     opacity: 1;
   }
 
+  .reader:global(.is-reading) .reader__phone-body {
+    transform-origin: 246px 87px;
+    animation: phone-float 4.2s ease-in-out 1.3s infinite;
+  }
+
+  /* Chip: a pulse on the ring each time a wave leaves */
+  .reader:global(.is-reading) .reader__tag-ring {
+    transform-origin: 96px 88px;
+    animation: chip-pulse 1.5s ease-out 0.9s infinite;
+  }
+
+  /* Waves travel from the chip to the phone, one after another */
   .reader:global(.is-reading) .reader__waves path {
-    animation: reader-wave 1.8s ease-out 1s infinite;
+    animation: wave-emit 1.5s cubic-bezier(0.2, 0.6, 0.4, 1) 0.9s infinite;
   }
 
   .reader:global(.is-reading) .reader__waves path:nth-child(2) {
-    animation-delay: 1.25s;
+    animation-delay: 1.4s;
   }
 
   .reader:global(.is-reading) .reader__waves path:nth-child(3) {
-    animation-delay: 1.5s;
+    animation-delay: 1.9s;
+  }
+
+  /* Screen lights up, with a soft flicker, and the case glows */
+  .reader:global(.is-reading) .reader__screen-light {
+    animation: screen-on 700ms ease-out 1.8s forwards;
+  }
+
+  .reader:global(.is-reading) .reader__case {
+    transition: filter 700ms var(--ease-out) 1.8s;
+    filter: drop-shadow(0 0 10px color-mix(in srgb, var(--color-cempasuchil) 55%, transparent));
+  }
+
+  /* Bitmap mask: revealed row by row, like pixels being drawn */
+  .reader:global(.is-reading) .reader__mask {
+    animation: mask-draw 900ms steps(13, end) 2.1s forwards;
+  }
+
+  .reader:global(.is-reading) .reader__screen-text {
+    animation: screen-text 500ms var(--ease-pop) 3.1s forwards;
+    transform-origin: 246px 124px;
   }
 
   .reader:global(.is-reading) .reader__point {
@@ -302,37 +468,92 @@ const { manifesto } = homeCopy;
     transform: scaleX(1);
   }
 
-  .reader:global(.is-reading) .reader__point:nth-child(1),
-  .reader:global(.is-reading) .reader__point:nth-child(1)::before {
-    animation-delay: 1.4s;
-    transition-delay: 1.4s;
+  .reader:global(.is-reading)
+    :is(.reader__point:nth-child(1), .reader__point:nth-child(1)::before) {
+    animation-delay: 3.6s;
+    transition-delay: 3.6s;
   }
 
-  .reader:global(.is-reading) .reader__point:nth-child(2),
-  .reader:global(.is-reading) .reader__point:nth-child(2)::before {
-    animation-delay: 2s;
-    transition-delay: 2s;
+  .reader:global(.is-reading)
+    :is(.reader__point:nth-child(2), .reader__point:nth-child(2)::before) {
+    animation-delay: 4.1s;
+    transition-delay: 4.1s;
   }
 
-  .reader:global(.is-reading) .reader__point:nth-child(3),
-  .reader:global(.is-reading) .reader__point:nth-child(3)::before {
-    animation-delay: 2.6s;
-    transition-delay: 2.6s;
+  .reader:global(.is-reading)
+    :is(.reader__point:nth-child(3), .reader__point:nth-child(3)::before) {
+    animation-delay: 4.6s;
+    transition-delay: 4.6s;
   }
 
-  .reader:global(.is-reading) .reader__status {
-    animation: reader-in var(--duration-editorial) var(--ease-out) 3.3s forwards;
+  @keyframes phone-float {
+    0%,
+    100% {
+      transform: translateY(0) rotate(0deg);
+    }
+    50% {
+      transform: translateY(-4px) rotate(-1.5deg);
+    }
   }
 
-  @keyframes reader-wave {
+  @keyframes chip-pulse {
+    0% {
+      transform: scale(1);
+    }
+    18% {
+      transform: scale(1.08);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+
+  @keyframes wave-emit {
+    0% {
+      transform: translateX(0) scale(0.7);
+      opacity: 0;
+    }
+    20% {
+      opacity: 1;
+    }
+    100% {
+      transform: translateX(52px) scale(1.7);
+      opacity: 0;
+    }
+  }
+
+  @keyframes screen-on {
     0% {
       opacity: 0;
     }
     30% {
       opacity: 1;
     }
+    45% {
+      opacity: 0.55;
+    }
     100% {
+      opacity: 1;
+    }
+  }
+
+  @keyframes mask-draw {
+    from {
+      clip-path: inset(0 0 100% 0);
+    }
+    to {
+      clip-path: inset(0 0 0 0);
+    }
+  }
+
+  @keyframes screen-text {
+    from {
       opacity: 0;
+      transform: scale(0.85);
+    }
+    to {
+      opacity: 1;
+      transform: none;
     }
   }
 

@@ -101,7 +101,11 @@ export const homeCopy = {
     reader: {
       label: "Ejemplo de lectura NFC",
       caption: "Acerca tu teléfono a la pieza",
-      status: "Certificado verificado",
+      // What the example phone shows after the reading — and only that.
+      screenTitle: "Pieza verificada",
+      screenSubtitle: "Certificado de autenticidad",
+      sceneAlt:
+        "Ejemplo: el teléfono lee el chip de la pieza, su pantalla se enciende y muestra una máscara y el texto Pieza verificada, Certificado de autenticidad.",
     },
     points: [
       { term: "Origen", description: "La comunidad y el material de donde viene la pieza." },
