@@ -8,20 +8,20 @@
 
 :root {
   /* Base palette — DESIGN_SYSTEM.md §3 */
-  --color-bg: #f5f3ee; /* Warm White */
+  --color-bg: #e8d9bf; /* Café con leche — was Warm White #f5f3ee (2026-10: no white backgrounds) */
   --color-surface-dark: #111111; /* Carbon */
   --color-text: #171717; /* Ink */
   --color-text-inverse: #f7f7f4; /* Soft White */
-  --color-text-muted: #5f5c57; /* Graphite, darkened from #66635E for AA on paper */
-  --color-soft-white: #f7f7f4;
+  --color-text-muted: #54504a; /* Graphite, darkened for AA on the cream backgrounds (5.2:1 on paper) */
+  --color-soft-white: #efe3cc; /* Raised cream (cards, hovers on dark); never pure white */
 
   /* Material accents — provisional (migration default) */
-  --color-paper: #ece6da;
+  --color-paper: #e0cead;
   --color-clay: #8a4b2f;
   --color-wood: #5c3f28;
   --color-pigment: #8f2a1d;
   --color-fiber: #b9a37a;
-  --color-rule: #d8d1c3;
+  --color-rule: #cbb592;
   --color-rule-dark: #3a3631;
   --color-focus: #8f2a1d;
 
@@ -312,7 +312,7 @@ button {
 }
 
 .on-dark .button:hover {
-  background: var(--color-text-inverse);
+  background: var(--color-soft-white);
   color: var(--color-surface-dark);
 }
 

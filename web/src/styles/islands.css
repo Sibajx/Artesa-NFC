@@ -150,7 +150,7 @@
 
 .piece-viewer__stage {
   aspect-ratio: 4 / 5;
-  background: radial-gradient(circle at 50% 40%, #f3eee4, var(--color-paper));
+  background: radial-gradient(circle at 50% 40%, var(--color-soft-white), var(--color-paper));
 }
 
 .piece-viewer__stage > img,
@@ -180,7 +180,7 @@
 }
 
 .piece-viewer .piece-viewer__launch:hover {
-  background: var(--color-text-inverse);
+  background: var(--color-soft-white);
   color: var(--color-surface-dark);
 }
 
