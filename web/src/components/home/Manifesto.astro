@@ -1,75 +1,366 @@
 ---
-// Home block 2 — short manifesto on origin, craft and authorship.
+// Home block 2 — short manifesto on origin, craft and authorship, shown as an
+// NFC reading: a phone meets the piece, waves go out and the three points
+// (origen, oficio, autoría) are "read" one after another. The points are a
+// real <dl>; the phone, tag and waves are decorative. Without JS or with
+// reduced motion everything is shown in its final, read state.
 import { homeCopy } from "@/content/site";
 const { manifesto } = homeCopy;
 ---
 
 <section class="manifesto section" aria-labelledby="manifesto-title">
   <div class="container manifesto__grid">
-    <div data-reveal>
+    <div class="manifesto__intro" data-reveal>
       <p class="eyebrow">{manifesto.eyebrow}</p>
       <h2 id="manifesto-title" class="display-l">
         {manifesto.title}
       </h2>
-    </div>
-    <div class="manifesto__body" data-reveal>
       <p class="lead">{manifesto.body}</p>
-      <dl class="manifesto__points">
-        {manifesto.points.map((point) => (
-          <div>
-            <dt>{point.term}</dt>
+    </div>
+
+    <div class="reader on-dark" data-nfc-reader>
+      <span class="hud-frame" aria-hidden="true"></span>
+      <div class="reader__head">
+        <p class="hud-label">{manifesto.reader.label}</p>
+        <p class="reader__caption">{manifesto.reader.caption}</p>
+      </div>
+
+      <div class="reader__scene" aria-hidden="true">
+        <svg viewBox="0 0 320 150" focusable="false">
+          <g class="reader__tag">
+            <circle cx="96" cy="75" r="34"></circle>
+            <circle cx="96" cy="75" r="22"></circle>
+            <path d="M80 86H86V80H92V74H98V64H112V84H104V72H108V78"></path>
+          </g>
+          <g class="reader__waves">
+            <path d="M140 52a34 34 0 0 1 0 46"></path>
+            <path d="M156 40a52 52 0 0 1 0 70"></path>
+            <path d="M172 28a70 70 0 0 1 0 94"></path>
+          </g>
+          <g class="reader__phone">
+            <rect x="214" y="16" width="70" height="118" rx="12"></rect>
+            <path d="M238 26h22"></path>
+            <rect class="reader__screen" x="222" y="36" width="54" height="80" rx="4"></rect>
+          </g>
+        </svg>
+      </div>
+
+      <dl class="reader__points">
+        {manifesto.points.map((point, i) => (
+          <div class="reader__point">
+            <dt>
+              <span class="reader__index" aria-hidden="true">
+                {String(i + 1).padStart(2, "0")}
+              </span>
+              {point.term}
+            </dt>
             <dd>{point.description}</dd>
           </div>
         ))}
       </dl>
+
+      <p class="reader__status">
+        <span class="reader__check" aria-hidden="true"></span>
+        {manifesto.reader.status}
+      </p>
     </div>
   </div>
 </section>
 
+<script>
+  // Starts the reading when the panel is well in view, once. The animated
+  // initial state only exists after JS adds .nfc-ready, so without JS (or with
+  // reduced motion) the panel is simply shown fully read.
+  const reader = document.querySelector<HTMLElement>("[data-nfc-reader]");
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reader && !reduced && "IntersectionObserver" in window) {
+    reader.classList.add("nfc-ready");
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          reader.classList.add("is-reading");
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.45 },
+    );
+    observer.observe(reader);
+  }
+</script>
+
 <style>
+  .manifesto {
+    background:
+      radial-gradient(
+        ellipse at 100% 0%,
+        color-mix(in srgb, var(--color-fiber) 22%, transparent),
+        transparent 50%
+      ),
+      var(--color-bg);
+  }
+
   .manifesto__grid {
     display: grid;
-    gap: var(--space-md);
+    gap: var(--space-lg);
+    align-items: center;
   }
 
-  .manifesto__grid h2 {
-    margin-top: var(--space-xs);
-  }
-
-  .manifesto__body {
-    display: grid;
-    gap: var(--space-md);
-  }
-
-  .manifesto__points {
+  .manifesto__intro {
     display: grid;
     gap: var(--space-sm);
-    border-top: 1px solid var(--color-rule);
-    padding-top: var(--space-sm);
   }
 
-  .manifesto__points div {
+  /* --- NFC reader panel ------------------------------------------------- */
+
+  .reader {
+    position: relative;
     display: grid;
-    grid-template-columns: 7.5rem 1fr;
-    gap: var(--space-sm);
-    padding-bottom: var(--space-sm);
-    border-bottom: 1px solid var(--color-rule);
+    gap: var(--space-md);
+    padding: clamp(20px, 4vw, 40px);
+    background:
+      radial-gradient(
+        circle at 30% 30%,
+        color-mix(in srgb, var(--color-cempasuchil) 12%, transparent),
+        transparent 60%
+      ),
+      var(--color-night);
+    color: var(--color-text-inverse);
+    border-radius: 4px;
+    box-shadow: 0 30px 60px -30px rgb(13 11 10 / 0.6);
   }
 
-  .manifesto__points dt {
+  .reader__head {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: var(--space-xs);
+  }
+
+  .reader__caption {
+    font-size: var(--text-small);
+    color: color-mix(in srgb, var(--color-text-inverse) 72%, transparent);
+  }
+
+  .reader__scene svg {
+    width: 100%;
+    height: auto;
+  }
+
+  .reader__scene path,
+  .reader__scene rect,
+  .reader__scene circle {
+    fill: none;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+  }
+
+  .reader__tag circle,
+  .reader__tag path {
+    stroke: color-mix(in srgb, var(--color-fiber) 80%, transparent);
+  }
+
+  .reader__tag circle:first-child {
+    stroke: var(--color-cempasuchil);
+    filter: drop-shadow(0 0 6px var(--color-cempasuchil));
+  }
+
+  .reader__waves path {
+    stroke: var(--color-cempasuchil);
+    stroke-width: 2;
+  }
+
+  .reader__phone rect,
+  .reader__phone path {
+    stroke: color-mix(in srgb, var(--color-text-inverse) 80%, transparent);
+  }
+
+  .reader__phone .reader__screen {
+    fill: color-mix(in srgb, var(--color-anil) 25%, transparent);
+    stroke: none;
+  }
+
+  .reader__points {
+    display: grid;
+  }
+
+  .reader__point {
+    position: relative;
+    display: grid;
+    grid-template-columns: 9.5rem 1fr;
+    gap: var(--space-sm);
+    align-items: baseline;
+    padding-block: var(--space-sm);
+    border-top: 1px solid var(--color-rule-dark);
+  }
+
+  .reader__index {
+    display: inline-block;
+    width: 2.25rem;
+    font-family: var(--font-mono);
+    font-size: var(--text-micro);
+    color: var(--color-cempasuchil);
+  }
+
+  .reader__point dt {
     font-family: var(--font-display);
     font-size: 1.5rem;
     line-height: 1.2;
   }
 
-  .manifesto__points dd {
-    color: var(--color-text-muted);
+  .reader__point dd {
+    color: color-mix(in srgb, var(--color-text-inverse) 78%, transparent);
+  }
+
+  /* Glowing rule that "fills" as each point is read. */
+  .reader__point::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: -1px;
+    height: 1px;
+    width: 100%;
+    background: var(--color-cempasuchil);
+    box-shadow: var(--glow-cempasuchil);
+    transform-origin: left;
+  }
+
+  .reader__status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6em;
+    font-family: var(--font-mono);
+    font-size: var(--text-micro);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-cempasuchil);
+  }
+
+  .reader__check {
+    position: relative;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 1px solid currentColor;
+    box-shadow: var(--glow-cempasuchil);
+  }
+
+  .reader__check::after {
+    content: "";
+    position: absolute;
+    left: 5px;
+    top: 3px;
+    width: 5px;
+    height: 9px;
+    border: solid currentColor;
+    border-width: 0 1.5px 1.5px 0;
+    transform: rotate(45deg);
+  }
+
+  /* --- Reading choreography (only after JS adds .nfc-ready) -------------- */
+
+  .reader:global(.nfc-ready) .reader__phone {
+    transform: translateX(60px);
+    opacity: 0.4;
+    transition:
+      transform var(--duration-scene) var(--ease-out),
+      opacity var(--duration-scene) var(--ease-out);
+  }
+
+  .reader:global(.nfc-ready) .reader__waves path,
+  .reader:global(.nfc-ready) .reader__point,
+  .reader:global(.nfc-ready) .reader__status {
+    opacity: 0;
+  }
+
+  .reader:global(.nfc-ready) .reader__point::before {
+    transform: scaleX(0);
+  }
+
+  .reader:global(.is-reading) .reader__phone {
+    transform: none;
+    opacity: 1;
+  }
+
+  .reader:global(.is-reading) .reader__waves path {
+    animation: reader-wave 1.8s ease-out 1s infinite;
+  }
+
+  .reader:global(.is-reading) .reader__waves path:nth-child(2) {
+    animation-delay: 1.25s;
+  }
+
+  .reader:global(.is-reading) .reader__waves path:nth-child(3) {
+    animation-delay: 1.5s;
+  }
+
+  .reader:global(.is-reading) .reader__point {
+    animation: reader-in var(--duration-editorial) var(--ease-out) forwards;
+  }
+
+  .reader:global(.is-reading) .reader__point::before {
+    transition: transform var(--duration-editorial) var(--ease-out);
+    transform: scaleX(1);
+  }
+
+  .reader:global(.is-reading) .reader__point:nth-child(1),
+  .reader:global(.is-reading) .reader__point:nth-child(1)::before {
+    animation-delay: 1.4s;
+    transition-delay: 1.4s;
+  }
+
+  .reader:global(.is-reading) .reader__point:nth-child(2),
+  .reader:global(.is-reading) .reader__point:nth-child(2)::before {
+    animation-delay: 2s;
+    transition-delay: 2s;
+  }
+
+  .reader:global(.is-reading) .reader__point:nth-child(3),
+  .reader:global(.is-reading) .reader__point:nth-child(3)::before {
+    animation-delay: 2.6s;
+    transition-delay: 2.6s;
+  }
+
+  .reader:global(.is-reading) .reader__status {
+    animation: reader-in var(--duration-editorial) var(--ease-out) 3.3s forwards;
+  }
+
+  @keyframes reader-wave {
+    0% {
+      opacity: 0;
+    }
+    30% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+
+  @keyframes reader-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @media (max-width: 520px) {
+    .reader__point {
+      grid-template-columns: 1fr;
+      gap: var(--space-2xs);
+    }
+
+    .reader__point dd {
+      padding-left: 2.25rem;
+    }
   }
 
   @media (min-width: 900px) {
     .manifesto__grid {
       grid-template-columns: 5fr 6fr;
-      gap: var(--space-lg);
     }
   }
 </style>

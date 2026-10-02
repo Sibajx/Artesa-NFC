@@ -25,6 +25,19 @@
   --color-rule-dark: #3a3631;
   --color-focus: #8f2a1d;
 
+  /* Luminous accents — the visible-technology layer of the Home (2026-10).
+     Named after Oaxacan natural dyes so the "tech" light stays cultural:
+     cempasúchil (marigold), grana cochinilla (cochineal), añil (indigo).
+     Used for glows, traces and HUD labels on dark surfaces only; text on
+     light surfaces keeps the base palette. */
+  --color-cempasuchil: #f2a33a;
+  --color-grana: #d6336c;
+  --color-anil: #5b6ee1;
+  --color-night: #0d0b0a; /* warmer than Carbon, for the tech scenes */
+  --color-night-raised: #1a1512;
+  --glow-cempasuchil: 0 0 18px color-mix(in srgb, var(--color-cempasuchil) 55%, transparent);
+  --font-mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+
   /* Per-piece theming hooks — DESIGN_SYSTEM.md §2.5, §3 */
   --piece-accent: var(--color-clay);
   --piece-accent-secondary: var(--color-fiber);
@@ -334,6 +347,71 @@ button {
   position: absolute;
   left: var(--space-xs);
   bottom: var(--space-xs);
+}
+
+/* HUD label — small monospaced technical caption ("lectura", "origen"…).
+   Decorative framing only: every fact it frames is also plain text nearby. */
+.hud-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-cempasuchil);
+}
+
+.hud-label::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 10px currentColor;
+  animation: hud-blink 2.4s ease-in-out infinite;
+}
+
+@keyframes hud-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+/* Corner brackets of a HUD frame; place inside a positioned element. */
+.hud-frame {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  --hud-c: color-mix(in srgb, var(--color-cempasuchil) 70%, transparent);
+  background:
+    linear-gradient(var(--hud-c), var(--hud-c)) top left / 18px 1px,
+    linear-gradient(var(--hud-c), var(--hud-c)) top left / 1px 18px,
+    linear-gradient(var(--hud-c), var(--hud-c)) top right / 18px 1px,
+    linear-gradient(var(--hud-c), var(--hud-c)) top right / 1px 18px,
+    linear-gradient(var(--hud-c), var(--hud-c)) bottom left / 18px 1px,
+    linear-gradient(var(--hud-c), var(--hud-c)) bottom left / 1px 18px,
+    linear-gradient(var(--hud-c), var(--hud-c)) bottom right / 18px 1px,
+    linear-gradient(var(--hud-c), var(--hud-c)) bottom right / 1px 18px;
+  background-repeat: no-repeat;
+}
+
+.button--glow {
+  border-color: var(--color-cempasuchil);
+  color: var(--color-text-inverse);
+  box-shadow:
+    var(--glow-cempasuchil),
+    inset 0 0 12px color-mix(in srgb, var(--color-cempasuchil) 25%, transparent);
+}
+
+.on-dark .button--glow:hover,
+.button--glow:hover {
+  background: var(--color-cempasuchil);
+  color: var(--color-night);
 }
 
 .rule {

@@ -4,10 +4,19 @@
 // plain HTML over it and work with no JavaScript, no video, reduced motion or
 // Save-Data. The video is an enhancement added by the script below, never
 // the only carrier of information (it is aria-hidden and has no audio).
+//
+// 2026-10 visible-technology layer (culture first): a canvas "field of
+// threads", a scan sweep, a rotating seal (Origen · Oficio · Autoría) around
+// an NFC wave, and the greca band. All decorative and aria-hidden; the title,
+// message and CTA stay plain HTML that works without JS or motion.
 import ResponsivePicture from "@/components/ui/ResponsivePicture.astro";
+import Greca from "@/components/home/Greca.astro";
 import { heroMedia, homeCopy } from "@/content/site";
 
 const { hero } = homeCopy;
+const titleWords = hero.title.split(" ");
+const sealText = "ORIGEN · OFICIO · AUTORÍA · PIEZA ÚNICA · ";
+const sealLength = (2 * Math.PI * 78).toFixed(1);
 const sources = JSON.stringify({
   desktop: heroMedia.desktopVideo,
   mobile: heroMedia.mobileVideo.length > 0 ? heroMedia.mobileVideo : heroMedia.desktopVideo,
@@ -39,15 +48,45 @@ const hasVideo = heroMedia.desktopVideo.length > 0;
       />
     )}
     <div class="hero__scrim"></div>
+    <canvas class="hero__field" aria-hidden="true" data-hero-field></canvas>
+    <div class="hero__scan" aria-hidden="true"></div>
+  </div>
+
+  <div class="hero__seal" aria-hidden="true">
+    <svg viewBox="0 0 200 200" focusable="false">
+      <defs>
+        <path id="hero-seal-circle" d="M100 100m-78 0a78 78 0 1 1 156 0a78 78 0 1 1-156 0"></path>
+      </defs>
+      <circle class="hero__seal-ring" cx="100" cy="100" r="92"></circle>
+      <circle class="hero__seal-ring hero__seal-ring--dash" cx="100" cy="100" r="64"></circle>
+      <g class="hero__seal-text">
+        <text>
+          <textPath href="#hero-seal-circle" textLength={sealLength} lengthAdjust="spacing">
+            {sealText}
+          </textPath>
+        </text>
+      </g>
+      <g class="hero__seal-waves">
+        <path d="M92 86a20 20 0 0 1 0 28"></path>
+        <path d="M101 78a32 32 0 0 1 0 44"></path>
+        <path d="M110 70a44 44 0 0 1 0 60"></path>
+      </g>
+      <circle class="hero__seal-core" cx="84" cy="100" r="4"></circle>
+    </svg>
   </div>
 
   <div class="hero__content container">
-    <p class="eyebrow">{hero.eyebrow}</p>
+    <p class="hud-label">{hero.eyebrow}</p>
     <h1 id="hero-title" class="hero__title display-xl">
-      {hero.title}
+      {titleWords.map((word, i) => (
+        <>
+          <span class="hero__word">{word}</span>
+          {i < titleWords.length - 1 && " "}
+        </>
+      ))}
     </h1>
     <p class="hero__subtitle lead">{hero.subtitle}</p>
-    <a class="button" href={hero.cta.href}>
+    <a class="button button--glow" href={hero.cta.href}>
       {hero.cta.label}
     </a>
   </div>
@@ -64,6 +103,7 @@ const hasVideo = heroMedia.desktopVideo.length > 0;
       </button>
     )}
   </div>
+  <Greca class="hero__greca" />
 </section>
 
 <script>
@@ -71,6 +111,8 @@ const hasVideo = heroMedia.desktopVideo.length > 0;
   // never with prefers-reduced-motion, Save-Data, or a 2G-class connection.
   // Sources are attached here (preload="none" + no <source> in the HTML), so
   // a visitor who does not get the video downloads none of it.
+  import { startHeroField } from "@/scripts/hero-field";
+
   interface NetworkInformationLike {
     saveData?: boolean;
     effectiveType?: string;
@@ -94,6 +136,9 @@ const hasVideo = heroMedia.desktopVideo.length > 0;
     toggle.setAttribute("aria-pressed", String(!playing));
     toggle.textContent = playing ? "Pausar video" : "Reproducir video";
   }
+
+  const field = document.querySelector<HTMLCanvasElement>("[data-hero-field]");
+  if (field) startHeroField(field);
 
   if (video && motionAllowed()) {
     const sources = JSON.parse(video.dataset.sources ?? "{}") as Record<
@@ -148,16 +193,18 @@ const hasVideo = heroMedia.desktopVideo.length > 0;
     position: relative;
     min-height: 100svh;
     display: grid;
-    grid-template-rows: 1fr auto;
+    grid-template-rows: 1fr auto auto;
     color: var(--color-text-inverse);
-    background: var(--color-surface-dark);
+    background: var(--color-night);
     overflow: hidden;
   }
 
   .hero__media,
   .hero__media :global(.hero__poster),
   .hero__video,
-  .hero__scrim {
+  .hero__scrim,
+  .hero__field,
+  .hero__scan {
     position: absolute;
     inset: 0;
   }
@@ -180,8 +227,176 @@ const hasVideo = heroMedia.desktopVideo.length > 0;
 
   .hero__scrim {
     background:
-      linear-gradient(to top, rgb(0 0 0 / 0.72) 0%, rgb(0 0 0 / 0.2) 55%, rgb(0 0 0 / 0.35) 100%),
-      linear-gradient(to right, rgb(0 0 0 / 0.4), transparent 70%);
+      radial-gradient(
+        ellipse at 78% 40%,
+        color-mix(in srgb, var(--color-cempasuchil) 14%, transparent),
+        transparent 55%
+      ),
+      linear-gradient(
+        to top,
+        rgb(13 11 10 / 0.9) 0%,
+        rgb(13 11 10 / 0.3) 55%,
+        rgb(13 11 10 / 0.5) 100%
+      ),
+      linear-gradient(to right, rgb(13 11 10 / 0.55), transparent 70%);
+  }
+
+  .hero__field {
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    transition: opacity var(--duration-scene) var(--ease-out);
+  }
+
+  .hero__field:global(.is-live) {
+    opacity: 1;
+  }
+
+  /* One scan sweep on arrival, then a slow repeat: light reading the piece. */
+  .hero__scan {
+    background: linear-gradient(
+      to bottom,
+      transparent 0%,
+      color-mix(in srgb, var(--color-cempasuchil) 22%, transparent) 49.5%,
+      color-mix(in srgb, var(--color-cempasuchil) 70%, transparent) 50%,
+      transparent 50.5%
+    );
+    background-size: 100% 260%;
+    background-repeat: no-repeat;
+    mix-blend-mode: screen;
+    opacity: 0.55;
+    animation: hero-scan 9s var(--ease-out) 0.4s infinite;
+    background-position: 0 130%;
+  }
+
+  @keyframes hero-scan {
+    0% {
+      background-position: 0 130%;
+    }
+    28%,
+    100% {
+      background-position: 0 -30%;
+    }
+  }
+
+  .hero__seal {
+    position: absolute;
+    right: clamp(16px, 7vw, 120px);
+    top: 50%;
+    width: clamp(180px, 26vw, 360px);
+    aspect-ratio: 1;
+    translate: 0 -50%;
+    pointer-events: none;
+    display: none;
+  }
+
+  .hero__seal svg {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+
+  .hero__seal-ring {
+    fill: none;
+    stroke: color-mix(in srgb, var(--color-cempasuchil) 45%, transparent);
+    stroke-width: 0.75;
+  }
+
+  .hero__seal-ring--dash {
+    stroke-dasharray: 2 6;
+    transform-origin: 100px 100px;
+    animation: hero-spin 40s linear infinite reverse;
+  }
+
+  .hero__seal-text {
+    transform-origin: 100px 100px;
+    animation: hero-spin 60s linear infinite;
+  }
+
+  .hero__seal-text text {
+    font-family: var(--font-mono);
+    font-size: 7.2px;
+    letter-spacing: 0.32em;
+    fill: color-mix(in srgb, var(--color-text-inverse) 75%, transparent);
+  }
+
+  .hero__seal-waves path {
+    fill: none;
+    stroke: var(--color-cempasuchil);
+    stroke-width: 2;
+    stroke-linecap: round;
+    opacity: 0.2;
+    filter: drop-shadow(0 0 4px var(--color-cempasuchil));
+    animation: hero-wave 2.4s ease-out infinite;
+  }
+
+  .hero__seal-waves path:nth-child(2) {
+    animation-delay: 0.3s;
+  }
+
+  .hero__seal-waves path:nth-child(3) {
+    animation-delay: 0.6s;
+  }
+
+  .hero__seal-core {
+    fill: var(--color-cempasuchil);
+    filter: drop-shadow(0 0 6px var(--color-cempasuchil));
+  }
+
+  @keyframes hero-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes hero-wave {
+    0%,
+    100% {
+      opacity: 0.15;
+    }
+    35% {
+      opacity: 1;
+    }
+  }
+
+  @media (min-width: 900px) {
+    .hero__seal {
+      display: block;
+    }
+  }
+
+  /* Title enters word by word (CSS only; reduced motion shows it at once). */
+  .hero__word {
+    display: inline-block;
+    animation: hero-word var(--duration-editorial) var(--ease-out) both;
+  }
+
+  .hero__word:nth-child(2) {
+    animation-delay: 90ms;
+  }
+  .hero__word:nth-child(3) {
+    animation-delay: 180ms;
+  }
+  .hero__word:nth-child(4) {
+    animation-delay: 270ms;
+  }
+  .hero__word:nth-child(5) {
+    animation-delay: 360ms;
+  }
+  .hero__word:nth-child(6) {
+    animation-delay: 450ms;
+  }
+
+  @keyframes hero-word {
+    from {
+      opacity: 0;
+      transform: translateY(0.35em);
+      filter: blur(6px);
+    }
+  }
+
+  .hero :global(.hero__greca) {
+    position: relative;
   }
 
   .hero__content {

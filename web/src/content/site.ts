@@ -97,7 +97,12 @@ export const homeCopy = {
   manifesto: {
     eyebrow: "Manifiesto",
     title: "La artesanía, primero.",
-    body: "Detrás de cada pieza hay un territorio, un material, un proceso y una persona. ArtesaNFC documenta ese origen y lo deja al alcance de quien sostiene la pieza. La tecnología se queda en silencio.",
+    body: "Detrás de cada pieza hay un territorio, un material, un proceso y una persona. ArtesaNFC documenta ese origen y lo guarda en la propia pieza: basta acercar el teléfono para leerlo.",
+    reader: {
+      label: "Ejemplo de lectura NFC",
+      caption: "Acerca tu teléfono a la pieza",
+      status: "Certificado verificado",
+    },
     points: [
       { term: "Origen", description: "La comunidad y el material de donde viene la pieza." },
       { term: "Oficio", description: "La técnica, el tiempo y el proceso de su elaboración." },
@@ -110,6 +115,19 @@ export const homeCopy = {
     body: "Cada pieza tiene su ficha: artesano, comunidad, materiales, técnica y, cuando existe, un modelo para recorrerla en 3D.",
     cta: { label: "Ver la colección", href: "/piezas/" },
     secondary: { label: "Conocer a los artesanos", href: "/artesanos/" },
+    // Illustrative certificate card: it shows what a certificate contains,
+    // never data of a real piece (always labelled "Ejemplo").
+    certificate: {
+      label: "Certificado de autenticidad",
+      example: "Ejemplo",
+      title: "Pieza única",
+      rows: [
+        { term: "Autoría", value: "Registrada" },
+        { term: "Origen", value: "Documentado" },
+        { term: "Chip NFC", value: "Vinculado" },
+      ],
+      serial: "ANFC · 0000 · 0000",
+    },
   },
   closing: {
     eyebrow: "Colaborar",
