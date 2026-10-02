@@ -65,11 +65,12 @@ La ficha pública **no** revela si existe certificado o tag NFC
 ### Variables de entorno
 
 **Ninguna.** La base de la API se elige en tiempo de ejecución por hostname
-exacto en `src/lib/api-config.ts` (misma tabla que
-`frontend/assets/js/api-config.js`): `localhost`/`127.0.0.1` → API local,
-`artesanfc.com` → `https://api.artesanfc.com/api/v1`, cualquier otro → sin API.
-No hay override por build a propósito. Habilitar un staging o `www` = añadir
-el hostname ahí **y** en `CORS_ALLOWED_ORIGINS` del backend.
+exacto en `src/lib/api-config.ts`: `localhost`/`127.0.0.1` → API local;
+`artesanfc.com` y `staging.artesanfc.com` →
+`https://api.artesanfc.com/api/v1`; cualquier otro → sin API. El frontend
+anterior no incluye el hostname de staging. No hay override por build a
+propósito. Habilitar otro host, como `www`, exige añadirlo aquí y en
+`CORS_ALLOWED_ORIGINS` del backend.
 
 ## Comandos
 
@@ -159,15 +160,15 @@ Los archivos de `public/media/placeholders/` son texturas abstractas generadas
 por `scripts/generate-placeholders.mjs`; no representan ninguna pieza, persona
 ni lugar, y la página los etiqueta como provisionales.
 
-| Asset                            | Estado                                                | Necesario                                                                                                                                |
-| -------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Video hero                       | Provisional (textura, VP8/WebM, ~300 KB)              | Clip documental ~9 s, sin audio: horizontal 1920×1080 y vertical 1080×1920, MP4 H.264 + WebM, ≤4 MB c/u, con autorización de publicación |
-| Póster hero                      | Provisional                                           | Fotograma real del clip (AVIF/WebP/JPEG, horizontal y vertical)                                                                          |
-| Imagen de entrada a la colección | Provisional                                           | Fotografía real autorizada, 4:5                                                                                                          |
-| Fotos de piezas y artesanos      | La API devuelve `/media/...`, que **nadie sirve** hoy | Capa de media/CDN (PEND-033) + fotos autorizadas                                                                                         |
-| Modelo 3D máscara de Cuilápam    | No existe                                             | GLB 2–8 MB, texturas 1024–2048 px, servido con CORS desde el origen de media                                                             |
-| Canal de contacto                | No existe                                             | Correo o formulario para el bloque de cierre                                                                                             |
-| Logo                             | Texto provisional                                     | Logo final (DESIGN_SYSTEM §22)                                                                                                           |
+| Asset                            | Estado                                                                         | Necesario                                                                                                                                |
+| -------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Video hero                       | Provisional (textura, VP8/WebM, ~300 KB)                                       | Clip documental ~9 s, sin audio: horizontal 1920×1080 y vertical 1080×1920, MP4 H.264 + WebM, ≤4 MB c/u, con autorización de publicación |
+| Póster hero                      | Provisional                                                                    | Fotograma real del clip (AVIF/WebP/JPEG, horizontal y vertical)                                                                          |
+| Imagen de entrada a la colección | Provisional                                                                    | Fotografía real autorizada, 4:5                                                                                                          |
+| Fotos de piezas y artesanos      | `/media/` está implementado; el repo no prueba qué fotos reales están cargadas | Fotos autorizadas y registradas en Gestión                                                                                               |
+| Modelo 3D máscara de Cuilápam    | No existe                                                                      | GLB 2–8 MB, texturas 1024–2048 px, servido con CORS desde el origen de media                                                             |
+| Canal de contacto                | No existe                                                                      | Correo o formulario para el bloque de cierre                                                                                             |
+| Logo                             | Texto provisional                                                              | Logo final (DESIGN_SYSTEM §22)                                                                                                           |
 
 Las 158 fotos de `Fotos_Mask_1/` (fuera del repo) no se usan: su autorización de
 publicación no está documentada y su compresión (WhatsApp, 960×1280) es

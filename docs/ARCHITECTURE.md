@@ -1,24 +1,49 @@
-# ArtesaNFC — Arquitectura objetivo
+# ArtesaNFC — Arquitectura vigente
 
-**Estado:** Propuesta aprobada para implementación incremental  
+**Estado:** Implementada de forma incremental; los estados operativos externos
+se indican con fecha
 **Dominio:** `artesanfc.com`  
-**Fecha de referencia:** 2026-09-16
+**Fecha de referencia:** 2026-10-02
 
 ## 1. Estado actual del repositorio
 
-El repositorio nació con un prototipo basado en sitio estático, Cloudflare Worker, Cloudflare D1 y lógica de certificados en Cloudflare (`public/`, `src/`, `db/`, `wrangler.toml`). Ese árbol legado **fue eliminado del repositorio** bajo el hallazgo F-07 (ver §15 F); sigue recuperable en el historial de git. La estructura actual es `frontend/`, `backend/`, `qa/`, `docs/` y `.github/`.
+El repositorio contiene cuatro superficies implementadas: el frontend público
+Astro en `web/`, el frontend anterior conservado en `frontend/`, la API FastAPI
+en `backend/` y Gestión en `admin/`. PostgreSQL es la fuente de verdad. Media,
+certificados/NFC y el sistema D10 de backup forman parte del código actual.
 
-La migración fue incremental: el sistema anterior no se eliminó hasta que existió reemplazo funcional.
+El estado de despliegue documentado difiere del estado del código:
 
-## 2. Arquitectura objetivo
+| Superficie | Código actual | Estado operativo documentado |
+|---|---|---|
+| Público | `web/` (Astro) y `frontend/` (anterior) | `web/` está desplegado en el proyecto Pages de staging; su dominio propio figura pendiente. `frontend/` sigue en producción como rollback hasta el cambio manual (`web/README.md`, estado fechado 2026-09-30) |
+| API | `backend/`, FastAPI + PostgreSQL | Producción detrás de Cloudflare Tunnel; controles verificados en `OPERATIONS.md` |
+| Gestión | `admin/` + `/api/admin/v1` | Implementación fases 1–4; su activación depende de Access, variables y servicios externos descritos en `admin/README.md` |
+| Media | `/media/`, carga desde Gestión y derivados públicos | Código implementado; regla A verificada para `GET|HEAD /media/*` el 2026-09-30. El respaldo M3 de originales está implementado, sin activación registrada en el repo |
+| Backup | D10.1–D10.3 para PostgreSQL | `BACKUP.md` registra activación B2 y restore drill; es evidencia operativa fechada |
+
+El contenido real vive en PostgreSQL y se gestiona fuera del repositorio. Este
+documento no infiere qué artesanos o piezas existen ni su estado de publicación.
+
+La base auditada antes de crear esta rama fue `origin/develop@8368c51`,
+sincronizada con el checkout, y `origin/main@6e59508`. El único cambio de
+contenido entre ambas era #168: `qa/db/legacy-inventory.sql`. Ese script solo
+inventaría tablas legacy dentro de una transacción `READ ONLY`; no las migra ni
+las elimina.
+
+El repositorio nació con un prototipo de sitio estático, Cloudflare Worker,
+Cloudflare D1 y certificados en Cloudflare (`public/`, `src/`, `db/`,
+`wrangler.toml`). Ese árbol se retiró bajo F-07 y sigue en el historial de git.
+
+## 2. Topología vigente
 
 ```text
 USUARIO
   │ HTTPS
   ▼
-artesanfc.com
+artesanfc.com / proyecto Pages de staging
 Cloudflare Pages
-Frontend público
+frontend/ (producción documentada) / web/ (Astro, staging project)
   │
   │ HTTPS / JSON
   ▼
@@ -36,6 +61,19 @@ Uvicorn / FastAPI
 PostgreSQL
 Fuente de verdad
 ```
+
+Gestión usa una entrada separada:
+
+```text
+gestion.artesanfc.com
+Cloudflare Access + Tunnel
+  ├── /api/admin/*  → FastAPI 127.0.0.1:8000
+  └── resto         → admin/dist en 127.0.0.1:8003
+```
+
+Los derivados públicos de media se sirven desde
+`https://api.artesanfc.com/media/*` cuando `MEDIA_ROOT` está configurado. Los
+originales nunca se exponen.
 
 **Topología real de producción:** Cloudflare → Cloudflare Tunnel → Uvicorn /
 FastAPI → PostgreSQL. **Nginx NO está desplegado actualmente** y no está en el
@@ -64,9 +102,9 @@ No es fuente de verdad para artesanos, piezas o certificados.
 - Rate limiting de `POST /api/v1/certificates/resolve` (capa primaria; regla C
   aplicada: 10 solicitudes por periodo de 10 segundos por IP, Block con
   mitigación de 10 segundos).
-- Restricción del host de la API al namespace público (`/api/v1/*`) con bloqueo
-  del resto (regla A aplicada) y bloqueo de `POST` a resolve con query string
-  (regla B aplicada).
+- Restricción del host de la API a `/api/v1/*` y a `GET|HEAD /media/*`, con
+  bloqueo del resto (regla A aplicada), más bloqueo de `POST` a resolve con
+  query string (regla B aplicada).
 - Entrega al origen mediante el Tunnel: el servidor no expone puertos públicos.
 
 Estas reglas son configuración operativa **no versionada**; el repo solo las
@@ -100,58 +138,26 @@ Tunnel exigiría una variante distinta (HTTP en loopback, IP real desde
 
 Fuente única de verdad para artesanos, piezas, certificados, asociaciones NFC, estados y futuras extensiones de propiedad.
 
-## 4. Estructura objetivo del repositorio
+## 4. Estructura actual del repositorio
 
 ```text
 artesa-nfc/
 │
-├── frontend/
-│   ├── index.html
-│   ├── artesanos/
-│   ├── piezas/
-│   ├── assets/
-│   │   ├── css/
-│   │   ├── js/
-│   │   ├── img/
-│   │   ├── video/
-│   │   ├── models/
-│   │   └── icons/
-│   └── _headers
-│
+├── web/                 Astro estático; destino de migración y staging
+├── frontend/            frontend anterior; producción/rollback documentados
+├── admin/               Gestión React/Vite
 ├── backend/
 │   ├── app/
-│   │   ├── api/
-│   │   ├── core/
-│   │   ├── db/
-│   │   ├── models/
-│   │   ├── schemas/
-│   │   ├── services/
-│   │   └── main.py
-│   ├── migrations/
-│   ├── scripts/
-│   ├── tests/
-│   ├── logs/
-│   ├── reportes/
-│   ├── nginx/
-│   ├── Dockerfile
-│   ├── docker-compose.yml
-│   ├── requirements.txt
-│   └── .env.example
-│
-├── docs/
-│   ├── PROJECT.md
-│   ├── ARCHITECTURE.md
-│   ├── DESIGN_SYSTEM.md
-│   ├── API_CONTRACT.md
-│   ├── DATA_MODEL.md
-│   ├── SECURITY.md
-│   ├── WORKFLOW.md
-│   └── DECISIONS.md
-│
-├── .github/
-│   ├── ISSUE_TEMPLATE/
-│   └── workflows/
-│
+│   │   ├── api/         API pública y API de Gestión
+│   │   ├── cli/         provisioning de certificados/NFC
+│   │   ├── models/      SQLAlchemy
+│   │   └── services/    contenido, certificados, NFC y media
+│   ├── alembic/         migraciones PostgreSQL
+│   ├── ops/             release, deploy y backup D10
+│   └── tests/
+├── docs/                contratos, decisiones y runbooks
+├── qa/                  QA y utilidades de inspección de solo lectura
+├── .github/workflows/   CI de backend, web, Gestión y releases
 ├── README.md
 └── .gitignore
 ```
@@ -160,28 +166,26 @@ artesa-nfc/
 
 ```text
 GET /
-GET /nosotros
-GET /contacto
 GET /artesanos
 GET /artesanos/{slug}
 GET /piezas
 GET /piezas/{slug}
+GET /c/{token}
 ```
 
 La pieza pública enlaza al artesano y el perfil del artesano muestra sus piezas.
+`web/` responde rutas desconocidas con `404.html`; los detalles y certificados
+usan shells neutros y cargan datos desde la API. El mapa completo está en
+`web/README.md`.
 
 ### Publicación en las rutas públicas (hallazgo F-08)
 
-La API pública es la **única autoridad de publicación**. El frontend no
-contiene ninguna página por entidad:
+La API pública es la **única autoridad de publicación**. Ningún frontend
+contiene páginas versionadas por entidad:
 
-- `/piezas/{slug}` y `/artesanos/{slug}` se sirven con **un shell neutro por
-  tipo** (`frontend/_shell/pieza/`, `frontend/_shell/artesano/`) mediante las
-  reglas de `frontend/_redirects`
-  (`/piezas/:slug  /_shell/pieza/  200`, con y sin `/` final, y las dos
-  equivalentes para `/artesanos`). El shell no contiene nombre, texto, imagen ni
-  slug; `hydrate-detail.js` lee el slug de `location.pathname` y muestra la
-  entidad **solo** tras un `200` válido.
+- `web/` reescribe `/piezas/{slug}` y `/artesanos/{slug}` a
+  `/shell/pieza/` y `/shell/artesano/`. `frontend/`, conservado para
+  producción/rollback, usa los shells equivalentes bajo `/_shell/`.
 - `404` (slug desconocido, borrador, archivado, pieza bajo artesano no
   publicado: el API no los distingue y la página tampoco) → una única página
   "no disponible" con `noindex`. `5xx`, `429`, timeout, red, respuesta
@@ -190,18 +194,15 @@ contiene ninguna página por entidad:
   aviso neutro.
 - `/piezas/` y `/artesanos/` no traen tarjetas: se llenan desde el API. Un `200`
   con `data: []` muestra un estado vacío, no conserva nada anterior.
-- Las listas y las rutas anidadas (`/piezas/a/b/`) no tienen rewrite; estas
-  últimas conservan su comportamiento anterior (fallback SPA a Home).
-- Reglas de `_redirects`: se usa el placeholder `:slug` y **no** `*`. Con
-  Wrangler 4.135.0 la primera regla que coincide gana y un rewrite `200` se
-  aplica incluso sobre un archivo existente; `/piezas/*` también coincide con
-  `/piezas/` y taparía la lista (`docs/QA_PRIVATE_ROUTE.md` §5).
-- Los shells viven en `/_shell/`, fuera de `/piezas/` y `/artesanos/`, para que
-  ningún slug pueda chocar con ellos.
+- Las listas no traen entidades embebidas: se llenan desde la API. Un `200` con
+  `data: []` muestra un estado vacío.
+- Las reglas usan el placeholder `:slug`, no `*`, para no tapar las listas. Los
+  shells viven fuera de `/piezas/` y `/artesanos/`; ver
+  `docs/QA_PRIVATE_ROUTE.md` §5.
 - SEO: los metadatos (`<title>`, description, canonical) los pone el JS solo con
   un `200` válido. Costo asumido y documentado: sin metadatos por entidad en el
-  HTML servido. Una evolución posible es pre-renderizar solo lo publicado en un
-  build, con verificación en runtime (fuera de F-08: hoy no hay build).
+  HTML servido. Una evolución posible es pre-renderizar solo lo publicado, con
+  verificación en runtime.
 
 ## 6. Certificado privado
 
@@ -231,9 +232,9 @@ El token:
 - se genera con un CSPRNG;
 - puede revocarse o rotarse según políticas futuras.
 
-## 7. API conceptual
+## 7. API actual
 
-Prefijo recomendado:
+Prefijo público:
 
 ```text
 /api/v1
@@ -252,15 +253,14 @@ POST /api/v1/certificates/resolve
 ### Administrativa
 
 ```text
-POST   /api/v1/admin/artisans
-PATCH  /api/v1/admin/artisans/{id}
-POST   /api/v1/admin/pieces
-PATCH  /api/v1/admin/pieces/{id}
-POST   /api/v1/admin/certificates
-POST   /api/v1/admin/certificates/{id}/revoke
+/api/admin/v1
 ```
 
-Las rutas definitivas se congelarán en `API_CONTRACT.md`.
+El namespace administrativo implementa lectura y escritura de artesanos y
+piezas, transiciones de estado, disponibilidad, auditoría y media. Cloudflare
+Access y `ADMIN_EMAILS` protegen toda la superficie. Certificados y NFC siguen
+en la CLI de provisioning. El contrato definitivo está en
+`API_CONTRACT.md` §14; no se usa el namespace histórico `/api/v1/admin`.
 
 ## 8. Modelo conceptual
 
@@ -374,6 +374,12 @@ Cada pieza puede utilizar:
 
 No todas las piezas necesitan 3D.
 
+La implementación actual recibe media desde Gestión, conserva originales bajo
+`MEDIA_ROOT/originales/`, genera derivados en `MEDIA_ROOT/publico/` y expone
+solo estos últimos por `/media/`. Sin `MEDIA_ROOT`, la ruta responde 404 y las
+cargas administrativas 503. Los formatos, límites, privacidad y respaldo se
+definen en `MEDIA.md`.
+
 ## 11. Entornos
 
 ```text
@@ -383,7 +389,7 @@ staging
 production
 ```
 
-Producción prevista:
+Hosts de producción documentados:
 
 ```text
 artesanfc.com
@@ -415,29 +421,28 @@ alias; `dev`, `development` y `prod` se rechazan): `local`, `test`, `staging`,
 Implementación y detalles: `backend/app/core/db_safety.py` y
 `backend/README.md` ("Environment safety").
 
-### Base de la API en el frontend
+### Base de la API en los frontends públicos
 
-La base de la API tiene una sola fuente de verdad:
-`frontend/assets/js/api-config.js`. La elige por **hostname exacto** de la
-página (sin comodines ni configuración por HTML):
+Cada frontend conserva su configuración explícita por hostname:
+`frontend/assets/js/api-config.js` para el rollback y
+`web/src/lib/api-config.ts` para Astro. Ambas evitan comodines y loopback desde
+hosts no locales.
 
 | Hostname de la página | Base de la API |
 |---|---|
 | `localhost`, `127.0.0.1` | `http://127.0.0.1:8000/api/v1` |
 | `artesanfc.com` | `https://api.artesanfc.com/api/v1` |
-| cualquier otro (`www`, `*.pages.dev`, `file://`, `[::1]`, …) | sin resolver (`null`) |
+| `staging.artesanfc.com` | `https://api.artesanfc.com/api/v1` en `web/` |
+| cualquier otro (`www`, `*.pages.dev`, `file://`, `[::1]`, …) | sin resolver |
 
-La app Astro (`web/src/lib/api-config.ts`, ADR-028) usa la misma tabla y añade
-`staging.artesanfc.com` → `https://api.artesanfc.com/api/v1` (requiere ese origen
-en `CORS_ALLOWED_ORIGINS`; ver `web/README.md`, "Staging paso a paso").
+Staging requiere su origen en `CORS_ALLOWED_ORIGINS`; ver `web/README.md`.
 
-- Con la base sin resolver, `api.js` no hace ninguna petición de red
-  (resultado `unavailable`): las páginas públicas de detalle y las listas
+- Con la base sin resolver, el cliente no hace ninguna petición de red. Las
+  páginas públicas de detalle y las listas
   muestran su estado neutro "no disponible" (F-08: ya no hay contenido estático
   de reserva) y `/c/{token}` muestra su estado de error de servicio. Un host no-local nunca puede resolver a
   loopback (guardia en `api-config.js`).
-- Ninguna página HTML ni otro script debe declarar o duplicar la URL de la
-  API (ya no existe el `<meta name="artesanfc-api-base">`).
+- Ninguna página HTML debe declarar una URL adicional de la API.
 - Soportar un host nuevo (`www`, un preview o un staging) implica añadirlo
   explícitamente a `api-config.js` **y** a `CORS_ALLOWED_ORIGINS` del backend.
 - El backend de producción debe permitir el origen `https://artesanfc.com` en
@@ -488,7 +493,10 @@ Reglas:
 - probar antes de bloquear;
 - bloquear escritura solo cuando la URL definitiva esté confirmada.
 
-## 15. Estrategia de migración
+## 15. Historia de migración
+
+Las fases siguientes explican cómo se llegó a la arquitectura actual. No son
+una lista del estado presente.
 
 ### A — Documentar
 Congelar producto, arquitectura y decisiones.
@@ -505,6 +513,9 @@ FastAPI + PostgreSQL.
 ### E — Migrar certificados
 Mover el flujo privado al backend nuevo.
 
+**Estado:** completado en el repositorio. El backend implementa modelos y ciclo
+de vida de certificados/NFC, resolución privada y provisioning por CLI.
+
 ### F — Retirar legado
 Solo después de pruebas, migración de datos y plan de rollback.
 
@@ -517,6 +528,14 @@ física apuntaba a rutas `/cert/<ID>`; el rollback es un `git revert`.
 dashboard de Cloudflare (aplicación Worker `artesa-nfc` conectada a Git, base D1
 `artesanfc-db`, asociación del dominio) no forma parte del repositorio y no se
 considera completada aquí.
+
+### G — Migrar el frontend público a Astro
+
+`web/` implementa la nueva aplicación y dispone de CI, un proyecto Pages de
+staging y scripts de despliegue con rollback. En el último estado operativo
+versionado (2026-09-30), ese proyecto sirve `web/`, el dominio propio de staging
+figura pendiente y producción conserva `frontend/`; el cambio de producción
+requiere el gate humano de `web/README.md`.
 
 ## 16. Regla de dependencias
 

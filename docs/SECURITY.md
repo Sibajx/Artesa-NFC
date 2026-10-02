@@ -318,16 +318,16 @@ Requisitos concretos:
 
 ### 4.2 Qué sí puede registrarse internamente
 
-Los logs internos (no la respuesta pública) **pueden** distinguir el
-motivo real (inexistente / malformado / revocado) para fines de
-auditoría y detección de abuso — ver sección 14 sobre qué va en
-`AUDIT_EVENT` y qué no.
+Los logs internos (no la respuesta pública) **pueden** distinguir el motivo real
+(inexistente / malformado / revocado) para detección de abuso, sin registrar el
+token. La persistencia de esos intentos en `AUDIT_EVENT` sigue pendiente (§12.1).
 
 ## 5. Rate limiting y abuso
 
 Objetivo: mitigar fuerza bruta/enumeración contra
 `certificates/resolve` y abuso de scraping contra endpoints públicos,
-de forma realista para un piloto pequeño (2 artesanos, 4 piezas), sin
+de forma realista para un piloto pequeño (el fixture versionado tiene 2
+artesanos y 4 piezas; no describe el contenido real), sin
 sobre-ingeniería.
 
 ### 5.1 `POST /api/v1/certificates/resolve`
@@ -379,31 +379,28 @@ mal configurados. No requieren distinguir "malformado" de "no
 encontrado" con el mismo rigor anti-enumeración que el certificado —
 son datos ya públicos por diseño.
 
-### 5.3 Futuro login administrativo
+### 5.3 Login administrativo en Cloudflare Access
 
-**Aprobado (aplicable cuando exista el endpoint):** máximo **5 intentos
-de autenticación fallidos por 15 minutos**, por IP y/o por cuenta según
-lo que sea aplicable al mecanismo elegido (sección 9). El mecanismo de
-autenticación en sí permanece como trabajo futuro (sección 9); esta
-cifra es el límite que debe respetar cualquier mecanismo que se elija,
-no una decisión abierta.
+ArtesaNFC no implementa un endpoint de login: Cloudflare Access autentica fuera
+de la aplicación y FastAPI verifica su JWT (§9). El límite histórico de 5
+fallos/15 min no está implementado por el repo; cualquier política de intentos
+se configura y verifica en Access.
 
 ### 5.4 Intentos repetidos de token inválido
 
-- Un mismo origen (IP) generando muchos `unavailable` consecutivos
-  contra `certificates/resolve` es una señal de abuso, auditable
-  (sección 14) independientemente del rate limiting — el rate limiting
-  contiene el volumen, el audit log permite investigar el patrón.
+- Un mismo origen (IP) generando muchos `unavailable` consecutivos contra
+  `certificates/resolve` es una señal de abuso. El rate limiting contiene el
+  volumen y los logs de Uvicorn/Cloudflare permiten investigar el patrón; su
+  persistencia en `AUDIT_EVENT` sigue pendiente.
 - Registrar estos intentos repetidos está permitido y es deseable
   (IP, timestamp, conteo) **sin registrar nunca el token en texto
   plano** de los intentos individuales (sección 3.2, sección 12.2).
-- **Estado en el MVP (Sprint 4):** `AUDIT_EVENT` sigue diferido (no hay
-  modelo, servicio ni API). La evidencia de abuso proviene por ahora de
-  los logs de Uvicorn (IP real vía `--proxy-headers`, timestamp, método,
-  path, status) y de los eventos del edge de Cloudflare, con la retención
-  de la sección 12.3 (si se adoptara el ejemplo de Nginx, también sus logs
-  y las líneas `limiting requests` de su error log). El registro persistente de abuso en `AUDIT_EVENT`
-  es trabajo futuro. Las peticiones a `/c/*` en el host de la API **no**
+- **Estado actual:** existe `AUDIT_EVENT` para mutaciones de Gestión, pero no se
+  insertan eventos de abuso de `certificates/resolve`. La evidencia proviene de
+  los logs de Uvicorn (IP real vía `--proxy-headers`, timestamp, método, path,
+  status) y del edge de Cloudflare, con la retención de la sección 12.3. Si se
+  adoptara Nginx, sus logs aportarían otra fuente. El registro persistente de
+  abuso en `AUDIT_EVENT` es trabajo futuro. Las peticiones a `/c/*` en el host de la API **no**
   se registran a propósito (sección 13), así que no forman parte de esta
   evidencia.
 
@@ -623,68 +620,44 @@ ningún punto abierto en esta sección):
   integren a futuro. (No hay pepper de hashing de certificados que
   proteger en el MVP — sección 3.1.)
 
-## 9. Seguridad administrativa (mínima, sin sobre-diseñar)
+## 9. Seguridad administrativa
 
-`API_CONTRACT.md` §14 deja explícitamente sin decidir el mecanismo de
-autenticación administrativa. Este documento define **requisitos
-mínimos**, no el mecanismo:
+ADR-029 y `API_CONTRACT.md` §14 fijaron el mecanismo vigente: Gestión vive en
+`gestion.artesanfc.com` detrás de Cloudflare Access y FastAPI vuelve a verificar
+el JWT de Access y la allowlist `ADMIN_EMAILS`. La UI y la API administrativa
+comparten origen.
 
-- Todo endpoint bajo `/api/v1/admin/...` **requiere autenticación**;
+- Todo endpoint bajo `/api/admin/v1/...` **requiere autenticación**;
   ninguno es accesible sin credenciales válidas, sin excepción.
 - **Principio de mínimo privilegio**: en el MVP con un operador (o muy
   pocos), esto puede ser tan simple como una única cuenta
   administrativa con acceso completo, pero el diseño no debe asumir
   que nunca habrá más de un rol — ver "trabajo futuro" abajo.
-- **Sin contraseñas por defecto compartidas.** Ninguna credencial de
-  fábrica, de ejemplo, ni reutilizada entre entornos (local/staging/
-  producción).
-- **Autenticación fuerte**: contraseña con requisitos mínimos de
-  longitud/complejidad razonables si se usa contraseña, o un mecanismo
-  equivalente si se usa otro esquema (ej. claves de API rotables).
-  Hashing de contraseña administrativa (si existe) **sí** debe usar
-  Argon2 o bcrypt — a diferencia de los tokens de certificado (sección
-  3), una contraseña elegida por un humano puede tener entropía baja,
-  por lo que aquí el hashing lento **sí** está justificado.
-- **Manejo seguro de sesión/token**: cookies de sesión con `HttpOnly`,
-  `Secure` y `SameSite` apropiados si se usa sesión basada en cookie;
-  o tokens con expiración razonable si se usa un esquema tipo JWT/API
-  key. El mecanismo exacto es una decisión pendiente (abajo).
-- **Rate limiting** específico sobre el endpoint de login/autenticación
-  administrativa (sección 5.3), más estricto que los límites públicos.
-- **Audit logging** de todo acceso y cambio administrativo (sección
-  14).
+- **Sin credenciales propias en ArtesaNFC.** Access gestiona el inicio de sesión;
+  la aplicación no almacena contraseñas ni implementa un endpoint de login.
+- **Validación en dos capas.** Access protege el hostname y FastAPI valida firma,
+  emisor, audiencia y expiración de `Cf-Access-Jwt-Assertion`, además del email.
+  Una configuración parcial impide arrancar; sin configuración, las rutas admin
+  responden 404.
+- **Audit logging** de las mutaciones administrativas implementadas; el alcance
+  y las brechas actuales se enumeran en la sección 12.
 - **HTTPS obligatorio** para toda la superficie administrativa, sin
   excepción.
-- **Consideraciones CSRF** si en el futuro se adopta autenticación
-  basada en cookies: se requeriría un token CSRF o el uso de
-  `SameSite=Strict`/`Lax` como mitigación; no aplica si el mecanismo
-  final es un token portado en header (`Authorization: Bearer ...`),
-  que no es vulnerable a CSRF de la misma forma.
-- **CORS** restrictivo específico para el namespace admin (sección
-  10).
+- **Escrituras protegidas contra CSRF:** mismo origen, JSON,
+  `X-Artesa-Admin: 1`, validación de `Origin` e `If-Match` para concurrencia,
+  según `API_CONTRACT.md` §14.2.
+- **Sin CORS administrativo:** la UI y `/api/admin/v1` comparten
+  `gestion.artesanfc.com`; el host público de la API bloquea el namespace admin.
 
-**Trabajo futuro explícitamente diferido** (no es un `PROPOSED
-DECISION` abierto para el MVP público actual — es alcance
-deliberadamente fuera de esta revisión, a resolver cuando se diseñe la
-API administrativa):
+**Trabajo futuro explícitamente diferido:**
 
-- Mecanismo exacto de autenticación: sesión con cookie vs. JWT vs. API
-  key vs. otro. Ninguno se elige en este documento, y no se elige por
-  descarte tampoco — queda abierto intencionalmente.
-- Transporte del credential (cookie vs. header `Authorization`).
-- Roles/niveles de autorización (¿un solo rol "admin" es suficiente
-  para el MVP con 2 artesanos, o se necesita un rol de solo lectura
-  desde ya?). Se recomienda **un solo rol admin para el MVP**, dado el
-  volumen actual, aunque `DATA_MODEL.md` §2.6 ya previó
+- Roles/niveles de autorización. Se recomienda **un solo rol admin para el
+  piloto** mientras no exista una necesidad demostrada de separar permisos;
+  `DATA_MODEL.md` §2.6 ya previó
   `actor_type`/`actor_id` genérico pensando en más de un actor a
   futuro.
-- Política de expiración/renovación de sesión o token.
-- Requisitos exactos de complejidad de contraseña, si se usa
-  contraseña.
-
-Estos puntos son trabajo futuro de diseño de backend/admin, coordinado
-cuando se priorice esa fase — no bloquean el resto de este documento ni
-el MVP público, y no requieren decisión de Alexis ahora mismo.
+- Cualquier reemplazo futuro de Cloudflare Access o incorporación de cuentas
+  propias requerirá una nueva decisión de seguridad.
 
 ## 10. CORS
 
@@ -709,21 +682,14 @@ alcance de seguridad que le corresponde):**
   páginas de terceros que un usuario pueda visitar. La defensa real
   contra fuerza bruta/scraping/abuso es el **rate limiting** (sección
   5), no CORS; esta sección no cambia ninguna cifra de rate limiting.
-- La API administrativa (`/api/v1/admin/...`), cuando exista, usa una
-  política aún más restrictiva: únicamente el origen del panel
-  administrativo (que puede no ser el mismo dominio que el sitio
-  público), y **nunca** `*`.
+- La API administrativa (`/api/admin/v1/...`) se consume desde el mismo origen
+  `gestion.artesanfc.com`, así que no habilita CORS administrativo.
 - Métodos y headers permitidos se limitan a los efectivamente usados
   por cada superficie (no se habilita `*` en `Access-Control-Allow-
   Methods`/`Headers` por defecto).
 
-**Trabajo futuro explícitamente diferido:** si el panel administrativo
-será un subdominio dedicado (ej. `admin.artesanfc.com`), una ruta del
-mismo frontend (`artesanfc.com/admin`), o una aplicación separada, no
-se define ni se congela en este documento ni en `ARCHITECTURE.md`/
-`API_CONTRACT.md`. Este documento solo exige que, sea cual sea el
-origen final elegido, **se declare explícitamente en la allowlist de
-CORS de producción** — nunca `*`, y nunca inferido implícitamente.
+Gestión usa el subdominio dedicado `gestion.artesanfc.com`; su topología y gate
+operativo están en `admin/README.md` y ADR-029.
 
 ## 11. Headers / seguridad de transporte
 
@@ -767,35 +733,23 @@ registrarse nunca.
 
 ### 12.1 Eventos que deben auditarse (mínimo)
 
-- Login administrativo exitoso y fallido.
-- Creación/edición de artesano.
-- Creación/edición de pieza.
-- Cambios de `publication_status` (artesano o pieza).
-- Emisión de certificado (`certificate` pasa de `draft` a `active`).
-- Revocación de certificado, incluyendo el motivo interno (sección 15).
-- Asignación, reemplazo y bloqueo (`locked`) de un `NFC_TAG`.
+**Implementado:** la tabla, modelo y trigger append-only de `AUDIT_EVENT`; las
+mutaciones de artesanos, piezas y media insertan el evento en la misma
+transacción. Gestión permite consultar esos eventos. Las acciones incluyen
+creación, edición y transiciones de publicación/disponibilidad, además de
+`media.uploaded`, `media.updated`, `media.archived` y `media.restored`.
 
-> **Estado en el piloto:** `AUDIT_EVENT` está **diferido** (brecha aceptada
-> conscientemente en el issue #107; sin modelo, tabla ni migración). Hasta que
-> exista, la procedencia mínima de emisión, revocación, programación y bloqueo
-> queda en campos existentes (`issued_at`, `revoked_at`, `revocation_reason`,
-> `programmed_at`, `locked_at` y una línea no secreta por operación en
-> `nfc_tag.notes`; `docs/PROVISIONING.md` §8). Es un riesgo conocido, no un
-> sustituto de la auditoría.
-- Abuso detectado contra `certificates/resolve` (ej. una IP superando
-  el rate limit repetidamente, o un volumen alto de `unavailable`
-  consecutivos desde el mismo origen).
-- Cambios de configuración relevantes a seguridad (ej. cambio de
-  política de rate limiting, rotación de secretos administrativos
-  futuros), cuando se realicen a través del propio sistema
-  administrativo — cambios hechos
-  directamente en el servidor (fuera de la aplicación) quedan fuera
-  del alcance de `AUDIT_EVENT` y dependen de logs de sistema/acceso
-  SSH (sección 17).
+`media.uploaded` conserva `storage_path`, tamaño y sha256 del original en
+`metadata`. Son datos internos visibles para una identidad de Gestión, no para
+la API pública; siguen prohibidos tokens, `token_hash`, JWT y secretos.
 
-Cada evento usa `action` con namespace ya aprobado en `DATA_MODEL.md`
-(ej. `certificate.issued`, `certificate.revoked`, `nfc_tag.locked`,
-`admin.login_failed`, `piece.published`).
+**Pendiente en `AUDIT_EVENT`:** login/lecturas de Gestión; emisión, rotación y
+revocación de certificados; operaciones NFC; abuso contra
+`certificates/resolve`; y cambios de configuración. Certificados y NFC
+conservan la procedencia mínima en sus campos de estado y en la línea no secreta
+de `nfc_tag.notes` descrita en `PROVISIONING.md` §8. Cloudflare, systemd, SSH y
+los logs de aplicación cubren otras señales, pero no sustituyen estos eventos
+pendientes.
 
 ### 12.2 Qué NO debe registrarse nunca
 
@@ -818,22 +772,23 @@ Cada evento usa `action` con namespace ya aprobado en `DATA_MODEL.md`
 `DATA_MODEL.md` §12 ya marca `audit_event.ip_address` como dato
 personal cuya retención/anonimización se define aquí:
 
-- Se registra la IP en eventos de seguridad relevantes (login
-  administrativo, abuso contra `certificates/resolve`) porque es
-  necesaria para investigar y mitigar abuso.
+- Las mutaciones actuales de Gestión guardan la IP del actor en cada
+  `AUDIT_EVENT`. La tabla es append-only y sus triggers rechazan `UPDATE`,
+  `DELETE` y `TRUNCATE`.
+- Cuando se implementen eventos persistentes de login/abuso, la IP solo se
+  registrará si es necesaria para investigar y mitigar. Hoy esas señales viven
+  en logs operativos/Cloudflare, no en `AUDIT_EVENT` (§12.1).
 - **Política aprobada de retención (MVP):** las direcciones IP en
   texto claro dentro de logs de seguridad/aplicación se retienen como
   máximo **30 días**, salvo que un incidente activo requiera
   preservarlas temporalmente más allá de ese plazo mientras dure la
-  investigación. Pasado ese plazo (o resuelto el incidente), se
-  eliminan o se anonimizan.
-- Los registros de auditoría que **no** requieren la IP en claro para
-  cumplir su propósito (ej. el hecho de que se emitió/revocó un
-  certificado) pueden conservarse por más tiempo sin la IP asociada,
-  ya que el valor de auditoría a largo plazo no depende de ese dato.
-- **No se recolecta IP ni información personal sin una necesidad
-  operativa o de seguridad concreta** — no se agrega captura de IP a
-  eventos que no la necesitan solo "por si acaso".
+  investigación.
+- **Brecha actual:** no existe un job ni un procedimiento compatible con la
+  inmutabilidad que elimine o anonimice `audit_event.ip_address` después de 30
+  días. Por tanto, el límite sí puede aplicarse a logs rotables, pero no está
+  aplicado a `AUDIT_EVENT`. Resolverlo exige una decisión coordinada de modelo
+  y operación (por ejemplo, redactar antes de insertar o diseñar una retención
+  privilegiada y auditable); esta auditoría documental no elige el mecanismo.
 - Esta es una **política operativa de privacidad para el MVP**, no una
   declaración de cumplimiento legal (ver sección 13).
 
@@ -847,10 +802,10 @@ personal cuya retención/anonimización se define aquí:
   (ej. logs de acceso de Nginx que capturan la ruta completa
   `/c/{token}` si esa ruta llega a tocar el servidor en vez de
   resolverse client-side): se recomienda configurar el logging de
-  acceso para excluir o enmascarar el segmento de path que contiene el
-  token. En el host de la API esto ya está implementado para
-  `/c/{token}` (rechazo local y formato de log saneado; ver «Rutas
-  privadas en logs de acceso» más abajo).
+  acceso para excluir o enmascarar el segmento de path que contiene el token.
+  En la topología vigente, la regla A de Cloudflare bloquea `/c/*` en el host de
+  la API. El ejemplo de Nginx añade rechazo local y formato saneado solo si esa
+  alternativa se adopta (ver «Rutas privadas en logs de acceso» más abajo).
 - **Errores de la base de datos en el ciclo de vida.** El `DETAIL` de
   PostgreSQL incluye valores de la fila (para `certificate`, el
   `token_hash`). Los servicios de ciclo de vida traducen los fallos de
@@ -889,13 +844,11 @@ personal cuya retención/anonimización se define aquí:
     datos en hilos en segundo plano, tareas de arranque, internos del pool
     de conexiones u otra ejecución fuera de una petición no pasan por esta
     frontera.
-  - Con FastAPI ≥ 0.118 la salida de las dependencias con `yield`
-    (p. ej. `commit` o `close()` de sesión) se ejecuta *después* de enviar
-    la respuesta; un error de base de datos en ese punto ya no llegaría al
-    manejador y Starlette lo relanzaría (`response already started`) encadenado
-    a la excepción original, con lo que su texto volvería al log. El repo
-    fija `fastapi==0.115.6`, donde el cierre ocurre antes del envío
-    (probado); revisar este punto antes de actualizar FastAPI.
+  - Con FastAPI 0.141.1 / Starlette 1.x, la salida de una dependencia con
+    `yield` puede fallar después de iniciar la respuesta. En ese caso
+    `DatabaseTracebackFilter` convierte el traceback de Uvicorn en una sola
+    línea saneada, sin texto de la excepción. El caso está cubierto por
+    `tests/test_global_db_error_uvicorn.py` (issue #121).
   - Una excepción que no es de base de datos y que encadena una de base de
     datos (`raise X from db_exc`) sigue imprimiendo la cadena completa.
 - **Rutas privadas en logs de acceso (`/c/{token}` en el host de la API).**
@@ -903,10 +856,9 @@ personal cuya retención/anonimización se define aquí:
   `/c/{token}` es una ruta del frontend estático (Cloudflare Pages), no de
   la API; pero el token es una credencial *bearer* en la ruta, y una
   petición literal `/c/<token>` puede llegar al host de la API (enlace mal
-  formado, sondeo, error de configuración). Antes de este cambio quedaba en
-  claro en el log de Nginx (`$uri`) y, en `:80`, en el `main` heredado (línea
-  de petición completa, query incluida). En producción, la configuración de
-  `backend/nginx/artesanfc-api.conf.example` lo trata así:
+  formado, sondeo, error de configuración). La regla A de Cloudflare lo bloquea
+  en la topología vigente. Si se adopta Nginx como alternativa, la configuración
+  de `backend/nginx/artesanfc-api.conf.example` lo trata así:
   - **Rechazo local.** `location ~* ^/c(?:/|$)` en los dos `server` (`:80` y
     `:443`): `404` genérico, `access_log off`, sin proxy a Uvicorn y **sin
     redirección** (tampoco en `:80`: redirigir reenviaría el token a otra
@@ -991,9 +943,9 @@ Comportamiento ya compatible con `DATA_MODEL.md` §2.3 y
   campo ya existente en `DATA_MODEL.md`, opcional) puede almacenarse
   para uso administrativo/auditoría, pero **nunca** se expone
   públicamente.
-- La revocación se audita (`certificate.revoked` en `AUDIT_EVENT`,
-  sección 12.1), incluyendo quién la ejecutó (`actor_id` cuando exista
-  modelo de usuario administrativo) y cuándo.
+- La revocación conserva `revoked_at`, `revocation_reason` y una línea de
+  procedencia no secreta del flujo de provisioning. Todavía no inserta
+  `certificate.revoked` en `AUDIT_EVENT` (§12.1).
 - Tras la revocación, el token anterior **no debe volver a validar**:
   dado que `token_hash` no se borra (`DATA_MODEL.md` §2.3), la
   verificación debe comprobar tanto la coincidencia del hash **como**
@@ -1094,8 +1046,8 @@ Requisitos mínimos para el MVP:
   backup con `age` para dos destinatarios públicos (K1, K2) cuyas claves
   privadas **nunca** están en el servidor; no se conserva ningún dump en claro;
   cada backup se restaura en un PostgreSQL desechable antes de cifrarse.
-  Detalle, límites y Definition of Done: `docs/BACKUP.md`. Fuera del host y
-  simulacros con la clave offline: fases D10.2 y D10.3 (pendientes).
+  Detalle, límites y Definition of Done: `docs/BACKUP.md`. Ese documento
+  registra D10.2 fuera del host y el simulacro D10.3 con K1/K2 al 2026-09-30.
 
 ## 16. Servidor y despliegue
 
@@ -1168,8 +1120,9 @@ Procesos mínimos, no un plan de respuesta a incidentes completo:
    la sección 14.1 (`CROSS-DOCUMENT CHANGE REQUIRED` pendiente para
    soportar esto limpiamente).
 3. Reprogramar el NFC de reemplazo si se emite un nuevo token.
-4. Registrar el incidente en `AUDIT_EVENT` con el motivo real
-   (`certificate.revoked`, con `revocation_reason` interno).
+4. Registrar el incidente en el registro operativo del equipo. La CLI conserva
+   `revocation_reason` y la procedencia no secreta; `certificate.revoked` en
+   `AUDIT_EVENT` sigue pendiente (§12.1).
 
 ### Si un secreto de servidor se filtra (credenciales de DB, clave administrativa futura, etc.)
 
@@ -1251,11 +1204,9 @@ porque el MVP no usa pepper — sección 3.1):
    observable de `API_CONTRACT.md` §7 (`authentic`/`unavailable` sin
    cambios).
 
-   Nota de alcance: esta resolución es a nivel de modelo de datos
-   (`DATA_MODEL.md` §14); la implementación de las tablas
-   `certificate`/`nfc_tag`/`audit_event` en sí permanece fuera de
-   Sprint 3 y se realiza en Sprint 4 (`WORKFLOW.md` §14), sin cambios a
-   este documento.
+   Nota histórica: en ese corte la implementación de las tablas quedó para
+   Sprint 4. Las tablas `certificate`, `nfc_tag` y `audit_event` existen en el
+   código y las migraciones actuales.
 
 Ningún otro requisito de este documento requiere modificar
 `DATA_MODEL.md` o `API_CONTRACT.md`.
@@ -1277,8 +1228,8 @@ Owner) el 2026-09-16:
    delays artificiales fijos (sección 4.1).
 4. Cifras de rate limiting — aprobadas: 30 req/min/IP en
    `certificates/resolve`, 120 req/min/IP en endpoints públicos `GET`,
-   5 intentos fallidos/15 min en futuro login administrativo (sección
-   5).
+   el control del login administrativo corresponde a Cloudflare Access y no se
+   implementa en este repo (sección 5.3).
 5. Gestión de secretos — aprobado: variables de entorno/archivos fuera
    del repositorio con permisos restrictivos son suficientes para el
    MVP; no se requiere una plataforma dedicada de gestión de secretos

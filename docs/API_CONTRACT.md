@@ -31,8 +31,9 @@ Fuera de alcance de este documento (pertenecen a otros documentos):
 /api/v1
 ```
 
-Todas las rutas de este documento cuelgan de este prefijo, según
-`ARCHITECTURE.md` §7.
+Los endpoints públicos de las secciones 3–13 cuelgan de este prefijo, según
+`ARCHITECTURE.md` §7. Gestión usa `/api/admin/v1` (§14) y los bytes públicos de
+media se sirven bajo `/media/` (§14.3).
 
 ## 2. Convención de nombres / serialización
 
@@ -422,9 +423,10 @@ producto por adelantado.
 
 ## 8. Listados, filtrado y paginación
 
-Inventario actual: 2 artesanos, 4 piezas (`PROJECT.md` §11). **Aprobado
-para el MVP:** no se implementa paginación real; se define una
-envoltura simple y forward-compatible.
+El fixture determinista del repositorio tiene 2 artesanos y 4 piezas
+(`PROJECT.md` §11); no describe el contenido real. **Aprobado para el MVP:** no
+se implementa paginación real; se define una envoltura simple y
+forward-compatible.
 
 ### `GET /api/v1/artisans`
 
@@ -631,15 +633,14 @@ devuelve el mismo estado sin cuerpo. Tampoco forman parte del contrato
 | **Interno, no expuesto salvo necesidad técnica** | `artisan.id`, `piece.id`, `certificate.id`, `media_asset.id`, `nfc_tag.id` (todos UUID) | No se exponen en el MVP porque `slug`/`public_code` cubren toda referencia pública necesaria. Si en el futuro el frontend necesita un UUID (ej. para una mutación administrativa), se documenta explícitamente en ese momento, no preventivamente. |
 | **Nunca expuesto en la superficie pública de PIECE** | `has_certificate`, `certificate_id`, `certificate_status`, `has_nfc`, cualquier campo de `nfc_tag` | Prohibido explícitamente (sección 5), incluso como indicador booleano, para no revelar la existencia de un certificado desde la navegación pública. |
 | **Absolutamente prohibido, en cualquier endpoint presente o futuro** | `certificate.token_hash`, el token privado del certificado en texto plano | Nunca se serializa en ninguna respuesta de ningún endpoint, público o administrativo, exista hoy o se agregue en el futuro. Esta es la única categoría de este documento que también restringe explícitamente a la futura API administrativa. |
-| **No expuesto por los endpoints públicos de este documento** | `nfc_tag.physical_uid`, UUIDs internos (`artisan.id`, `piece.id`, `certificate.id`, `media_asset.id`, `nfc_tag.id`), `audit_event.*`, `actor_id`/`actor_type`, rutas de almacenamiento/bucket internas | Ninguno de los endpoints públicos definidos en las secciones 3-9 de este documento expone estos campos. Este documento **no** decide si o cómo una futura API administrativa los expondría: cualquier exposición operativa/interna a través de `/api/v1/admin/...` es una decisión separada, que debe documentarse explícitamente en el futuro contrato administrativo (sección 14) y protegerse con la autorización que defina `SECURITY.md`. No se asume aquí ni prohibición ni permiso para el admin — solo se fija que hoy no existe ningún endpoint (público o administrativo) que los exponga. |
+| **No expuesto por los endpoints públicos de este documento** | `nfc_tag.physical_uid`, UUIDs internos (`artisan.id`, `piece.id`, `certificate.id`, `media_asset.id`, `nfc_tag.id`), `audit_event.*`, `actor_id`/`actor_type`, rutas de almacenamiento/bucket internas | Ningún endpoint público de las secciones 3–9 expone estos campos. La superficie interna de Gestión se define por separado en §14 y se protege con Cloudflare Access + `ADMIN_EMAILS`. Sus eventos de auditoría de media sí incluyen `storage_path` y sha256 del original como metadatos internos. |
 | **Filtrado por publicación** | `artisan`/`piece` con `publication_status != published`, o una pieza `published` cuyo artesano no lo está (sección 9) | Nunca aparecen en endpoints públicos; no existe parámetro para forzar su inclusión desde fuera de la API administrativa. |
 
 Esta tabla es la referencia única para auditar cualquier endpoint nuevo
 que se agregue a este documento en el futuro: si un campo no aparece
 aquí como público (en alguna de sus tres formas), no se expone sin antes
-actualizar esta sección. La única regla de esta tabla que se extiende
-por diseño a un futuro contrato administrativo no escrito todavía es la
-prohibición absoluta de `token_hash`/token en texto plano.
+actualizar esta sección. La prohibición absoluta de `token_hash`/token en texto
+plano también se extiende al contrato administrativo de §14.
 
 ## 12. Convención sobre valores ausentes (aprobada)
 
@@ -720,7 +721,12 @@ Se considera **cambio disruptivo** (requiere `/api/v2`):
 definirá cuando exista efectivamente una `/api/v2`, no de forma
 especulativa ahora.
 
-## 14. API administrativa (solo espacio de nombres conceptual)
+## 14. API administrativa
+
+### 14.0 Historia: namespace conceptual descartado
+
+El bloque siguiente conserva la propuesta anterior para explicar por qué fue
+reemplazada. El contrato vigente empieza en §14.1.
 
 `ARCHITECTURE.md` §7 anticipa un namespace administrativo:
 
@@ -800,9 +806,10 @@ El texto anterior de esta sección se conserva como historia. Desde ADR-029:
 `q` busca sin distinguir mayúsculas; `%` y `_` se tratan como texto literal.
 
 **Nunca** se exponen, tampoco aquí: `certificate.token_hash`, el token,
-`nfc_tag.physical_uid`, `media_asset.storage_path` ni `audit_event.ip_address`.
-Emitir, rotar o revocar certificados y programar tags sigue siendo solo por
-CLI (ADR-026).
+`nfc_tag.physical_uid` ni `audit_event.ip_address`. El endpoint de auditoría
+devuelve `metadata`; para `media.uploaded` contiene el `storage_path` interno y
+el sha256 del original. Emitir, rotar o revocar certificados y programar tags
+sigue siendo solo por CLI (ADR-026).
 
 ### 14.2 Fase 2 de Gestión: escrituras de contenido (ADR-029)
 
@@ -891,8 +898,8 @@ blanca); cualquier otra, `404` sin tocar el disco. Cabeceras:
 `Cache-Control: public, max-age=31536000, immutable`, `nosniff` y
 `Access-Control-Allow-Origin: *`. Esta última es una excepción acotada a bytes
 públicos: `<model-viewer>` pide el GLB con CORS, y Cloudflare guarda una sola
-copia por URL sin mirar `Vary: Origin`. En producción requiere ampliar la
-regla A de Cloudflare a `GET|HEAD /media/*`.
+copia por URL sin mirar `Vary: Origin`. La regla A de producción fue ampliada y
+verificada para `GET|HEAD /media/*` el 2026-09-30 (`OPERATIONS.md` §8).
 
 ## 15. Estado de las decisiones
 
@@ -925,18 +932,16 @@ Owner) el 2026-09-16:
    (sección 12).
 10. Principio de versionado sin período fijo de deprecación — aprobado
     (sección 13).
-11. API administrativa como namespace puramente conceptual, sin CRUD
-    congelado — aprobado (sección 14).
+11. La propuesta inicial dejó el namespace administrativo como conceptual. Fue
+    reemplazada por ADR-029 y el contrato vigente de §§14.1–14.3.
 
 Correcciones de consistencia adicionales aplicadas en esta revisión
 (2026-09-16), no `PROPOSED DECISION` sino ajustes de redacción/alcance:
 
 12. La restricción "nunca expuesto, público o administrativo" se acotó:
-    solo `token_hash`/token en texto plano son absolutamente prohibidos
-    incluso para un futuro admin; el resto de campos sensibles
-    (`nfc_tag.physical_uid`, UUIDs internos, `audit_event.*`) están
-    fuera de los endpoints **públicos** de este documento, sin prejuzgar
-    una futura API administrativa (sección 11).
+    solo `token_hash`/token en texto plano son absolutamente prohibidos en toda
+    superficie. Los UUID y eventos internos están fuera de la API pública y se
+    exponen a Gestión solo según §§11 y 14; `physical_uid` permanece omitido.
 13. `400`/`422` simplificados para alinearse con el comportamiento
     estándar de FastAPI/Pydantic: `422` cubre toda validación de
     entrada (body, query, path); `400` queda reservado para solicitudes
@@ -962,7 +967,8 @@ delimitación de alcance intencional:
   y la distinción interna (inexistente/revocado/malformado) para
   auditoría (sección 7).
 - Logging de intentos hacia `AUDIT_EVENT` (sección 7).
-- Mecanismo de autenticación administrativa (sección 14).
+- Requisitos de seguridad de Cloudflare Access y la validación adicional de la
+  API administrativa (sección 14; detalle en `SECURITY.md` §9).
 
 **Trabajo futuro (backend/admin, no bloqueante para el MVP público):**
 
@@ -970,8 +976,8 @@ delimitación de alcance intencional:
   justifique (sección 8).
 - Validación administrativa que prevenga el estado inconsistente
   pieza-publicada/artesano-no-publicado (sección 9).
-- Contrato administrativo completo: cuerpos de request/response,
-  estrategia de identificador, paginación admin, roles, mapeo a
-  `AUDIT_EVENT` (sección 14).
+- Paginación administrativa y roles separados, si el piloto demuestra que son
+  necesarios. Los cuerpos, identificadores y mapeos actuales están congelados
+  en §§14.1–14.3.
 - Ampliación futura de la allowlist de `authenticity_metadata` cuando
   exista contenido real que lo justifique (sección 7).
