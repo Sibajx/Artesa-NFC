@@ -182,3 +182,193 @@
     background: #FCFBF9;
   }
 }
+
+/* --- 2026-10: más visual (pedido del equipo) -------------------------------
+   Pop con resorte en los botones, botón de peligro, diálogo propio y avisos.
+   Mismo resorte que el sitio público (--ease-pop). Sin movimiento con
+   prefers-reduced-motion. */
+
+:root {
+  --ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.btn-danger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  background-color: #b42318;
+  color: white;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.btn-danger:hover {
+  background-color: #912018;
+}
+
+.btn-danger:focus-visible {
+  outline: 2px solid #b42318;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .btn-primary,
+  .btn-secondary,
+  .btn-danger {
+    transition:
+      transform 380ms var(--ease-pop),
+      box-shadow 200ms ease,
+      background-color 150ms ease,
+      color 150ms ease;
+  }
+
+  .btn-primary:hover:not(:disabled),
+  .btn-secondary:hover:not(:disabled),
+  .btn-danger:hover:not(:disabled) {
+    transform: translateY(-2px) scale(1.04);
+    box-shadow: 0 8px 18px -10px rgb(0 0 0 / 0.35);
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    box-shadow: 0 10px 22px -10px color-mix(in srgb, var(--color-botanica-jade) 70%, transparent);
+  }
+
+  .btn-danger:hover:not(:disabled) {
+    box-shadow: 0 10px 22px -10px rgb(180 35 24 / 0.6);
+  }
+
+  .btn-primary:active:not(:disabled),
+  .btn-secondary:active:not(:disabled),
+  .btn-danger:active:not(:disabled) {
+    transform: scale(0.96);
+    transition-duration: 100ms;
+  }
+}
+
+/* Confirm dialog */
+.confirm-dialog {
+  margin: auto;
+  width: min(92vw, 460px);
+  padding: 1.5rem;
+  border: 0;
+  border-radius: 16px;
+  background: white;
+  box-shadow: 0 30px 60px -20px rgb(0 0 0 / 0.35);
+}
+
+.confirm-dialog::backdrop {
+  background: rgb(26 26 26 / 0.45);
+  backdrop-filter: blur(3px);
+}
+
+.confirm-dialog__icon {
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  color: var(--color-botanica-jade);
+  background: color-mix(in srgb, var(--color-botanica-jade) 14%, white);
+}
+
+.confirm-dialog__icon--danger {
+  color: #b42318;
+  background: #fde8e6;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .confirm-dialog[open] {
+    animation: dialog-pop 320ms var(--ease-pop);
+  }
+
+  .confirm-dialog[open]::backdrop {
+    animation: backdrop-in 200ms ease;
+  }
+}
+
+@keyframes dialog-pop {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.94);
+  }
+}
+
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Toasts */
+.toast-region {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: white;
+  background: var(--color-botanica-negro);
+  box-shadow: 0 16px 30px -14px rgb(0 0 0 / 0.5);
+}
+
+.toast span {
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--color-botanica-jade);
+}
+
+.toast--error span {
+  background: #b42318;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .toast {
+    animation: toast-in 380ms var(--ease-pop);
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.92);
+  }
+}
+
+/* Sticky action bar on record pages */
+.record-bar {
+  position: sticky;
+  top: 0.75rem;
+  z-index: 20;
+  padding: 0.75rem;
+  border-radius: 14px;
+  background: color-mix(in srgb, white 88%, transparent);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 10px 30px -18px rgb(0 0 0 / 0.35);
+  border: 1px solid color-mix(in srgb, var(--color-botanica-gris) 15%, transparent);
+}
+
+.btn-publish {
+  font-size: 0.95rem;
+  padding: 0.7rem 1.5rem;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-botanica-jade) 18%, transparent);
+}

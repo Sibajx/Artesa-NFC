@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import type { AdminMedia, ArtisanDetail, PieceDetail } from './api';
+import { usePublish } from './usePublish';
 
 // Status banner + pre-publication review for an artisan or a piece.
 // It answers "¿se ve en el sitio?" at a glance, lists what is missing before
@@ -49,10 +50,11 @@ function pieceChecks(p: PieceDetail): Check[] {
   ];
 }
 
-type Props = { kind: 'artisans'; record: ArtisanDetail } | { kind: 'pieces'; record: PieceDetail };
+type Props = ({ kind: 'artisans'; record: ArtisanDetail } | { kind: 'pieces'; record: PieceDetail }) & { onChanged: () => void };
 
 export function PublishChecklist(props: Props) {
-  const { kind, record } = props;
+  const { kind, record, onChanged } = props;
+  const publish = usePublish();
   if (record.publication_status === 'archived' || record.trashed_at) return null;
   const visible = kind === 'artisans' ? record.publication_status === 'published' : props.record.publicly_visible;
   const checks = kind === 'artisans' ? artisanChecks(props.record) : pieceChecks(props.record);
@@ -109,6 +111,15 @@ export function PublishChecklist(props: Props) {
           </li>
         ))}
       </ul>
+      {record.publication_status === 'draft' && blocking.every((c) => c.label === 'Artesano publicado') && (
+        <div>
+          <button type="button" className="btn-primary btn-publish"
+            onClick={() => void publish({ kind, id: record.id, version: record.updated_at, name: kind === 'artisans' ? props.record.full_name : props.record.name })
+              .then((changed) => { if (changed) onChanged(); })}>
+            Publicar ahora
+          </button>
+        </div>
+      )}
       <p className="text-xs text-botanica-gris">Dirección pública al publicar: <span className="font-mono">{publicUrl}</span></p>
     </section>
   );
