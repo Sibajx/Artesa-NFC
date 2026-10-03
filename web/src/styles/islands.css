@@ -628,3 +628,64 @@
   font-weight: 600;
   overflow-wrap: anywhere;
 }
+
+/* --- Generic certificate in the piece's colours (ADR-030 phase 4) ------- */
+
+.certificate__palette {
+  display: grid;
+  gap: 0.5rem;
+  margin: var(--space-sm) 0 0;
+  max-width: 360px;
+}
+
+.certificate__palette-band {
+  display: flex;
+  height: 14px;
+  border-radius: 999px;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--piece-dark, #000) 25%, transparent);
+}
+
+.certificate__palette-band span {
+  flex: 1;
+}
+
+.certificate__palette figcaption {
+  font-size: var(--text-small);
+}
+
+.certificate--themed .original__card {
+  border-color: var(--piece-dark);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .certificate__palette-band span {
+    animation: palette-in 0.7s var(--ease-pop) both;
+    transform-origin: left;
+  }
+
+  .certificate__palette-band span:nth-child(2) {
+    animation-delay: 80ms;
+  }
+
+  .certificate__palette-band span:nth-child(3) {
+    animation-delay: 160ms;
+  }
+
+  .certificate__palette-band span:nth-child(4) {
+    animation-delay: 240ms;
+  }
+
+  .certificate__palette-band span:nth-child(5) {
+    animation-delay: 320ms;
+  }
+}
+
+@keyframes palette-in {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: none;
+  }
+}

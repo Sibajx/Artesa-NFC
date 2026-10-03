@@ -4,6 +4,7 @@ import { formatDate, formatDateTime, joinList, labels } from '../format';
 import { useState } from 'react';
 import { useLoad } from '../hooks';
 import { MediaSection } from '../MediaSection';
+import { PaletteSection } from '../PaletteSection';
 import { PublishChecklist } from '../PublishChecklist';
 import { RecordActions } from '../RecordActions';
 import { Badge, ErrorState, Field, Loading, PublicationBadge } from '../ui';
@@ -130,6 +131,8 @@ export default function PiezaDetalle() {
 
             <MediaSection kind="pieces" ownerId={p.id} media={p.media}
               ownerArchived={p.publication_status === 'archived'} onChanged={() => setRevision((r) => r + 1)} />
+
+            <PaletteSection key={p.updated_at} piece={p} onChanged={() => setRevision((r) => r + 1)} />
           </div>
         );
       })()}

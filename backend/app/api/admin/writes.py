@@ -18,6 +18,7 @@ from datetime import datetime
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.api.admin import router as reads
@@ -36,7 +37,7 @@ from app.schemas.admin_write import (
 from pathlib import Path
 
 from app.core.config import get_settings
-from app.services import content, trash
+from app.services import content, palette, trash
 from app.services.content import Actor, ContentError
 
 ADMIN_WRITE_HEADER = "X-Artesa-Admin"
@@ -198,6 +199,31 @@ def set_availability(piece_id: uuid.UUID, body: AvailabilityBody, expected: date
                      who: Actor = Depends(actor), db: Session = Depends(get_db)) -> AdminPieceDetail:
     try:
         content.set_availability(db, who, piece_id, expected, body.availability_status)
+    except ContentError as exc:
+        raise _fail(exc) from None
+    return reads.get_piece(piece_id, db, who.identity)
+
+
+class PaletteBody(BaseModel):
+    colors: list[str] = Field(max_length=8)
+
+
+# ADR-030 phase 4. Declared before the generic /{action} transition.
+@router.post("/pieces/{piece_id}/palette/generate", response_model=AdminPieceDetail)
+def generate_palette(piece_id: uuid.UUID, expected: datetime = Depends(expected_version),
+                     who: Actor = Depends(actor), db: Session = Depends(get_db)) -> AdminPieceDetail:
+    try:
+        palette.generate(db, who, _media_root_or_none(), piece_id, expected)
+    except ContentError as exc:
+        raise _fail(exc) from None
+    return reads.get_piece(piece_id, db, who.identity)
+
+
+@router.post("/pieces/{piece_id}/palette", response_model=AdminPieceDetail)
+def set_palette(piece_id: uuid.UUID, body: PaletteBody, expected: datetime = Depends(expected_version),
+                who: Actor = Depends(actor), db: Session = Depends(get_db)) -> AdminPieceDetail:
+    try:
+        palette.set_manual(db, who, piece_id, expected, body.colors)
     except ContentError as exc:
         raise _fail(exc) from None
     return reads.get_piece(piece_id, db, who.identity)
