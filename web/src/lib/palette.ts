@@ -21,7 +21,9 @@ function rgb(hex: string): [number, number, number] {
 }
 
 function luminance(hex: string): number {
-  const [r, g, b] = rgb(hex).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  const [r, g, b] = rgb(hex).map((c) =>
+    c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4,
+  ) as [number, number, number];
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
@@ -44,6 +46,10 @@ export interface PaletteRoles {
 export function paletteRoles(colors: readonly string[]): PaletteRoles | null {
   if (colors.length < 3) return null;
   const byLuminance = [...colors].sort((a, b) => luminance(a) - luminance(b));
-  const accent = [...colors].sort((a, b) => saturation(b) - saturation(a))[0];
-  return { accent, dark: byLuminance[0], light: byLuminance[byLuminance.length - 1] };
+  const bySaturation = [...colors].sort((a, b) => saturation(b) - saturation(a));
+  const accent = bySaturation[0];
+  const dark = byLuminance[0];
+  const light = byLuminance[byLuminance.length - 1];
+  if (!accent || !dark || !light) return null;
+  return { accent, dark, light };
 }
