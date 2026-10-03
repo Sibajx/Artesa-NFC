@@ -793,7 +793,7 @@ El texto anterior de esta sección se conserva como historia. Desde ADR-029:
 |---|---|
 | `GET /api/admin/v1/me` | `{"email", "roles"}` de la identidad verificada; `roles` ⊆ `editor`, `designer`, `custodian` (ADR-030) |
 | `GET /api/admin/v1/custody/pieces` | **Solo Custodios** (403 + `audit_event` `custody.denied` para los demás): cada pieza fuera de la papelera con `certificate_status`, `certificate_version`, `tag_status`, `tag_chip` y `ready_to_certify`. Nunca `token_hash` ni `physical_uid` |
-| `GET /api/admin/v1/custody/pieces/{id}/state` | Solo Admin (Custodio). Estado de certificación de la pieza: certificado activo, chips (`uid`, estado), `recommended_action` y bloqueos (`issue_blockers`, `rotate_blockers`, `lock_blockers`) |
+| `GET /api/admin/v1/custody/pieces/{id}/state` | Solo Custodios. Estado de certificación de la pieza: certificado activo, chips (`uid`, estado), `recommended_action` y bloqueos (`issue_blockers`, `rotate_blockers`, `lock_blockers`) |
 | `POST …/custody/pieces/{id}/issue` `{"uid"}` | Registra el chip, lo asigna y emite el certificado en una transacción; autochequeo de `resolve`. **Única respuesta con la URL del certificado** (ADR-030), `no-store`, nunca registrada |
 | `POST …/custody/pieces/{id}/rotate` `{"reason", "uid"?}` | Revoca y reemite; `uid` = chip nuevo, sin `uid` = el mismo chip. Devuelve la URL nueva |
 | `POST …/custody/pieces/{id}/program` `{"tag_id", "uid"}` | Tras grabar **y leer de vuelta**: el `uid` leído debe ser el registrado (`409 uid_mismatch`) |
