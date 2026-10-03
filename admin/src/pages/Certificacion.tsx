@@ -21,9 +21,9 @@ export default function Certificacion() {
   const state = useLoad('custody:pieces', (signal) => adminApi.custodyPieces(signal));
   return (
     <div className="max-w-6xl mx-auto pb-12">
-      <PageHeader title="Certificación" subtitle="Área de Admin: certificados, claves y etiquetas NFC de cada pieza." />
+      <PageHeader title="Certificación" subtitle="Área de Custodios: certificados, claves y etiquetas NFC de cada pieza." />
       <p className="mb-6 rounded-xl border border-botanica-jade/25 bg-botanica-jade/5 p-4 text-sm text-botanica-grafito">
-        Solo los Admin ven esta sección. Abre una pieza para certificarla y grabar su chip desde un Android con Chrome
+        Solo los Custodios ven esta sección. Abre una pieza para certificarla y grabar su chip desde un Android con Chrome
         (ADR-030). La clave de la tarjeta del comprador llega en la siguiente fase.
       </p>
       <div className="bg-white rounded-xl border border-botanica-gris/20 overflow-hidden shadow-sm">

@@ -488,3 +488,10 @@ Internamente sigue llamándose `custodian` (`CUSTODIAN_EMAILS`,
 administrativa (`ADMIN_EMAILS`, `/api/admin/v1`) y renombrarlo las
 confundiría. Donde este ADR dice "Custodio", léase "Admin".
 
+**Actualización (2026-10-03):** se revierte la etiqueta: el rol vuelve a
+mostrarse como **"Custodio"**. Con "Admin" en la pantalla, quien estaba en
+`ADMIN_EMAILS` (todos los que entran a Gestión) se veía como "Editor", y era
+fácil equivocarse al editar `shared/.env`. Un correo en `CUSTODIAN_EMAILS` que
+no esté en `ADMIN_EMAILS` impide que la app arranque (pasó en producción el
+2026-10-03 por un correo sin `.com`).
+

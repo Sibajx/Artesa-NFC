@@ -10,7 +10,7 @@ en español. Los subcomandos y los códigos siguen en inglés: `list`, `status`,
 `/c/{token}` reales, `token_hash`, credenciales ni UIDs de tags reales.
 
 > **2026-10 (ADR-030):** el camino habitual es ahora **Gestión → Certificación**
-> desde **Chrome para Android** (Web NFC), solo para Admin (Custodios): lee el
+> desde **Chrome para Android** (Web NFC), solo para Custodios: lee el
 > chip, emite, graba, **lee de vuelta y compara UID y URL**, registra y, al final
 > y de forma opcional, bloquea. Usa los mismos servicios y reglas que esta CLI,
 > que queda como respaldo y para recuperación.
