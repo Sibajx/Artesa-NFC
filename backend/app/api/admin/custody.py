@@ -165,6 +165,20 @@ class CustodyTag(BaseModel):
     locked_at: str | None
 
 
+class CustodyCard(BaseModel):
+    status: str
+    issued_at: str
+    failed_attempts: int
+    locked_until: str | None
+
+
+class CustodyClaim(BaseModel):
+    # The custodian sees the full email: it is how the owner is recognised
+    # when asking for a new card, a PIN reset or a transfer.
+    owner_email: str
+    claimed_at: str
+
+
 class CustodyState(BaseModel):
     piece_id: uuid.UUID
     public_code: str
@@ -181,6 +195,10 @@ class CustodyState(BaseModel):
     rotate_blockers: list[str]
     lock_blockers: list[str]
     revocation_reasons: list[str]
+    # ADR-030 phase 3: the buyer's card, the claim and the stolen report.
+    card: CustodyCard | None = None
+    claim: CustodyClaim | None = None
+    reported_stolen_at: str | None = None
 
 
 class CustodyIssued(BaseModel):
@@ -276,6 +294,7 @@ def custody_state(piece_id: uuid.UUID, db: Session = Depends(get_db)) -> Custody
         rotate_blockers=prov.rotate_blockers(state),
         lock_blockers=prov.lock_blockers(state),
         revocation_reasons=list(prov.REVOCATION_REASONS),
+        **_ownership_state(db, piece_id),
     )
 
 
@@ -360,3 +379,112 @@ def custody_revoke(piece_id: uuid.UUID, body: RevokeBody, who: Actor = Depends(a
                                                   "reason": body.reason})
     db.commit()
     return custody_state(piece_id, db)
+
+
+# --- Phase 3: the buyer's card, the claim and the stolen report --------------------
+#
+# The card key leaves the server only in the issue/replace/transfer response,
+# once, to this custodian's browser for printing (no-store, never logged or
+# audited). Actions that change who can open the original need a note, the
+# custodian's record of the proof they checked (PO decision 2026-10-03).
+
+from app.services import ownership as own  # noqa: E402
+
+
+def _ownership_state(db: Session, piece_id: uuid.UUID) -> dict:
+    card = own.current_card(db, piece_id)
+    claim = own.active_claim(db, piece_id)
+    piece = db.get(Piece, piece_id)
+    return {
+        "card": CustodyCard(status=card.status.value, issued_at=_iso(card.issued_at),
+                            failed_attempts=card.failed_attempts, locked_until=_iso(card.locked_until))
+        if card else None,
+        "claim": CustodyClaim(owner_email=claim.owner_email, claimed_at=_iso(claim.claimed_at)) if claim else None,
+        "reported_stolen_at": _iso(piece.reported_stolen_at) if piece else None,
+    }
+
+
+class NoteBody(BaseModel):
+    note: str = Field(min_length=5, max_length=500)
+
+
+class CardKey(BaseModel):
+    """The only response that carries the card key (ADR-030). Shown once."""
+    key: str
+    public_code: str
+
+
+def _own(db: Session, call):
+    try:
+        return call()
+    except own.OwnershipConflict as exc:
+        db.rollback()
+        raise _conflict(exc.code) from None
+
+
+def _key(db: Session, piece_id: uuid.UUID, key: str) -> CardKey:
+    return CardKey(key=own.format_card_key(key), public_code=_public_code(db, piece_id))
+
+
+@writes_router.post("/pieces/{piece_id}/card/issue", response_model=CardKey)
+def card_issue(piece_id: uuid.UUID, who: Actor = Depends(actor), db: Session = Depends(get_db)) -> CardKey:
+    _public_code(db, piece_id)
+    key = _own(db, lambda: own.issue_card(db, piece_id, who.identity.email, who.ip_address))
+    return _key(db, piece_id, key)
+
+
+@writes_router.post("/pieces/{piece_id}/card/replace", response_model=CardKey)
+def card_replace(piece_id: uuid.UUID, body: NoteBody, who: Actor = Depends(actor),
+                 db: Session = Depends(get_db)) -> CardKey:
+    _public_code(db, piece_id)
+    key = _own(db, lambda: own.replace_card(db, piece_id, body.note, who.identity.email, who.ip_address))
+    return _key(db, piece_id, key)
+
+
+@writes_router.post("/pieces/{piece_id}/transfer", response_model=CardKey)
+def piece_transfer(piece_id: uuid.UUID, body: NoteBody, who: Actor = Depends(actor),
+                   db: Session = Depends(get_db)) -> CardKey:
+    _public_code(db, piece_id)
+    key = _own(db, lambda: own.transfer(db, piece_id, body.note, who.identity.email, who.ip_address))
+    return _key(db, piece_id, key)
+
+
+def _state_after(db: Session, piece_id: uuid.UUID, call) -> CustodyState:
+    _public_code(db, piece_id)
+    _own(db, call)
+    return custody_state(piece_id, db)
+
+
+@writes_router.post("/pieces/{piece_id}/card/block", response_model=CustodyState)
+def card_block(piece_id: uuid.UUID, body: NoteBody, who: Actor = Depends(actor),
+               db: Session = Depends(get_db)) -> CustodyState:
+    return _state_after(db, piece_id, lambda: own.block_card(db, piece_id, body.note, who.identity.email,
+                                                              who.ip_address))
+
+
+@writes_router.post("/pieces/{piece_id}/card/unblock", response_model=CustodyState)
+def card_unblock(piece_id: uuid.UUID, body: NoteBody, who: Actor = Depends(actor),
+                 db: Session = Depends(get_db)) -> CustodyState:
+    return _state_after(db, piece_id, lambda: own.unblock_card(db, piece_id, body.note, who.identity.email,
+                                                                who.ip_address))
+
+
+@writes_router.post("/pieces/{piece_id}/claim/release", response_model=CustodyState)
+def claim_release(piece_id: uuid.UUID, body: NoteBody, who: Actor = Depends(actor),
+                  db: Session = Depends(get_db)) -> CustodyState:
+    return _state_after(db, piece_id, lambda: own.release_claim(db, piece_id, body.note, who.identity.email,
+                                                                 who.ip_address))
+
+
+@writes_router.post("/pieces/{piece_id}/stolen", response_model=CustodyState)
+def stolen_report(piece_id: uuid.UUID, body: NoteBody, who: Actor = Depends(actor),
+                  db: Session = Depends(get_db)) -> CustodyState:
+    return _state_after(db, piece_id, lambda: own.set_stolen(db, piece_id, True, body.note, who.identity.email,
+                                                              who.ip_address))
+
+
+@writes_router.post("/pieces/{piece_id}/stolen/clear", response_model=CustodyState)
+def stolen_clear(piece_id: uuid.UUID, body: NoteBody, who: Actor = Depends(actor),
+                 db: Session = Depends(get_db)) -> CustodyState:
+    return _state_after(db, piece_id, lambda: own.set_stolen(db, piece_id, False, body.note, who.identity.email,
+                                                              who.ip_address))

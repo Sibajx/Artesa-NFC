@@ -62,6 +62,10 @@ class Piece(Base):
     # draft or archived records go there; publishing or editing is refused
     # until it is restored, and only never-public records can be purged.
     trashed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # ADR-030 phase 3: a custodian reported the piece stolen. Scanning its chip
+    # still proves it is authentic, with a visible warning; unlocking the
+    # original certificate is refused while it is set.
+    reported_stolen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     artisan: Mapped["Artisan"] = relationship(back_populates="pieces")
     media_assets: Mapped[list["MediaAsset"]] = relationship(back_populates="piece")

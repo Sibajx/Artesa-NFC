@@ -117,7 +117,8 @@ def test_authentic_response_has_only_documented_top_level_fields(db_session):
         body = _resolve(raw_token).json()
 
         assert set(body.keys()) == {"authenticity", "piece", "artisan", "authenticity_metadata"}
-        assert set(body["authenticity"].keys()) == {"status", "certificate_version", "issued_at"}
+        # reported_stolen: ADR-030 phase 3.
+        assert set(body["authenticity"].keys()) == {"status", "certificate_version", "issued_at", "reported_stolen"}
 
 
 def test_authentic_piece_matches_public_piece_representation(db_session):
