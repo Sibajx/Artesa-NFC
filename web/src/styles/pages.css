@@ -239,6 +239,23 @@
     animation: scan-reveal 1.6s var(--ease-out) 0.2s both;
   }
 
+  /* Pop like every other photo (PO, 2026-10-03): the frame pops in on
+     load, and the portrait pops inside it under the pointer, as linked
+     images do. The scan line still reveals it. */
+  .portrait-hero__frame {
+    animation: pop-in 0.9s var(--ease-out) both;
+  }
+
+  .portrait-hero__frame img {
+    transition: transform var(--duration-pop) var(--ease-pop);
+  }
+
+  @media (hover: hover) {
+    .portrait-hero__frame:hover img {
+      transform: scale(1.06);
+    }
+  }
+
   .portrait-hero__frame::after {
     content: "";
     position: absolute;
@@ -1005,6 +1022,31 @@
   border: 1px solid color-mix(in srgb, var(--color-cempasuchil) 45%, transparent);
   font-size: var(--text-small);
   color: color-mix(in srgb, var(--color-text-inverse) 88%, transparent);
+}
+
+/* Not links, but they light up like the glow buttons (.button--glow:hover)
+   under the pointer (PO, 2026-10-03). */
+@media (hover: hover) {
+  .craft-tags li {
+    transition:
+      transform var(--duration-pop) var(--ease-pop),
+      background-color var(--duration-ui) var(--ease-out),
+      color var(--duration-ui) var(--ease-out),
+      box-shadow var(--duration-ui) var(--ease-out);
+  }
+
+  .craft-tags li:hover {
+    background: var(--color-cempasuchil);
+    border-color: var(--color-cempasuchil);
+    color: var(--color-night);
+    box-shadow: var(--glow-cempasuchil);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .craft-tags li:hover {
+      transform: scale(1.06);
+    }
+  }
 }
 
 .mission__values {
