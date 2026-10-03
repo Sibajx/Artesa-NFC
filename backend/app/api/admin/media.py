@@ -36,10 +36,10 @@ from app.api.admin.writes import (
 from app.api.deps import get_db
 from app.core.access import require_admin
 from app.core.config import get_settings
-from app.models.media_asset import MediaRole
+from app.models.media_asset import MediaRole, MediaType
 from app.schemas.admin import AdminMedia
 from app.schemas.admin_write import MediaUpdate, TransitionBody, provided
-from app.services import media
+from app.services import media, palette
 from app.services.content import Actor, ContentError
 
 UPLOAD_CONTENT_TYPES = frozenset({
@@ -104,6 +104,9 @@ async def upload_media(
         asset = await run_in_threadpool(media.upload, db, who, root, owner_type, owner_id, role, text, data)
     except ContentError as exc:
         raise _fail(exc) from None
+    if owner_type == "piece" and asset.media_type == MediaType.image:
+        # ADR-030 phase 4: the first photo gives the piece its palette.
+        await run_in_threadpool(palette.fill_if_missing, db, who, root, owner_id)
     return admin_media(db, asset)
 
 
