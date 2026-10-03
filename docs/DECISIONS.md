@@ -480,3 +480,11 @@ solo por CLI) y amplía ADR-029 (Gestión). Se implementa por fases.
 3. Reclamo con correo: sí, en v1.
 4. Las claves las imprime el equipo.
 5. Sin segunda verificación por ahora.
+
+**Actualización (2026-10-02):** a pedido del PO, el rol **Custodio** se
+muestra como **"Admin"** en Gestión y en la comunicación con el equipo.
+Internamente sigue llamándose `custodian` (`CUSTODIAN_EMAILS`,
+`/api/admin/v1/custody`), porque "admin" ya nombra a toda la API
+administrativa (`ADMIN_EMAILS`, `/api/admin/v1`) y renombrarlo las
+confundiría. Donde este ADR dice "Custodio", léase "Admin".
+

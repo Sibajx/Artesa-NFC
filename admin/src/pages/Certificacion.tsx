@@ -21,9 +21,9 @@ export default function Certificacion() {
   const state = useLoad('custody:pieces', (signal) => adminApi.custodyPieces(signal));
   return (
     <div className="max-w-6xl mx-auto pb-12">
-      <PageHeader title="Certificación" subtitle="Área de Custodia: certificados, claves y etiquetas NFC de cada pieza." />
+      <PageHeader title="Certificación" subtitle="Área de Admin: certificados, claves y etiquetas NFC de cada pieza." />
       <p className="mb-6 rounded-xl border border-botanica-jade/25 bg-botanica-jade/5 p-4 text-sm text-botanica-grafito">
-        Solo los Custodios ven esta sección. Pronto, desde aquí se generarán el token y la clave de la tarjeta y se grabará
+        Solo los Admin ven esta sección. Pronto, desde aquí se generarán el token y la clave de la tarjeta y se grabará
         el chip con un Android (ADR-030). Por ahora muestra el estado de cada pieza.
       </p>
       <div className="bg-white rounded-xl border border-botanica-gris/20 overflow-hidden shadow-sm">
