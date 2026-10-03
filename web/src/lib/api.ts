@@ -20,6 +20,7 @@ import type {
   Artisan,
   ArtisanSummary,
   CertificateAuthentic,
+  CertificateOriginal,
   ListEnvelope,
   Piece,
   PieceSummary,
@@ -46,6 +47,15 @@ export type ApiResult<T> =
 export type CertificateResult =
   | { readonly kind: "authentic"; readonly data: CertificateAuthentic }
   | { readonly kind: "unavailable" }
+  | { readonly kind: "error"; readonly reason: UnavailableReason };
+
+// ADR-030 phase 3. "refused" is the API's own answer; "invalid" never says
+// why (wrong key, wrong PIN, blocked card, ...). "locked" = too many tries.
+export type UnlockResult =
+  | { readonly kind: "unlocked"; readonly data: CertificateOriginal }
+  | { readonly kind: "refused"; readonly result: "invalid" | "pin_required" | "reported_stolen" }
+  | { readonly kind: "locked"; readonly retryAfter: number | null }
+  | { readonly kind: "rejected"; readonly code: string }
   | { readonly kind: "error"; readonly reason: UnavailableReason };
 
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
@@ -108,6 +118,18 @@ function isCertificateAuthentic(payload: unknown): payload is CertificateAuthent
     isRecord(payload.authenticity_metadata)
   );
 }
+
+function isCertificateOriginal(payload: unknown): payload is CertificateOriginal {
+  return (
+    isRecord(payload) &&
+    payload.result === "unlocked" &&
+    isCertificateAuthentic(payload) &&
+    isRecord(payload.ownership) &&
+    typeof payload.ownership.claimed === "boolean"
+  );
+}
+
+const REFUSALS = new Set(["invalid", "pin_required", "reported_stolen"]);
 
 function isCertificateUnavailable(payload: unknown): boolean {
   return (
@@ -195,7 +217,43 @@ export function createApiClient(options: ApiClientOptions = {}) {
       if (isCertificateUnavailable(payload)) return { kind: "unavailable" };
       return { kind: "error", reason: "malformed" };
     },
+
+    // ADR-030 phase 3. The token, key, PIN and email only live in the body;
+    // never logged, stored or put in a URL.
+    unlockCertificate: (token: string, key: string, pin: string | null) =>
+      postUnlock("/certificates/unlock", { token, key, pin }),
+    claimPiece: (token: string, key: string, email: string, pin: string) =>
+      postUnlock("/certificates/claim", { token, key, email, pin }),
   };
+
+  async function postUnlock(path: string, body: Record<string, unknown>): Promise<UnlockResult> {
+    const response = await send(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(body),
+      credentials: "omit",
+      referrerPolicy: "no-referrer",
+      cache: "no-store",
+    });
+    if (typeof response === "string") return { kind: "error", reason: response };
+    const payload = await readJson(response);
+    const error = isRecord(payload) && isRecord(payload.error) ? payload.error : null;
+    if (response.status === 429) {
+      const retry = error && typeof error.retry_after === "number" ? error.retry_after : null;
+      return { kind: "locked", retryAfter: retry };
+    }
+    if (response.status === 422 && error && isString(error.code))
+      return { kind: "rejected", code: error.code };
+    if (!response.ok) return { kind: "error", reason: reasonForStatus(response.status) };
+    if (isCertificateOriginal(payload)) return { kind: "unlocked", data: payload };
+    if (isRecord(payload) && isString(payload.result) && REFUSALS.has(payload.result)) {
+      return {
+        kind: "refused",
+        result: payload.result as "invalid" | "pin_required" | "reported_stolen",
+      };
+    }
+    return { kind: "error", reason: "malformed" };
+  }
 }
 
 export type ApiClient = ReturnType<typeof createApiClient>;

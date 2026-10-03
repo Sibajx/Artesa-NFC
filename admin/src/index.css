@@ -494,3 +494,20 @@
     box-shadow: 0 0 0 18px transparent;
   }
 }
+
+/* Printing the buyer's card: only the card itself goes to paper. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-card,
+  .print-card * {
+    visibility: visible;
+  }
+  .print-card {
+    position: absolute;
+    top: 1cm;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}

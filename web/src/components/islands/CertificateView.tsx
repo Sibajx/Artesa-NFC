@@ -20,6 +20,7 @@ import { pickHeroImage } from "@/lib/media";
 import { artisanPath, piecePath, tokenFromPath } from "@/lib/routes";
 import type { CertificateAuthentic } from "@/lib/types";
 import { MediaImage } from "./MediaImage";
+import { OriginalCertificate } from "./OriginalCertificate";
 import { PassportPanel } from "./PassportPanel";
 import { LoadingView } from "./StatusView";
 
@@ -99,6 +100,7 @@ export default function CertificateView() {
   }
 
   const { piece, artisan } = view.data;
+  const stolen = view.data.authenticity.reported_stolen === true;
   const hero = pickHeroImage(piece.media);
   return (
     <article className="certificate" data-state="cert-authentic" aria-labelledby="cert-piece-title">
@@ -117,7 +119,14 @@ export default function CertificateView() {
           {piece.description && <p className="lead">{piece.description}</p>}
         </div>
       </div>
+      {stolen && (
+        <p className="certificate__alert" role="alert" data-state="cert-stolen">
+          <strong>Pieza reportada como robada.</strong> Es auténtica, pero su dueño la reportó como
+          robada. Si te la ofrecen en venta, contacta a ArtesaNFC.
+        </p>
+      )}
       <PassportPanel piece={piece} artisan={artisan} certificate={view.data} />
+      {!stolen && token && <OriginalCertificate token={token} />}
       <nav className="certificate__links" aria-label="Más sobre esta pieza">
         <a className="editorial-link" href={piecePath(piece.slug)}>
           Ver la pieza

@@ -133,6 +133,17 @@ export interface CustodyState {
   rotate_blockers: string[];
   lock_blockers: string[];
   revocation_reasons: string[];
+  // ADR-030 phase 3.
+  card: { status: 'active' | 'blocked'; issued_at: string; failed_attempts: number; locked_until: string | null } | null;
+  claim: { owner_email: string; claimed_at: string } | null;
+  reported_stolen_at: string | null;
+}
+
+// The only API response that carries the buyer's card key (ADR-030). Shown
+// once for printing; never stored or logged.
+export interface CardKey {
+  key: string;
+  public_code: string;
 }
 
 // The only API response that carries the certificate URL (ADR-030). Keep it
@@ -343,6 +354,11 @@ export const adminApi = {
     request<CustodyState>('POST', `/custody/pieces/${encodeURIComponent(id)}/program`, { body: { tag_id: tagId, uid } }),
   custodyLock: (id: string, uid: string) => request<CustodyState>('POST', `/custody/pieces/${encodeURIComponent(id)}/lock`, { body: { uid } }),
   custodyRevoke: (id: string, reason: string) => request<CustodyState>('POST', `/custody/pieces/${encodeURIComponent(id)}/revoke`, { body: { reason } }),
+  cardIssue: (id: string) => request<CardKey>('POST', `/custody/pieces/${encodeURIComponent(id)}/card/issue`, { body: {} }),
+  cardKeyAction: (id: string, action: 'card/replace' | 'transfer', note: string) =>
+    request<CardKey>('POST', `/custody/pieces/${encodeURIComponent(id)}/${action}`, { body: { note } }),
+  ownershipAction: (id: string, action: 'card/block' | 'card/unblock' | 'claim/release' | 'stolen' | 'stolen/clear', note: string) =>
+    request<CustodyState>('POST', `/custody/pieces/${encodeURIComponent(id)}/${action}`, { body: { note } }),
   artisans: (params: { publication_status?: string; q?: string; trashed?: string }, signal?: AbortSignal) =>
     get<ListEnvelope<ArtisanSummary>>('/artisans', params, signal),
   artisan: (id: string, signal?: AbortSignal) => get<ArtisanDetail>(`/artisans/${encodeURIComponent(id)}`, undefined, signal),

@@ -537,3 +537,94 @@
     gap: var(--space-lg);
   }
 }
+
+/* --- Original certificate (ADR-030 phase 3) ------------------------------ */
+
+.certificate__alert {
+  padding: var(--space-sm) var(--space-md);
+  border: 2px solid var(--color-pigment);
+  border-radius: 12px;
+  color: var(--color-pigment);
+  background: color-mix(in srgb, var(--color-pigment) 8%, var(--color-bg));
+}
+
+.original {
+  display: grid;
+  gap: var(--space-sm);
+  max-width: 640px;
+  padding: var(--space-md);
+  border: 1px solid var(--color-rule);
+  border-radius: 16px;
+  background: var(--color-soft-white);
+}
+
+.original__form {
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.original__claim {
+  margin-top: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-rule);
+}
+
+.field {
+  display: grid;
+  gap: 0.35em;
+  font-size: var(--text-small);
+  font-weight: 600;
+}
+
+.input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0.6em 0.8em;
+  font: inherit;
+  font-weight: 400;
+  font-size: 1.05rem;
+  color: var(--color-text);
+  background: var(--color-bg);
+  border: 1px solid var(--color-rule-dark);
+  border-radius: 10px;
+}
+
+.input--key {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.12em;
+}
+
+.original__error {
+  color: var(--color-pigment);
+  font-weight: 600;
+}
+
+.original__note {
+  font-size: var(--text-small);
+}
+
+.original__card {
+  display: grid;
+  gap: var(--space-xs, 0.5rem);
+  padding: var(--space-md);
+  border: 2px solid var(--color-wood);
+  border-radius: 14px;
+  background: var(--color-bg);
+}
+
+.original__facts {
+  display: grid;
+  gap: var(--space-sm);
+  margin: var(--space-sm) 0 0;
+}
+
+.original__facts dt {
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+}
+
+.original__facts dd {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}

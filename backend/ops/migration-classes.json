@@ -24,6 +24,10 @@
     "a7c3e91d2b40": {
       "class": "additive",
       "note": "Adds nullable artisan.trashed_at and piece.trashed_at (Gestión papelera). Older code never reads or writes them; a trashed record is never published, so older code serves the same public data."
+    },
+    "91fd01294c1c": {
+      "class": "additive",
+      "note": "Creates ownership_card and piece_claim (enum types, partial unique indexes) and adds nullable piece.reported_stolen_at (ADR-030 phase 3). Older code never reads or writes them."
     }
   }
 }

@@ -103,6 +103,9 @@ export interface CertificateAuthentic {
     readonly status: "authentic";
     readonly certificate_version: number;
     readonly issued_at: string;
+    // ADR-030 phase 3: a custodian reported the piece stolen. Optional so an
+    // older API keeps matching.
+    readonly reported_stolen?: boolean;
   };
   readonly piece: Piece;
   readonly artisan: Artisan;
@@ -114,3 +117,15 @@ export interface CertificateUnavailable {
 }
 
 export type CertificateResolution = CertificateAuthentic | CertificateUnavailable;
+
+// ADR-030 phase 3: POST /certificates/unlock and /claim. The original
+// certificate behind the buyer's card (+ PIN once the piece is claimed).
+export interface CertificateOriginal extends CertificateAuthentic {
+  readonly result: "unlocked";
+  readonly ownership: {
+    readonly claimed: boolean;
+    readonly claimed_at: string | null;
+    readonly owner_email_masked: string | null;
+    readonly card_issued_at: string;
+  };
+}
