@@ -771,6 +771,15 @@ Este documento se actualizará con el contrato administrativo completo
 cuando exista `SECURITY.md` y una decisión de autenticación aprobada, no
 antes.
 
+### 7.1 Certificado original con la tarjeta del comprador (ADR-030 fase 3)
+
+- `POST /api/v1/certificates/resolve`: `authenticity` suma `reported_stolen` (bool). Si es `true`, la pieza sigue siendo auténtica, pero la página muestra el aviso y no ofrece el original.
+- `POST /api/v1/certificates/unlock` `{"token", "key", "pin"?}` y `POST /api/v1/certificates/claim` `{"token", "key", "email", "pin"}`. Con éxito responden `{"result": "unlocked", authenticity, piece, artisan, authenticity_metadata, ownership: {claimed, claimed_at, owner_email_masked, card_issued_at}}`.
+- Cualquier rechazo es `200 {"result": "invalid" | "pin_required" | "reported_stolen"}`. `invalid` no distingue entre token, clave, PIN o tarjeta bloqueada. `pin_required` solo se devuelve con una clave correcta de una pieza reclamada.
+- `429 too_many_attempts` (con `retry_after` en segundos): tras 5 fallos la tarjeta se bloquea 15 min, duplicando hasta 24 h, y hay un límite de 20 fallos por IP cada 15 min.
+- `claim` valida antes con `422`: `invalid_email`, `invalid_pin` (6 dígitos) y `weak_pin`.
+- Las dos rutas comparten con `resolve` el límite de 1 KB y `no-store`.
+
 ### 14.1 Fase 1 de Gestión (ADR-029, 2026-09-28)
 
 El texto anterior de esta sección se conserva como historia. Desde ADR-029:
@@ -799,6 +808,9 @@ El texto anterior de esta sección se conserva como historia. Desde ADR-029:
 | `POST …/custody/pieces/{id}/program` `{"tag_id", "uid"}` | Tras grabar **y leer de vuelta**: el `uid` leído debe ser el registrado (`409 uid_mismatch`) |
 | `POST …/custody/pieces/{id}/lock` `{"uid"}` | Tras el bloqueo físico confirmado por el navegador |
 | `POST …/custody/pieces/{id}/revoke` `{"reason"}` | Revoca y retira los chips |
+| `POST …/custody/pieces/{id}/card/issue` `{}` | ADR-030 fase 3. Genera la tarjeta del comprador (requiere certificado activo; `409 card_exists` si ya hay una). **Única respuesta con la clave**: `{"key": "XXXX-XXXX-XX", "public_code"}`, `no-store`, una sola vez |
+| `POST …/card/replace` · `…/transfer` `{"note"}` | Tarjeta perdida / pieza vendida: la tarjeta anterior queda `replaced` y se devuelve una clave nueva. `transfer` además libera el reclamo |
+| `POST …/card/block` · `…/card/unblock` · `…/claim/release` · `…/stolen` · `…/stolen/clear` `{"note"}` | Devuelven el estado. `note` (5–500) es obligatoria: la prueba que revisó el Custodio; queda en `audit_event` |
 | `GET /api/admin/v1/artisans?publication_status=&q=` | `ListEnvelope` de `{id, slug, full_name, artistic_name, publication_status, piece_count, updated_at}`; **incluye borradores y archivados**; orden `updated_at` desc |
 | `GET /api/admin/v1/artisans/{id}` | todos los campos del artesano (incluido `public_contact`), `media` (con `id` y `status`) y **todas** sus piezas |
 | `GET /api/admin/v1/pieces?publication_status=&artisan_id=&q=` | `ListEnvelope` de `{id, slug, public_code, name, artisan_id, artisan_slug, publication_status, availability_status, updated_at}` |

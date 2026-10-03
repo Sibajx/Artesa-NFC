@@ -14,6 +14,17 @@ en español. Los subcomandos y los códigos siguen en inglés: `list`, `status`,
 > chip, emite, graba, **lee de vuelta y compara UID y URL**, registra y, al final
 > y de forma opcional, bloquea. Usa los mismos servicios y reglas que esta CLI,
 > que queda como respaldo y para recuperación.
+>
+> **Fase 3 (tarjeta del comprador):** con el certificado activo, en "Tarjeta del
+> comprador" → **Generar tarjeta**. La clave se muestra una sola vez.
+>
+> 1. Imprímela.
+> 2. Prueba el desbloqueo escaneando el chip y escribiendo la clave, **sin
+>    registrar la pieza**.
+> 3. Cúbrela con la capa rasca y guárdala en el sobre sellado.
+>
+> Los casos de tarjeta perdida o robada, PIN olvidado, venta y robo de la pieza
+> están en la misma sección y piden una nota con la prueba revisada.
 
 ## 1. Alcance y prerrequisitos
 

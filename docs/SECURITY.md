@@ -176,6 +176,20 @@ la guarda de escritura de ADR-029) usa los mismos servicios de provisioning:
   acerca otro, ese chip queda con una URL válida. La lectura de vuelta lo
   detecta; el Custodio debe rotar (`rotate`) o retirar ese chip.
 
+**Actualización ADR-030 (fase 3, tarjeta del comprador):**
+
+- **Clave de la tarjeta:** 50 bits aleatorios (`secrets`), mostrados como 10 caracteres Crockford base32. **PIN de reclamo:** 6 dígitos que elige el dueño; se rechazan los triviales.
+- Ambos se guardan **solo** como hash `hashlib.scrypt` con sal propia (N=2^14, r=8, p=1) y se comparan en tiempo constante. Sin tarjeta, se verifica contra un hash fijo, para que la respuesta tarde lo mismo.
+- **La clave** sale una sola vez, en la respuesta de `card/issue`, `replace` o `transfer` hacia el navegador del Custodio, para imprimirla. Nunca entra en logs ni en la auditoría.
+- **El correo del dueño** se guarda en `piece_claim`. Solo lo ven los Custodios; la página pública muestra una versión enmascarada. No entra en `audit_event`.
+- **Límites:** 5 fallos libres por tarjeta y luego bloqueo de 15 min, que se duplica hasta 24 h. Mientras está bloqueada, la clave ni se comprueba. Por IP, 20 fallos en 15 min, contados en `audit_event`.
+- **Rechazos:** una sola respuesta, `invalid`, para todos.
+- **Cambios de dueño o tarjeta** (reponer, bloquear, liberar, transferir, robo) exigen la nota del Custodio y quedan en la auditoría.
+- **Riesgos residuales:**
+  - Sin reclamo, la tarjeta sola abre el original.
+  - Si alguien reclama antes que el comprador (por ejemplo, quien tuvo el sobre), lo delata el sello VOID; el Custodio puede liberar el reclamo.
+  - El correo no se verifica con un enlace: decisión del PO para no depender de un servicio de envío de correos.
+
 ## 3. Hash y verificación del token
 
 `DATA_MODEL.md` §2.3 deja deliberadamente el algoritmo exacto para este
