@@ -372,3 +372,100 @@
   padding: 0.7rem 1.5rem;
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-botanica-jade) 18%, transparent);
 }
+
+/* --- Barra lateral animada (2026-10) --------------------------------------
+   Entrada escalonada de los apartados, deslizamiento con resorte al pasar
+   el cursor, ícono que "rebota", barra de acento que crece en el apartado
+   activo y ondas NFC del logo latiendo. Nada se mueve con reduced motion. */
+
+.side-link {
+  position: relative;
+  transition:
+    background-color 200ms ease,
+    color 200ms ease;
+}
+
+.side-link[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: -0.75rem;
+  top: 20%;
+  bottom: 20%;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--color-botanica-jade);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .side-nav > .side-link {
+    animation: side-in 480ms var(--ease-pop) both;
+  }
+
+  .side-nav > .side-link:nth-child(2) { animation-delay: 40ms; }
+  .side-nav > .side-link:nth-child(3) { animation-delay: 80ms; }
+  .side-nav > .side-link:nth-child(4) { animation-delay: 120ms; }
+  .side-nav > .side-link:nth-child(5) { animation-delay: 160ms; }
+  .side-nav > .side-link:nth-child(6) { animation-delay: 200ms; }
+  .side-nav > .side-link:nth-child(7) { animation-delay: 240ms; }
+
+  .side-link {
+    transition:
+      transform 380ms var(--ease-pop),
+      background-color 200ms ease,
+      color 200ms ease;
+  }
+
+  .side-link:hover {
+    transform: translateX(4px);
+  }
+
+  .side-link__icon {
+    display: inline-flex;
+    transition:
+      transform 420ms var(--ease-pop),
+      opacity 200ms ease;
+  }
+
+  .side-link:hover .side-link__icon {
+    transform: scale(1.22) rotate(-8deg);
+    opacity: 1;
+  }
+
+  .side-link[aria-current="page"]::before {
+    animation: side-accent 420ms var(--ease-pop);
+  }
+
+  .side-link[aria-current="page"] .side-link__icon {
+    opacity: 1;
+  }
+
+  .side-logo svg path {
+    animation: side-wave 2.6s ease-in-out infinite;
+  }
+
+  .side-logo svg path:nth-child(2) { animation-delay: 0.25s; }
+  .side-logo svg path:nth-child(3) { animation-delay: 0.5s; }
+}
+
+@keyframes side-in {
+  from {
+    opacity: 0;
+    transform: translateX(-14px);
+  }
+}
+
+@keyframes side-accent {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+@keyframes side-wave {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  35% {
+    opacity: 1;
+  }
+}

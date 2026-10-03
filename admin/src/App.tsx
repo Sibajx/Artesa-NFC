@@ -91,7 +91,7 @@ export default function App() {
       <aside className="w-full md:w-60 bg-white border-r border-botanica-gris/15 flex flex-col shrink-0">
         <div className="px-6 pt-7 pb-6 border-b border-botanica-gris/10">
           <div className="flex items-center gap-2.5 mb-1">
-            <div className="w-7 h-7 rounded-md bg-botanica-jade/10 border border-botanica-jade/20 flex items-center justify-center shrink-0">
+            <div className="side-logo w-7 h-7 rounded-md bg-botanica-jade/10 border border-botanica-jade/20 flex items-center justify-center shrink-0">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3E806E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M6 8.32a7.43 7.43 0 0 1 0 7.36"/>
                 <path d="M9.46 6.21a11.76 11.76 0 0 1 0 11.58"/>
@@ -103,20 +103,20 @@ export default function App() {
           <p className="text-xs text-botanica-gris pl-[38px]">Consola de gestión</p>
         </div>
 
-        <nav aria-label="Principal" className="flex-1 px-3 py-4 flex flex-col gap-0.5">
+        <nav aria-label="Principal" className="side-nav flex-1 px-3 py-4 flex flex-col gap-0.5">
           {menuItems.map((item) => (
             <NavLink
               key={item.name}
               to={item.path}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
+                `side-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm ${
                   isActive
                     ? 'bg-botanica-jade/10 text-botanica-jade font-medium'
                     : 'text-botanica-grafito hover:bg-botanica-hueso hover:text-botanica-negro'
                 }`
               }
             >
-              <span className="shrink-0 opacity-70">{icons[item.name]}</span>
+              <span className="side-link__icon shrink-0 opacity-70">{icons[item.name]}</span>
               {item.name}
             </NavLink>
           ))}
