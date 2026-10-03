@@ -13,10 +13,11 @@
 // Privacy: the token is read only from location.pathname, lives only in this
 // module's closure and the POST body, and is never rendered, stored, logged
 // or put in a URL. The page is noindex + no-referrer (meta and _headers).
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { api, type UnavailableReason } from "@/lib/api";
 import { displayName } from "@/lib/format";
 import { pickHeroImage } from "@/lib/media";
+import { paletteOf, paletteRoles } from "@/lib/palette";
 import { artisanPath, piecePath, tokenFromPath } from "@/lib/routes";
 import type { CertificateAuthentic } from "@/lib/types";
 import { MediaImage } from "./MediaImage";
@@ -102,8 +103,23 @@ export default function CertificateView() {
   const { piece, artisan } = view.data;
   const stolen = view.data.authenticity.reported_stolen === true;
   const hero = pickHeroImage(piece.media);
+  // ADR-030 phase 4: the generic certificate wears the piece's own colours.
+  const colors = paletteOf(piece.visual_theme);
+  const roles = paletteRoles(colors);
+  const themed = roles
+    ? ({
+        "--piece-accent": roles.accent,
+        "--piece-dark": roles.dark,
+        "--piece-light": roles.light,
+      } as CSSProperties)
+    : undefined;
   return (
-    <article className="certificate" data-state="cert-authentic" aria-labelledby="cert-piece-title">
+    <article
+      className={roles ? "certificate certificate--themed" : "certificate"}
+      style={themed}
+      data-state="cert-authentic"
+      aria-labelledby="cert-piece-title"
+    >
       <div className="certificate__intro">
         <div className="certificate__media media-frame">
           <MediaImage media={hero} fallbackAlt={piece.name} loading="eager" />
@@ -117,6 +133,16 @@ export default function CertificateView() {
           </h1>
           <p className="muted">Creada por {displayName(artisan)}</p>
           {piece.description && <p className="lead">{piece.description}</p>}
+          {roles && (
+            <figure className="certificate__palette" data-state="cert-palette">
+              <div className="certificate__palette-band" aria-hidden="true">
+                {colors.map((c) => (
+                  <span key={c} style={{ background: c }} />
+                ))}
+              </div>
+              <figcaption className="muted">Colores de esta pieza</figcaption>
+            </figure>
+          )}
         </div>
       </div>
       {stolen && (

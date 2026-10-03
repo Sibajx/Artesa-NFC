@@ -780,6 +780,16 @@ antes.
 - `claim` valida antes con `422`: `invalid_email`, `invalid_pin` (6 dígitos) y `weak_pin`.
 - Las dos rutas comparten con `resolve` el límite de 1 KB y `no-store`.
 
+### 7.2 Paleta de la pieza para el certificado genérico (ADR-030 fase 4)
+
+- `piece.visual_theme` (público, esquema abierto ADR-012) puede llevar `{"palette": ["#rrggbb", …], "palette_source": "auto" | "manual"}`: de 3 a 5 colores en minúsculas, el más presente primero. Las demás llaves se conservan.
+- Cuándo se llena y quién lo cambia:
+  - la primera foto que recibe la pieza llena la paleta `auto`, **sin cambiar** `updated_at`;
+  - en Gestión, `POST /api/admin/v1/pieces/{id}/palette/generate` la recalcula desde la portada (`If-Match`; `409 no_cover_photo` o `unreadable_cover_photo`);
+  - `POST /api/admin/v1/pieces/{id}/palette` `{"colors": [...]}` la fija a mano (`409 invalid_palette`);
+  - ambas quedan auditadas como `piece.palette_set`.
+- La web (`/c/{token}`) muestra la franja de colores y usa el color más saturado como acento. Si la paleta no tiene la forma esperada, se ignora y la página usa los colores del sitio.
+
 ### 14.1 Fase 1 de Gestión (ADR-029, 2026-09-28)
 
 El texto anterior de esta sección se conserva como historia. Desde ADR-029:

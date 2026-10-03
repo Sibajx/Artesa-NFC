@@ -188,6 +188,8 @@ export interface PieceDetail {
   creation_year: number | null;
   creation_date: string | null;
   dimensions: Record<string, unknown> | null;
+  // ADR-030 phase 4: { palette: string[], palette_source: 'auto' | 'manual' } and any other keys.
+  visual_theme: Record<string, unknown> | null;
   availability_status: string;
   publication_status: PublicationStatus;
   publicly_visible: boolean;
@@ -386,6 +388,10 @@ export const adminApi = {
     request<void>('POST', `/${kind}/${encodeURIComponent(id)}/purge`, { body: {}, version }),
   setAvailability: (id: string, version: string, availability_status: string) =>
     request<PieceDetail>('POST', `/pieces/${encodeURIComponent(id)}/availability`, { body: { availability_status }, version }),
+  generatePalette: (id: string, version: string) =>
+    request<PieceDetail>('POST', `/pieces/${encodeURIComponent(id)}/palette/generate`, { body: {}, version }),
+  setPalette: (id: string, colors: string[], version: string) =>
+    request<PieceDetail>('POST', `/pieces/${encodeURIComponent(id)}/palette`, { body: { colors }, version }),
 
   uploadMedia: (owner: 'artisans' | 'pieces', id: string, file: Blob, contentType: string, role: MediaRole, altText?: string) =>
     request<AdminMedia>('POST', `/${owner}/${encodeURIComponent(id)}/media`, {
