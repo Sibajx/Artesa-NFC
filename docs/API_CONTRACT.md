@@ -793,6 +793,12 @@ El texto anterior de esta sección se conserva como historia. Desde ADR-029:
 |---|---|
 | `GET /api/admin/v1/me` | `{"email", "roles"}` de la identidad verificada; `roles` ⊆ `editor`, `designer`, `custodian` (ADR-030) |
 | `GET /api/admin/v1/custody/pieces` | **Solo Custodios** (403 + `audit_event` `custody.denied` para los demás): cada pieza fuera de la papelera con `certificate_status`, `certificate_version`, `tag_status`, `tag_chip` y `ready_to_certify`. Nunca `token_hash` ni `physical_uid` |
+| `GET /api/admin/v1/custody/pieces/{id}/state` | Solo Admin (Custodio). Estado de certificación de la pieza: certificado activo, chips (`uid`, estado), `recommended_action` y bloqueos (`issue_blockers`, `rotate_blockers`, `lock_blockers`) |
+| `POST …/custody/pieces/{id}/issue` `{"uid"}` | Registra el chip, lo asigna y emite el certificado en una transacción; autochequeo de `resolve`. **Única respuesta con la URL del certificado** (ADR-030), `no-store`, nunca registrada |
+| `POST …/custody/pieces/{id}/rotate` `{"reason", "uid"?}` | Revoca y reemite; `uid` = chip nuevo, sin `uid` = el mismo chip. Devuelve la URL nueva |
+| `POST …/custody/pieces/{id}/program` `{"tag_id", "uid"}` | Tras grabar **y leer de vuelta**: el `uid` leído debe ser el registrado (`409 uid_mismatch`) |
+| `POST …/custody/pieces/{id}/lock` `{"uid"}` | Tras el bloqueo físico confirmado por el navegador |
+| `POST …/custody/pieces/{id}/revoke` `{"reason"}` | Revoca y retira los chips |
 | `GET /api/admin/v1/artisans?publication_status=&q=` | `ListEnvelope` de `{id, slug, full_name, artistic_name, publication_status, piece_count, updated_at}`; **incluye borradores y archivados**; orden `updated_at` desc |
 | `GET /api/admin/v1/artisans/{id}` | todos los campos del artesano (incluido `public_contact`), `media` (con `id` y `status`) y **todas** sus piezas |
 | `GET /api/admin/v1/pieces?publication_status=&artisan_id=&q=` | `ListEnvelope` de `{id, slug, public_code, name, artisan_id, artisan_slug, publication_status, availability_status, updated_at}` |
