@@ -25,6 +25,9 @@ class AuthenticityAuthentic(BaseModel):
     status: Literal["authentic"] = "authentic"
     certificate_version: int
     issued_at: datetime
+    # ADR-030 phase 3: a custodian reported the piece stolen. The chip is still
+    # authentic; the page shows a warning and the original stays locked.
+    reported_stolen: bool = False
 
 
 class AuthenticityUnavailable(BaseModel):
@@ -50,3 +53,44 @@ class CertificateResolveUnavailable(BaseModel):
     point of it existing as its own fixed-shape class."""
 
     authenticity: AuthenticityUnavailable
+
+
+# --- ADR-030 phase 3: the buyer's card --------------------------------------------
+
+
+class CertificateUnlockRequest(BaseModel):
+    """POST /api/v1/certificates/unlock. Caps are generous on purpose: the
+    real shapes are checked after, through the single ``invalid`` result."""
+
+    token: str = Field(max_length=256)
+    key: str = Field(max_length=32)
+    pin: str | None = Field(default=None, max_length=16)
+
+
+class CertificateClaimRequest(BaseModel):
+    token: str = Field(max_length=256)
+    key: str = Field(max_length=32)
+    email: str = Field(max_length=254)
+    pin: str = Field(max_length=16)
+
+
+class CertificateUnlockRefused(BaseModel):
+    """Every refusal has this one shape. ``invalid`` never says why."""
+
+    result: Literal["invalid", "pin_required", "reported_stolen"]
+
+
+class OwnershipPublic(BaseModel):
+    claimed: bool
+    claimed_at: datetime | None
+    owner_email_masked: str | None
+    card_issued_at: datetime
+
+
+class CertificateOriginal(BaseModel):
+    result: Literal["unlocked"] = "unlocked"
+    authenticity: AuthenticityAuthentic
+    piece: PiecePublic
+    artisan: ArtisanPublic
+    authenticity_metadata: AuthenticityMetadataPublic
+    ownership: OwnershipPublic

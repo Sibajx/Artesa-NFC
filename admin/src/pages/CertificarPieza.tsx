@@ -7,6 +7,7 @@ import { useConfirm, useToast } from '../feedback-context';
 import { useLoad } from '../hooks';
 import { NfcError, lockTag, nfcSupported, readTag, writeUrl } from '../nfc';
 import { Badge, ErrorState, Loading } from '../ui';
+import TarjetaComprador from '../TarjetaComprador';
 
 // ADR-030 phase 2: certify a piece and write its NFC tag from Gestión
 // (Chrome for Android, Web NFC). Order: read the chip -> the server issues the
@@ -212,6 +213,7 @@ function Wizard({ state, reload, error, setError }: WizardProps) {
           </Badge>
           {live && <Badge tone={live.status === 'locked' ? 'jade' : 'neutral'}>Chip {labels.nfc(live.status)} · {live.uid}</Badge>}
           {state.revoked_certificates > 0 && <Badge tone="lavanda">{state.revoked_certificates} revocado(s)</Badge>}
+          {state.reported_stolen_at && <Badge tone="lavanda">Reportada como robada</Badge>}
         </div>
       </header>
 
@@ -296,6 +298,10 @@ function Wizard({ state, reload, error, setError }: WizardProps) {
           </>
         )}
       </section>
+
+      {(state.certificate_active || state.card) && phase.step === 'idle' && (
+        <TarjetaComprador state={state} reload={reload} setError={setError} />
+      )}
     </div>
   );
 }

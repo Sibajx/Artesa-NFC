@@ -19,6 +19,13 @@ from app.db.session import check_database_connection
 settings = get_settings()
 
 _RESOLVE_PATH = "/api/v1/certificates/resolve"
+# ADR-030 phase 3: unlock and claim carry the card key and the PIN; they get
+# the same body limit and no-store as resolve.
+_CERTIFICATE_POST_PATHS = frozenset({
+    _RESOLVE_PATH,
+    "/api/v1/certificates/unlock",
+    "/api/v1/certificates/claim",
+})
 
 # The only body certificates/resolve accepts is {"token": "<43 chars>"}
 # (~60 bytes; ~270 bytes even at the schema's 256-character max_length). 1 KiB
@@ -54,7 +61,7 @@ class ResolveBodySizeLimitMiddleware:
         if (
             scope["type"] != "http"
             or scope["method"] != "POST"
-            or scope["path"].rstrip("/") != _RESOLVE_PATH
+            or scope["path"].rstrip("/") not in _CERTIFICATE_POST_PATHS
         ):
             await self.app(scope, receive, send)
             return
@@ -99,7 +106,7 @@ class ResolveNoStoreMiddleware:
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or scope["path"].rstrip("/") != _RESOLVE_PATH:
+        if scope["type"] != "http" or scope["path"].rstrip("/") not in _CERTIFICATE_POST_PATHS:
             await self.app(scope, receive, send)
             return
 
