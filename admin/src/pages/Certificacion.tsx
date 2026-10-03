@@ -23,8 +23,8 @@ export default function Certificacion() {
     <div className="max-w-6xl mx-auto pb-12">
       <PageHeader title="Certificación" subtitle="Área de Admin: certificados, claves y etiquetas NFC de cada pieza." />
       <p className="mb-6 rounded-xl border border-botanica-jade/25 bg-botanica-jade/5 p-4 text-sm text-botanica-grafito">
-        Solo los Admin ven esta sección. Pronto, desde aquí se generarán el token y la clave de la tarjeta y se grabará
-        el chip con un Android (ADR-030). Por ahora muestra el estado de cada pieza.
+        Solo los Admin ven esta sección. Abre una pieza para certificarla y grabar su chip desde un Android con Chrome
+        (ADR-030). La clave de la tarjeta del comprador llega en la siguiente fase.
       </p>
       <div className="bg-white rounded-xl border border-botanica-gris/20 overflow-hidden shadow-sm">
         {state.status === 'loading' && <Loading label="Cargando certificación..." />}
@@ -65,7 +65,9 @@ export default function Certificacion() {
                         : <span className="text-botanica-gris">Sin etiqueta</span>}
                     </td>
                     <td className="py-4 px-6">
-                      <span className={p.ready_to_certify ? 'font-medium text-botanica-jade' : ''}>{nextStep(p)}</span>
+                      <Link to={`/certificacion/${p.id}`} className={p.ready_to_certify ? 'btn-primary !py-1.5 !px-3 text-xs' : 'text-botanica-grafito underline hover:text-botanica-jade'}>
+                        {p.ready_to_certify ? 'Certificar' : nextStep(p)}
+                      </Link>
                     </td>
                   </tr>
                 ))}
