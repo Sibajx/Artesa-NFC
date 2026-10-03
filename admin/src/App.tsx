@@ -140,7 +140,7 @@ export default function App() {
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium text-botanica-negro truncate" title={email}>{email}</p>
               <p className="text-xs text-botanica-gris">
-                {roles.includes('custodian') ? 'Custodio' : roles.includes('designer') ? 'Diseñador' : 'Editor de contenido'}
+                {roles.includes('custodian') ? 'Admin' : roles.includes('designer') ? 'Diseñador' : 'Editor de contenido'}
               </p>
             </div>
             <a
