@@ -158,12 +158,12 @@ programar el NFC". Ese canal queda definido (issue #107, N-09;
   teléfono tras el escaneo.
 
 **Actualización ADR-030 (fase 2, Web NFC):** la CLI deja de ser el único canal.
-Gestión → Certificación (solo rol Admin/Custodio, validado en el servidor, con
+Gestión → Certificación (solo rol Custodio, validado en el servidor, con
 la guarda de escritura de ADR-029) usa los mismos servicios de provisioning:
 
 - La URL completa sale **solo** en la respuesta de
   `POST /api/admin/v1/custody/pieces/{id}/issue` y `…/rotate`, con
-  `Cache-Control: no-store`, hacia el navegador del Admin. Va en el cuerpo,
+  `Cache-Control: no-store`, hacia el navegador del Custodio. Va en el cuerpo,
   nunca en una ruta ni en un query string, así que no llega a los access logs.
 - El navegador la guarda solo en memoria para escribir el registro NDEF; no se
   muestra, no pasa por el portapapeles y no se registra. El `audit_event`
@@ -174,7 +174,7 @@ la guarda de escritura de ADR-029) usa los mismos servicios de provisioning:
   confirmar que se graba un chip de prueba.
 - Riesgo residual nuevo: Web NFC escribe en el chip que esté cerca; si se
   acerca otro, ese chip queda con una URL válida. La lectura de vuelta lo
-  detecta; el Admin debe rotar (`rotate`) o retirar ese chip.
+  detecta; el Custodio debe rotar (`rotate`) o retirar ese chip.
 
 ## 3. Hash y verificación del token
 

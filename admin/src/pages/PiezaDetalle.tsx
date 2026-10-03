@@ -124,7 +124,7 @@ export default function PiezaDetalle() {
               </>
             ) : (
               <section aria-label="Certificación" className="rounded-xl border border-botanica-gris/15 bg-white p-5 text-sm text-botanica-grafito">
-                Los certificados y las etiquetas NFC solo los ven los Admin (ADR-030).
+                Los certificados y las etiquetas NFC solo los ven los Custodios (ADR-030).
               </section>
             )}
 
