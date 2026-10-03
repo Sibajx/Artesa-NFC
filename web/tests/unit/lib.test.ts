@@ -119,3 +119,29 @@ describe("media", () => {
     );
   });
 });
+
+import { paletteOf, paletteRoles } from "@/lib/palette";
+
+describe("palette (ADR-030 phase 4)", () => {
+  it("accepts 3-5 hex colours and ignores anything else", () => {
+    expect(paletteOf({ palette: ["#5C3F28", "#c9761c", "#efe4cf"] })).toEqual([
+      "#5c3f28",
+      "#c9761c",
+      "#efe4cf",
+    ]);
+    expect(paletteOf({ palette: ["#111111", "#222222"] })).toEqual([]);
+    expect(paletteOf({ palette: "red" })).toEqual([]);
+    expect(paletteOf({ palette: ["#111111", "red", "#333333", "#444444"] })).toEqual([
+      "#111111",
+      "#333333",
+      "#444444",
+    ]);
+    expect(paletteOf(null)).toEqual([]);
+  });
+
+  it("picks accent, dark and light roles", () => {
+    const roles = paletteRoles(["#5c3f28", "#f2a33a", "#efe4cf", "#7a7a7a"]);
+    expect(roles).toEqual({ accent: "#f2a33a", dark: "#5c3f28", light: "#efe4cf" });
+    expect(paletteRoles(["#111111"])).toBeNull();
+  });
+});
