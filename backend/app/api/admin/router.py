@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.api.v1.common import media_order_by, not_found
-from app.core.access import AdminIdentity, require_admin
+from app.core.access import CUSTODIAN, AdminIdentity, require_admin
 from app.models.artisan import Artisan
 from app.models.audit_event import AuditEvent
 from app.models.certificate import Certificate
@@ -87,7 +87,7 @@ def _piece_summaries(db: Session, pieces: list[Piece]) -> list[AdminPieceSummary
 
 @router.get("/me", response_model=AdminMe)
 def me(identity: AdminIdentity = Depends(require_admin)) -> AdminMe:
-    return AdminMe(email=identity.email)
+    return AdminMe(email=identity.email, roles=sorted(identity.roles))
 
 
 @router.get("/artisans", response_model=ListEnvelope[AdminArtisanSummary])
@@ -136,7 +136,8 @@ def list_artisans(
 
 
 @router.get("/artisans/{artisan_id}", response_model=AdminArtisanDetail)
-def get_artisan(artisan_id: uuid.UUID, db: Session = Depends(get_db)) -> AdminArtisanDetail:
+def get_artisan(artisan_id: uuid.UUID, db: Session = Depends(get_db),
+                identity: AdminIdentity = Depends(require_admin)) -> AdminArtisanDetail:
     artisan = db.get(Artisan, artisan_id)
     if artisan is None:
         raise not_found()
@@ -190,7 +191,8 @@ def list_pieces(
 
 
 @router.get("/pieces/{piece_id}", response_model=AdminPieceDetail)
-def get_piece(piece_id: uuid.UUID, db: Session = Depends(get_db)) -> AdminPieceDetail:
+def get_piece(piece_id: uuid.UUID, db: Session = Depends(get_db),
+              identity: AdminIdentity = Depends(require_admin)) -> AdminPieceDetail:
     piece = db.get(Piece, piece_id)
     if piece is None:
         raise not_found()
@@ -203,6 +205,10 @@ def get_piece(piece_id: uuid.UUID, db: Session = Depends(get_db)) -> AdminPieceD
         select(NfcTag).where(NfcTag.piece_id == piece.id)
         .order_by(NfcTag.created_at.desc(), cast(NfcTag.status, String).asc())
     ).scalars().all()
+    # ADR-030: certificates and NFC tags belong to the custody area.
+    custody_visible = isinstance(identity, AdminIdentity) and identity.has(CUSTODIAN)
+    if not custody_visible:
+        certificates, tags = [], []
     return AdminPieceDetail(
         id=piece.id,
         slug=piece.slug,
@@ -247,6 +253,7 @@ def get_piece(piece_id: uuid.UUID, db: Session = Depends(get_db)) -> AdminPieceD
             )
             for c in certificates
         ],
+        custody_visible=custody_visible,
         nfc_tags=[
             AdminNfcTag(
                 id=t.id,

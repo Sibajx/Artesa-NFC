@@ -65,6 +65,8 @@ export default function PiezaDetalle() {
               </dl>
             </article>
 
+            {p.custody_visible ? (
+              <>
             <section aria-labelledby="cert-heading">
               <h2 id="cert-heading" className="text-2xl font-serif text-botanica-negro mb-2">Certificados</h2>
               <p className="text-sm text-botanica-gris mb-4">Solo consulta. Emitir, reemplazar o revocar se hace con la CLI de provisioning (ADR-026).</p>
@@ -118,6 +120,13 @@ export default function PiezaDetalle() {
                 )}
               </div>
             </section>
+
+              </>
+            ) : (
+              <section aria-label="Certificación" className="rounded-xl border border-botanica-gris/15 bg-white p-5 text-sm text-botanica-grafito">
+                Los certificados y las etiquetas NFC solo los ven los Custodios (ADR-030).
+              </section>
+            )}
 
             <MediaSection kind="pieces" ownerId={p.id} media={p.media}
               ownerArchived={p.publication_status === 'archived'} onChanged={() => setRevision((r) => r + 1)} />
