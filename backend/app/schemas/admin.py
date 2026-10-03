@@ -21,6 +21,23 @@ from app.schemas.media import MediaAssetPublic
 
 class AdminMe(BaseModel):
     email: str
+    # ADR-030: "editor" always; "designer" and/or "custodian" when granted.
+    roles: list[str] = ["editor"]
+
+
+class CustodyPiece(BaseModel):
+    """A piece as seen from the custody area (ADR-030, phase 1)."""
+    id: uuid.UUID
+    slug: str
+    public_code: str
+    name: str
+    artisan_name: str
+    publication_status: str
+    certificate_status: str | None
+    certificate_version: int | None
+    tag_status: str | None
+    tag_chip: str | None
+    ready_to_certify: bool
 
 
 class AdminArtisanSummary(BaseModel):
@@ -142,6 +159,9 @@ class AdminPieceDetail(BaseModel):
     # when it can be deleted for good, else the reason code (services/trash.py).
     trashed_at: datetime | None = None
     purge_blocker: str | None = None
+    # False when the caller is not a custodian: certificates and nfc_tags are
+    # then empty on purpose, not because the piece has none (ADR-030).
+    custody_visible: bool = False
 
 
 class AdminAuditEvent(BaseModel):

@@ -10,6 +10,8 @@ import Piezas from './pages/Piezas';
 import PiezaDetalle from './pages/PiezaDetalle';
 import Auditoria from './pages/Auditoria';
 import Apartado from './pages/Apartado';
+import Certificacion from './pages/Certificacion';
+import CertificarPieza from './pages/CertificarPieza';
 import ArtesanoForm from './pages/ArtesanoForm';
 import PiezaForm from './pages/PiezaForm';
 
@@ -32,6 +34,12 @@ const icons: Record<string, ReactElement> = {
       <polygon points="12 2 2 7 12 12 22 7 12 2"/>
       <polyline points="2 17 12 22 22 17"/>
       <polyline points="2 12 12 17 22 12"/>
+    </svg>
+  ),
+  Certificación: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 2l7 4v6c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6z"/>
+      <path d="M9 12l2 2 4-4"/>
     </svg>
   ),
   Archivados: (
@@ -63,6 +71,7 @@ const menuItems = [
   { name: 'Resumen', path: '/resumen' },
   { name: 'Artesanos', path: '/artesanos' },
   { name: 'Piezas', path: '/piezas' },
+  { name: 'Certificación', path: '/certificacion', role: 'custodian' },
   { name: 'Archivados', path: '/archivados' },
   { name: 'Papelera', path: '/papelera' },
   { name: 'Auditoría', path: '/auditoria' },
@@ -85,6 +94,8 @@ export default function App() {
   }
 
   const email = me.data.email;
+  const roles = me.data.roles ?? ['editor'];
+  const visibleItems = menuItems.filter((item) => !('role' in item) || roles.includes(item.role as string));
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-botanica-hueso">
@@ -104,7 +115,7 @@ export default function App() {
         </div>
 
         <nav aria-label="Principal" className="side-nav flex-1 px-3 py-4 flex flex-col gap-0.5">
-          {menuItems.map((item) => (
+          {visibleItems.map((item) => (
             <NavLink
               key={item.name}
               to={item.path}
@@ -129,7 +140,9 @@ export default function App() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium text-botanica-negro truncate" title={email}>{email}</p>
-              <p className="text-xs text-botanica-gris">Editor de contenido</p>
+              <p className="text-xs text-botanica-gris">
+                {roles.includes('custodian') ? 'Admin' : roles.includes('designer') ? 'Diseñador' : 'Editor de contenido'}
+              </p>
             </div>
             <a
               href={LOGOUT_URL}
@@ -158,6 +171,8 @@ export default function App() {
           <Route path="/piezas/:id/editar" element={<PiezaForm />} />
           <Route path="/piezas/:id" element={<PiezaDetalle />} />
           <Route path="/piezas" element={<Piezas />} />
+          {roles.includes('custodian') && <Route path="/certificacion" element={<Certificacion />} />}
+          {roles.includes('custodian') && <Route path="/certificacion/:id" element={<CertificarPieza />} />}
           <Route path="/archivados" element={<Apartado key="archivados" mode="archivados" />} />
           <Route path="/papelera" element={<Apartado key="papelera" mode="papelera" />} />
           <Route path="/auditoria" element={<Auditoria />} />

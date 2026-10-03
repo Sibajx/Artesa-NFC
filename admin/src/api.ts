@@ -94,6 +94,57 @@ export interface ArtisanDetail {
   purge_blocker?: string | null;
 }
 
+// ADR-030 custody overview (custodians only).
+export interface CustodyPiece {
+  id: string;
+  slug: string;
+  public_code: string;
+  name: string;
+  artisan_name: string;
+  publication_status: PublicationStatus;
+  certificate_status: 'draft' | 'active' | 'revoked' | null;
+  certificate_version: number | null;
+  tag_status: 'available' | 'programmed' | 'locked' | null;
+  tag_chip: string | null;
+  ready_to_certify: boolean;
+}
+
+export interface CustodyTag {
+  id: string;
+  status: 'available' | 'programmed' | 'locked';
+  uid: string | null;
+  programmed_at: string | null;
+  locked_at: string | null;
+}
+
+export interface CustodyState {
+  piece_id: string;
+  public_code: string;
+  name: string;
+  artisan_name: string;
+  piece_published: boolean;
+  artisan_published: boolean;
+  certificate_active: boolean;
+  certificate_issued_at: string | null;
+  revoked_certificates: number;
+  tags: CustodyTag[];
+  recommended_action: 'issue' | 'verify_then_optional_lock' | 'locked' | 'interrupted_rotate' | 'revoked_with_tags';
+  issue_blockers: string[];
+  rotate_blockers: string[];
+  lock_blockers: string[];
+  revocation_reasons: string[];
+}
+
+// The only API response that carries the certificate URL (ADR-030). Keep it
+// in memory for the write; never render or log it.
+export interface CustodyIssued {
+  url: string;
+  certificate_id: string;
+  tag_id: string;
+  uid: string | null;
+  needs_program: boolean;
+}
+
 export interface Certificate {
   id: string;
   status: 'draft' | 'active' | 'revoked';
@@ -135,6 +186,8 @@ export interface PieceDetail {
   media: AdminMedia[];
   certificates: Certificate[];
   nfc_tags: NfcTag[];
+  // False for non-custodians: certificates and nfc_tags are hidden (ADR-030).
+  custody_visible?: boolean;
   trashed_at?: string | null;
   purge_blocker?: string | null;
 }
@@ -280,7 +333,16 @@ export interface PieceInput {
 }
 
 export const adminApi = {
-  me: (signal?: AbortSignal) => get<{ email: string }>('/me', undefined, signal),
+  me: (signal?: AbortSignal) => get<{ email: string; roles: string[] }>('/me', undefined, signal),
+  custodyPieces: (signal?: AbortSignal) => get<ListEnvelope<CustodyPiece>>('/custody/pieces', undefined, signal),
+  custodyState: (id: string, signal?: AbortSignal) => get<CustodyState>(`/custody/pieces/${encodeURIComponent(id)}/state`, undefined, signal),
+  custodyIssue: (id: string, uid: string) => request<CustodyIssued>('POST', `/custody/pieces/${encodeURIComponent(id)}/issue`, { body: { uid } }),
+  custodyRotate: (id: string, reason: string, uid: string | null) =>
+    request<CustodyIssued>('POST', `/custody/pieces/${encodeURIComponent(id)}/rotate`, { body: { reason, uid } }),
+  custodyProgram: (id: string, tagId: string, uid: string) =>
+    request<CustodyState>('POST', `/custody/pieces/${encodeURIComponent(id)}/program`, { body: { tag_id: tagId, uid } }),
+  custodyLock: (id: string, uid: string) => request<CustodyState>('POST', `/custody/pieces/${encodeURIComponent(id)}/lock`, { body: { uid } }),
+  custodyRevoke: (id: string, reason: string) => request<CustodyState>('POST', `/custody/pieces/${encodeURIComponent(id)}/revoke`, { body: { reason } }),
   artisans: (params: { publication_status?: string; q?: string; trashed?: string }, signal?: AbortSignal) =>
     get<ListEnvelope<ArtisanSummary>>('/artisans', params, signal),
   artisan: (id: string, signal?: AbortSignal) => get<ArtisanDetail>(`/artisans/${encodeURIComponent(id)}`, undefined, signal),

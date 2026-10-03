@@ -469,3 +469,28 @@
     opacity: 1;
   }
 }
+
+/* NFC wizard: a dot that pulses like a wave while waiting for the chip. */
+.nfc-dot {
+  flex: none;
+  margin-top: 0.4rem;
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 50%;
+  background: var(--color-botanica-jade);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .nfc-dot--pulse {
+    animation: nfc-pulse 1.4s ease-out infinite;
+  }
+}
+
+@keyframes nfc-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-botanica-jade) 55%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 18px transparent;
+  }
+}

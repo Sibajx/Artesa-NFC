@@ -43,9 +43,18 @@ AUTH_UNAVAILABLE_ERROR = {
 }
 
 
+EDITOR, DESIGNER, CUSTODIAN = "editor", "designer", "custodian"
+
+
 @dataclass(frozen=True)
 class AdminIdentity:
     email: str
+    # ADR-030: everyone allowed is an editor; designer and custodian come from
+    # their own allowlists (a custodian is also a designer).
+    roles: frozenset[str] = frozenset({EDITOR})
+
+    def has(self, role: str) -> bool:
+        return role in self.roles
 
 
 class AccessUnavailable(Exception):
@@ -65,10 +74,18 @@ class AccessVerifier:
         audience: str,
         allowed_emails: tuple[str, ...],
         jwks_client: jwt.PyJWKClient | None = None,
+        *,
+        custodians: tuple[str, ...] = (),
+        designers: tuple[str, ...] = (),
+        extra_audiences: tuple[str, ...] = (),
     ) -> None:
         self.issuer = f"https://{team_domain}"
-        self.audience = audience
+        # The custody path may sit behind its own Access application: its
+        # tokens carry that application's AUD (ADR-030).
+        self.audience = [audience, *[a for a in extra_audiences if a]]
         self.allowed_emails = frozenset(email.lower() for email in allowed_emails)
+        self.custodians = frozenset(email.lower() for email in custodians)
+        self.designers = frozenset(email.lower() for email in designers) | self.custodians
         self._jwks = jwks_client or jwt.PyJWKClient(
             f"{self.issuer}/cdn-cgi/access/certs",
             cache_keys=True,
@@ -102,13 +119,22 @@ class AccessVerifier:
         email = claims.get("email")
         if not isinstance(email, str) or email.strip().lower() not in self.allowed_emails:
             raise AccessDenied(403)
-        return AdminIdentity(email=email.strip().lower())
+        email = email.strip().lower()
+        roles = {EDITOR}
+        if email in self.designers:
+            roles.add(DESIGNER)
+        if email in self.custodians:
+            roles.add(CUSTODIAN)
+        return AdminIdentity(email=email, roles=frozenset(roles))
 
 
 @lru_cache
-def _verifier_for(team_domain: str, audience: str, allowed_emails: tuple[str, ...]) -> AccessVerifier:
+def _verifier_for(team_domain: str, audience: str, allowed_emails: tuple[str, ...],
+                  custodians: tuple[str, ...], designers: tuple[str, ...],
+                  extra_audiences: tuple[str, ...]) -> AccessVerifier:
     # One verifier (and one key cache) per configuration for the process.
-    return AccessVerifier(team_domain, audience, allowed_emails)
+    return AccessVerifier(team_domain, audience, allowed_emails, custodians=custodians,
+                          designers=designers, extra_audiences=extra_audiences)
 
 
 def get_access_verifier() -> AccessVerifier | None:
@@ -120,6 +146,9 @@ def get_access_verifier() -> AccessVerifier | None:
         settings.admin_access_team_domain,
         settings.admin_access_aud,
         tuple(settings.admin_emails_list),
+        tuple(settings.custodian_emails_list),
+        tuple(settings.designer_emails_list),
+        (settings.custody_access_aud,) if settings.custody_access_aud else (),
     )
 
 

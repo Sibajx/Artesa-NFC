@@ -314,3 +314,177 @@ admin bajo `/api/v1/admin` (quedaría dentro del prefijo público de la regla A)
 fase 4 (media), que depende de la capa de media. El despliegue requiere una
 aplicación de Access, su AUD y el team domain en `shared/.env`, y un hostname en
 el Tunnel (paso humano).
+
+## ADR-030 — Certificación v2: NFC con token, tarjeta rasca, Custodios y certificados diseñados
+
+**Estado:** **Aceptado** (PO, 2026-10-02). Modifica ADR-026 (provisioning
+solo por CLI) y amplía ADR-029 (Gestión). Se implementa por fases.
+
+**Fecha:** 2026-10-02
+
+**Contexto:**
+
+- **Hoy:** vincular un tag exige la CLI por SSH (ADR-026). La URL secreta
+  `/c/{token}` se muestra una vez y el operador la copia a mano a una app
+  NFC. Es seguro, pero técnico y con pasos manuales delicados (portapapeles,
+  varias confirmaciones). El certificado que se ve al escanear es uno solo,
+  igual para todo el que tenga la URL, y un NTAG213 se puede clonar
+  (SECURITY.md §6).
+- **El PO quiere:**
+  - que el equipo vincule tags sin terminal;
+  - que solo personas designadas puedan hacerlo;
+  - que el comprador tenga un certificado **original y privado**, diseñado
+    por el equipo y **aprobado por el artesano**;
+  - que exista un certificado **genérico** con la paleta de la pieza.
+- **Ya hay chips** grabados con una URL de prueba, **sin bloquear**:
+  se pueden reaprovechar.
+- **El artesano** tallará la cavidad para embeber el chip.
+
+**Decisión:**
+
+1. **Dos factores.**
+   - **Tag NFC:** sigue llevando `/c/{token}`. Token aleatorio de 128 bits,
+     generado por el servidor y guardado solo como `token_hash` (SECURITY.md
+     §2–§3, sin cambios). Escanear muestra el **certificado genérico**:
+     `authentic` con los datos públicos de la pieza y su paleta. La
+     anti-enumeración de `resolve` se conserva.
+   - **Tarjeta del comprador:** una **clave secreta bajo capa rasca** (o
+     sello VOID), generada por el servidor. Con el token **y** la clave, un
+     endpoint nuevo devuelve el **certificado original**.
+   - **No** se graba ningún secreto en la pieza: quien la manipula lo vería
+     y no se podría cambiar.
+2. **Clave de la tarjeta.**
+   - Aleatoria, 50 bits. **Código** Crockford base32 de 10 caracteres
+     (`K7QM-4XHT-9R`), decisión del PO.
+   - Se guarda **solo su hash**, con `hashlib.scrypt` de la biblioteca
+     estándar y sal por clave, sin dependencias nuevas. Se muestra **una
+     vez** al Custodio, en la vista de impresión.
+   - Desbloqueo con **límite de intentos** por certificado y por IP, espera
+     progresiva, bloqueo temporal y evento en `audit_event`.
+   - La respuesta a una clave incorrecta no distingue entre causas.
+   - La tarjeta muestra el **código público** de la pieza (no secreto) y el
+     dominio oficial.
+3. **Reclamar la pieza** (entra en v1, decisión del PO).
+   - En el primer desbloqueo, el comprador puede registrar un correo o un
+     PIN. Desde entonces la tarjeta sola ya no basta.
+   - Transferir la pieza (reventa) y reponer una tarjeta perdida lo hace un
+     Custodio, con prueba de compra, y queda auditado.
+4. **Roles en Gestión** (amplía ADR-029), validados **en el servidor**:
+   - **Editor:** contenido.
+   - **Diseñador:** certificados y registro de la aprobación del artesano.
+   - **Custodio:** generar tokens y claves, grabar y reemplazar tags,
+     imprimir tarjetas, revocar, emitir.
+   - El rol se asigna por email (allowlists separadas en `shared/.env`).
+   - El área de Custodia está en su propio prefijo de la API y tiene **una
+     política propia en Cloudflare Access**, solo con los correos de los
+     Custodios. Sin segunda verificación por ahora (decisión del PO).
+   - Custodio inicial: el PO (`armzsibaja@gmail.com`).
+   - Un Editor que llame a esas rutas recibe 403, y el intento se audita.
+5. **Vincular tags con Web NFC.**
+   - El Custodio abre la pieza en Gestión desde un **Android con Chrome** y
+     acerca el chip. Gestión pide al servidor el token (este endpoint de
+     Custodia es la **única** excepción a "el token nunca sale en una
+     respuesta", y solo hacia ese navegador). Luego escribe un único
+     registro NDEF URI, lo **lee de vuelta**, registra el número de serie y
+     marca el tag `programmed`.
+   - El token no se muestra ni pasa por el portapapeles.
+   - El **bloqueo** del chip es opcional y va siempre al final, con la pieza
+     terminada y escaneada.
+   - **El token se genera antes de grabar**, porque la URL lo contiene.
+   - La CLI de ADR-026 se mantiene como respaldo y para recuperación.
+6. **Certificados.**
+   - **Genérico (público):** paleta de 3–5 colores extraída de la foto de
+     portada (guardada en `piece.visual_theme`) y una plantilla fija con el
+     estilo del sitio.
+   - **Original (privado):** plantillas con parámetros (paleta, motivo,
+     variante, textos, frase del artesano, semilla de un patrón generativo)
+     más **arte propio** subido por el equipo (SVG/PNG).
+   - El original se puede descargar en PDF. Nunca contiene la clave ni el
+     token.
+7. **Dashboard de diseño y aprobación** (rol Diseñador).
+   - Previsualización en vivo con los datos reales.
+   - Estados **Borrador → En revisión con el artesano → Aprobado →
+     Publicado**.
+   - Para la revisión, un enlace privado que caduca, o una imagen.
+   - La aprobación se registra con quién, cuándo, por qué medio y evidencia
+     opcional.
+   - "Publicar" deja esa versión como la vigente.
+   - Las versiones emitidas **se congelan**: un rediseño crea la versión
+     siguiente.
+   - **No** se construye un editor libre tipo Canva.
+
+**Orden por pieza:**
+
+1. Pieza y artesano publicados.
+2. Original diseñado y aprobado por el artesano.
+3. El Custodio genera el token y la clave.
+4. Graba el tag y verifica la lectura de vuelta.
+5. Escaneo de prueba.
+6. Imprime la tarjeta y prueba el desbloqueo en modo prueba, sin reclamar.
+7. Aplica la capa rasca y sella el sobre.
+8. El artesano embebe el chip.
+9. Escaneo final.
+10. Bloqueo, opcional.
+11. Entrega.
+
+**Alternativas descartadas:**
+
+- **Palabra grabada en la máscara:** visible para quien manipula la pieza,
+  se adivina por fuerza bruta y no se puede cambiar.
+- **URL pública sin token en el tag:** pierde la anti-enumeración y deja el
+  certificado genérico expuesto a cualquiera.
+- **Seguir solo con la CLI:** demasiado técnico para operar con varias
+  piezas.
+- **Editor de diseño libre dentro de Gestión:** semanas o meses de trabajo,
+  frágil, y no supera a Figma o Canva.
+- **NTAG 424 DNA desde ya:** más caro y con menos proveedores; se evalúa
+  después del piloto.
+
+**Riesgos residuales:**
+
+- **Clonado del NTAG213:** un clon muestra el certificado genérico de una
+  pieza real; el original exige la tarjeta. Se resuelve a futuro con NTAG 424
+  DNA (SUN/CMAC).
+- **Phishing:** un sitio falso podría pedir la clave. Mitigación: el dominio
+  impreso en la tarjeta y una advertencia.
+- **Los Custodios ven la clave al imprimirla:** se acota con el rol, la
+  política de Access y la auditoría.
+- **Compartir la tarjeta comparte el acceso:** lo resuelve reclamar la
+  pieza.
+- **Web NFC solo escribe desde Android con Chrome.**
+
+**Consecuencias:**
+
+- **Migraciones aditivas:**
+  - clave de la tarjeta (hash, estado, intentos);
+  - reclamo de la pieza;
+  - versiones de diseño del certificado y su aprobación;
+  - roles.
+- **Cambios en documentos:** `API_CONTRACT.md` (endpoint de desbloqueo y
+  forma del certificado genérico y del original), `SECURITY.md` (§2, §5,
+  §6, §9, §12) y `PROVISIONING.md` (flujo con Web NFC; la CLI queda como
+  respaldo).
+- **Sin dependencias nuevas:** `hashlib.scrypt` cubre el hash de la clave.
+- **Fases de implementación:**
+  1. Roles y Custodia.
+  2. Web NFC.
+  3. Tarjeta, desbloqueo y reclamo.
+  4. Certificado genérico.
+  5. Dashboard de diseño.
+  6. Piloto.
+
+**Respuestas del PO (2026-10-02):**
+
+1. Custodio: `armzsibaja@gmail.com`.
+2. Clave: código.
+3. Reclamo con correo: sí, en v1.
+4. Las claves las imprime el equipo.
+5. Sin segunda verificación por ahora.
+
+**Actualización (2026-10-02):** a pedido del PO, el rol **Custodio** se
+muestra como **"Admin"** en Gestión y en la comunicación con el equipo.
+Internamente sigue llamándose `custodian` (`CUSTODIAN_EMAILS`,
+`/api/admin/v1/custody`), porque "admin" ya nombra a toda la API
+administrativa (`ADMIN_EMAILS`, `/api/admin/v1`) y renombrarlo las
+confundiría. Donde este ADR dice "Custodio", léase "Admin".
+
