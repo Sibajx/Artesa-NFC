@@ -94,6 +94,21 @@ export interface ArtisanDetail {
   purge_blocker?: string | null;
 }
 
+// ADR-030 custody overview (custodians only).
+export interface CustodyPiece {
+  id: string;
+  slug: string;
+  public_code: string;
+  name: string;
+  artisan_name: string;
+  publication_status: PublicationStatus;
+  certificate_status: 'draft' | 'active' | 'revoked' | null;
+  certificate_version: number | null;
+  tag_status: 'available' | 'programmed' | 'locked' | null;
+  tag_chip: string | null;
+  ready_to_certify: boolean;
+}
+
 export interface Certificate {
   id: string;
   status: 'draft' | 'active' | 'revoked';
@@ -135,6 +150,8 @@ export interface PieceDetail {
   media: AdminMedia[];
   certificates: Certificate[];
   nfc_tags: NfcTag[];
+  // False for non-custodians: certificates and nfc_tags are hidden (ADR-030).
+  custody_visible?: boolean;
   trashed_at?: string | null;
   purge_blocker?: string | null;
 }
@@ -280,7 +297,8 @@ export interface PieceInput {
 }
 
 export const adminApi = {
-  me: (signal?: AbortSignal) => get<{ email: string }>('/me', undefined, signal),
+  me: (signal?: AbortSignal) => get<{ email: string; roles: string[] }>('/me', undefined, signal),
+  custodyPieces: (signal?: AbortSignal) => get<ListEnvelope<CustodyPiece>>('/custody/pieces', undefined, signal),
   artisans: (params: { publication_status?: string; q?: string; trashed?: string }, signal?: AbortSignal) =>
     get<ListEnvelope<ArtisanSummary>>('/artisans', params, signal),
   artisan: (id: string, signal?: AbortSignal) => get<ArtisanDetail>(`/artisans/${encodeURIComponent(id)}`, undefined, signal),

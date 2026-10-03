@@ -791,11 +791,13 @@ El texto anterior de esta sección se conserva como historia. Desde ADR-029:
 
 | Método y ruta | Respuesta |
 |---|---|
-| `GET /api/admin/v1/me` | `{"email"}` de la identidad verificada |
+| `GET /api/admin/v1/me` | `{"email", "roles"}` de la identidad verificada; `roles` ⊆ `editor`, `designer`, `custodian` (ADR-030) |
+| `GET /api/admin/v1/custody/pieces` | **Solo Custodios** (403 + `audit_event` `custody.denied` para los demás): cada pieza fuera de la papelera con `certificate_status`, `certificate_version`, `tag_status`, `tag_chip` y `ready_to_certify`. Nunca `token_hash` ni `physical_uid` |
 | `GET /api/admin/v1/artisans?publication_status=&q=` | `ListEnvelope` de `{id, slug, full_name, artistic_name, publication_status, piece_count, updated_at}`; **incluye borradores y archivados**; orden `updated_at` desc |
 | `GET /api/admin/v1/artisans/{id}` | todos los campos del artesano (incluido `public_contact`), `media` (con `id` y `status`) y **todas** sus piezas |
 | `GET /api/admin/v1/pieces?publication_status=&artisan_id=&q=` | `ListEnvelope` de `{id, slug, public_code, name, artisan_id, artisan_slug, publication_status, availability_status, updated_at}` |
-| `GET /api/admin/v1/pieces/{id}` | todos los campos de la pieza, `publicly_visible` (pieza **y** artesano publicados, §9), `artisan`, `media`, historial de `certificates` (`id, status, version, issued_at, revoked_at, revocation_reason, created_at`) y de `nfc_tags` (`id, status, chip_model, programmed_at, locked_at, created_at`) |
+| `GET /api/admin/v1/pieces/{id}` | (ADR-030) `certificates` y `nfc_tags` solo para Custodios; para los demás llegan vacíos con `custody_visible: false`. |
+| `GET /api/admin/v1/pieces/{id}` (detalle) | todos los campos de la pieza, `publicly_visible` (pieza **y** artesano publicados, §9), `artisan`, `media`, historial de `certificates` (`id, status, version, issued_at, revoked_at, revocation_reason, created_at`) y de `nfc_tags` (`id, status, chip_model, programmed_at, locked_at, created_at`) |
 | `GET /api/admin/v1/audit-events?entity_type=&entity_id=&limit=` | eventos más recientes primero (`limit` 1–200, por defecto 50) |
 
 `q` busca sin distinguir mayúsculas; `%` y `_` se tratan como texto literal.

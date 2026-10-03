@@ -31,6 +31,7 @@ TEAM = "artesanfc-test.cloudflareaccess.com"
 ISSUER = f"https://{TEAM}"
 AUD = "0123456789abcdef" * 4
 ADMIN_EMAIL = "ops@example.org"
+CUSTODIAN_EMAIL = "keeper@example.org"
 TOKEN_HASH = "a1" * 32
 PHYSICAL_UID = "04:A1:B2:C3:D4:E5:F6"
 
@@ -73,7 +74,8 @@ def auth(token: str) -> dict[str, str]:
 
 @pytest.fixture()
 def verifier():
-    v = AccessVerifier(TEAM, AUD, (ADMIN_EMAIL,), jwks_client=FakeJWKS())
+    v = AccessVerifier(TEAM, AUD, (ADMIN_EMAIL, CUSTODIAN_EMAIL), jwks_client=FakeJWKS(),
+                       custodians=(CUSTODIAN_EMAIL,))
     app.dependency_overrides[get_access_verifier] = lambda: v
     yield v
     app.dependency_overrides.pop(get_access_verifier, None)
@@ -110,7 +112,7 @@ def test_default_test_settings_leave_the_admin_api_disabled():
 def test_valid_token_for_an_allowlisted_email(client):
     response = client.get("/api/admin/v1/me", headers=auth(make_token(email="OPS@Example.org")))
     assert response.status_code == 200
-    assert response.json() == {"email": ADMIN_EMAIL}
+    assert response.json() == {"email": ADMIN_EMAIL, "roles": ["editor"]}
     assert response.headers["cache-control"] == "no-store"
 
 
@@ -246,10 +248,11 @@ def test_artisan_detail_shows_internal_fields_and_every_piece(client, db_session
 
 def test_piece_detail_never_exposes_token_hash_physical_uid_or_storage_path(client, db_session):
     rows = _seed(db_session)
-    response = client.get(f"/api/admin/v1/pieces/{rows['public_piece'].id}", headers=auth(make_token()))
+    response = client.get(f"/api/admin/v1/pieces/{rows['public_piece'].id}",
+                          headers=auth(make_token(email=CUSTODIAN_EMAIL)))
     assert response.status_code == 200
     body = response.json()
-    assert body["publicly_visible"] is True
+    assert body["publicly_visible"] is True and body["custody_visible"] is True
     assert [c["status"] for c in body["certificates"]] == ["active"]
     assert [t["status"] for t in body["nfc_tags"]] == ["available"]
     for forbidden in (TOKEN_HASH, PHYSICAL_UID, "token_hash", "physical_uid", "storage_path"):

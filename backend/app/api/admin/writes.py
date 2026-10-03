@@ -118,7 +118,7 @@ def _trash_routes(kind: str, plural: str, read, model):
             trash.trash(db, who, kind, entity_id, expected)
         except ContentError as exc:
             raise _fail(exc) from None
-        return read(entity_id, db)
+        return read(entity_id, db, who.identity)
 
     @router.post(f"/{plural}/{{entity_id}}/untrash", response_model=model,
                  name=f"untrash_{kind}")
@@ -128,7 +128,7 @@ def _trash_routes(kind: str, plural: str, read, model):
             trash.untrash(db, who, kind, entity_id, expected)
         except ContentError as exc:
             raise _fail(exc) from None
-        return read(entity_id, db)
+        return read(entity_id, db, who.identity)
 
     @router.post(f"/{plural}/{{entity_id}}/purge", status_code=204, name=f"purge_{kind}")
     def purge_entity(entity_id: uuid.UUID, body: TransitionBody, expected: datetime = Depends(expected_version),
@@ -180,7 +180,7 @@ def create_piece(body: PieceCreate, who: Actor = Depends(actor), db: Session = D
         piece = content.create_piece(db, who, body.model_dump())
     except ContentError as exc:
         raise _fail(exc) from None
-    return reads.get_piece(piece.id, db)
+    return reads.get_piece(piece.id, db, who.identity)
 
 
 @router.patch("/pieces/{piece_id}", response_model=AdminPieceDetail)
@@ -190,7 +190,7 @@ def update_piece(piece_id: uuid.UUID, body: PieceUpdate, expected: datetime = De
         content.update_piece(db, who, piece_id, expected, provided(body, never_null=_PIECE_NEVER_NULL))
     except ContentError as exc:
         raise _fail(exc) from None
-    return reads.get_piece(piece_id, db)
+    return reads.get_piece(piece_id, db, who.identity)
 
 
 @router.post("/pieces/{piece_id}/availability", response_model=AdminPieceDetail)
@@ -200,7 +200,7 @@ def set_availability(piece_id: uuid.UUID, body: AvailabilityBody, expected: date
         content.set_availability(db, who, piece_id, expected, body.availability_status)
     except ContentError as exc:
         raise _fail(exc) from None
-    return reads.get_piece(piece_id, db)
+    return reads.get_piece(piece_id, db, who.identity)
 
 
 @router.post("/pieces/{piece_id}/{action}", response_model=AdminPieceDetail)
@@ -211,4 +211,4 @@ def transition_piece(piece_id: uuid.UUID, action: content.TransitionAction, body
         content.transition_piece(db, who, piece_id, expected, action.value, body.reason)
     except ContentError as exc:
         raise _fail(exc) from None
-    return reads.get_piece(piece_id, db)
+    return reads.get_piece(piece_id, db, who.identity)

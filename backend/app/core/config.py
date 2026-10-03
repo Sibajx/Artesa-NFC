@@ -77,6 +77,16 @@ class Settings(BaseSettings):
     # Comma-separated allowlist, compared case-insensitively. Access decides
     # who may sign in; this list decides who may use the admin API.
     admin_emails: str = ""
+    # ADR-030 roles. Both lists must be subsets of ADMIN_EMAILS; everyone in
+    # ADMIN_EMAILS is an editor. Custodians generate tokens and card keys,
+    # write tags and see certificates and NFC tags; designers design
+    # certificates. Custodians are also designers.
+    custodian_emails: str = ""
+    designer_emails: str = ""
+    # AUD tag of the separate Access application that guards the custody
+    # path (/api/admin/v1/custody). Optional: tokens of either application
+    # are accepted, the custodian role is still checked here.
+    custody_access_aud: str = ""
 
     # Gestión phase 4 (docs/MEDIA.md): absolute path of the media directory,
     # which holds originales/ (private, never served) and publico/ (the only
@@ -150,6 +160,16 @@ class Settings(BaseSettings):
             raise UnsafeConfigurationError("ADMIN_ACCESS_AUD must be the 64-hex-character AUD tag.")
         if any(not _EMAIL_RE.fullmatch(email) for email in self.admin_emails_list):
             raise UnsafeConfigurationError("ADMIN_EMAILS must be a comma-separated list of email addresses.")
+        admins = set(self.admin_emails_list)
+        for name, emails in (("CUSTODIAN_EMAILS", self.custodian_emails_list),
+                             ("DESIGNER_EMAILS", self.designer_emails_list)):
+            if any(not _EMAIL_RE.fullmatch(email) for email in emails):
+                raise UnsafeConfigurationError(f"{name} must be a comma-separated list of email addresses.")
+            if not set(emails) <= admins:
+                raise UnsafeConfigurationError(f"Every address in {name} must also be in ADMIN_EMAILS.")
+        self.custody_access_aud = self.custody_access_aud.strip().lower()
+        if self.custody_access_aud and not _ACCESS_AUD_RE.fullmatch(self.custody_access_aud):
+            raise UnsafeConfigurationError("CUSTODY_ACCESS_AUD must be the 64-hex-character AUD tag.")
 
     def _validate_media_root(self) -> None:
         self.media_root = self.media_root.strip()
@@ -183,6 +203,14 @@ class Settings(BaseSettings):
     @property
     def admin_emails_list(self) -> list[str]:
         return [email.strip().lower() for email in self.admin_emails.split(",") if email.strip()]
+
+    @property
+    def custodian_emails_list(self) -> list[str]:
+        return [email.strip().lower() for email in self.custodian_emails.split(",") if email.strip()]
+
+    @property
+    def designer_emails_list(self) -> list[str]:
+        return [email.strip().lower() for email in self.designer_emails.split(",") if email.strip()]
 
     @property
     def docs_enabled(self) -> bool:
