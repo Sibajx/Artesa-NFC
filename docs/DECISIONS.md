@@ -317,9 +317,8 @@ el Tunnel (paso humano).
 
 ## ADR-030 — Certificación v2: NFC con token, tarjeta rasca, Custodios y certificados diseñados
 
-**Estado:** **Propuesto**, pendiente de aprobación del PO. Modifica ADR-026
-(provisioning solo por CLI) y amplía ADR-029 (Gestión). Hasta aprobarlo no se
-programa nada de lo que describe.
+**Estado:** **Aceptado** (PO, 2026-10-02). Modifica ADR-026 (provisioning
+solo por CLI) y amplía ADR-029 (Gestión). Se implementa por fases.
 
 **Fecha:** 2026-10-02
 
@@ -355,17 +354,17 @@ programa nada de lo que describe.
    - **No** se graba ningún secreto en la pieza: quien la manipula lo vería
      y no se podría cambiar.
 2. **Clave de la tarjeta.**
-   - Aleatoria, unos 50 bits como mínimo. Formato a decidir por el PO: un
-     código Crockford base32 de 10 caracteres (`K7QM-4XHT-9R`) o tres
-     palabras con un número.
-   - Se guarda **solo su hash** (argon2id) y se muestra **una vez** al
-     Custodio, en la vista de impresión.
+   - Aleatoria, 50 bits. **Código** Crockford base32 de 10 caracteres
+     (`K7QM-4XHT-9R`), decisión del PO.
+   - Se guarda **solo su hash**, con `hashlib.scrypt` de la biblioteca
+     estándar y sal por clave, sin dependencias nuevas. Se muestra **una
+     vez** al Custodio, en la vista de impresión.
    - Desbloqueo con **límite de intentos** por certificado y por IP, espera
      progresiva, bloqueo temporal y evento en `audit_event`.
    - La respuesta a una clave incorrecta no distingue entre causas.
    - La tarjeta muestra el **código público** de la pieza (no secreto) y el
      dominio oficial.
-3. **Reclamar la pieza** (recomendado; si entra en v1 lo decide el PO).
+3. **Reclamar la pieza** (entra en v1, decisión del PO).
    - En el primer desbloqueo, el comprador puede registrar un correo o un
      PIN. Desde entonces la tarjeta sola ya no basta.
    - Transferir la pieza (reventa) y reponer una tarjeta perdida lo hace un
@@ -378,7 +377,8 @@ programa nada de lo que describe.
    - El rol se asigna por email (allowlists separadas en `shared/.env`).
    - El área de Custodia está en su propio prefijo de la API y tiene **una
      política propia en Cloudflare Access**, solo con los correos de los
-     Custodios y, si se puede, con una segunda verificación.
+     Custodios. Sin segunda verificación por ahora (decisión del PO).
+   - Custodio inicial: el PO (`armzsibaja@gmail.com`).
    - Un Editor que llame a esas rutas recibe 403, y el intento se audita.
 5. **Vincular tags con Web NFC.**
    - El Custodio abre la pieza en Gestión desde un **Android con Chrome** y
@@ -464,7 +464,7 @@ programa nada de lo que describe.
   forma del certificado genérico y del original), `SECURITY.md` (§2, §5,
   §6, §9, §12) y `PROVISIONING.md` (flujo con Web NFC; la CLI queda como
   respaldo).
-- **Dependencia nueva probable:** `argon2-cffi`, que requiere autorización.
+- **Sin dependencias nuevas:** `hashlib.scrypt` cubre el hash de la clave.
 - **Fases de implementación:**
   1. Roles y Custodia.
   2. Web NFC.
@@ -473,10 +473,10 @@ programa nada de lo que describe.
   5. Dashboard de diseño.
   6. Piloto.
 
-**Preguntas abiertas para el PO:**
+**Respuestas del PO (2026-10-02):**
 
-1. Correos de los Custodios.
-2. Formato de la clave.
-3. Si reclamar con correo entra en v1.
-4. Quién imprime las claves (se recomienda hacerlo en casa).
-5. Si se requiere una segunda verificación en Access para la Custodia.
+1. Custodio: `armzsibaja@gmail.com`.
+2. Clave: código.
+3. Reclamo con correo: sí, en v1.
+4. Las claves las imprime el equipo.
+5. Sin segunda verificación por ahora.
