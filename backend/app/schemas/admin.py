@@ -38,6 +38,12 @@ class CustodyPiece(BaseModel):
     tag_status: str | None
     tag_chip: str | None
     ready_to_certify: bool
+    # P-026 G6: what else the piece has, at a glance.
+    card_status: str | None = None
+    claimed: bool = False
+    design_status: str | None = None
+    sold: bool = False
+    reported_stolen: bool = False
 
 
 class AdminArtisanSummary(BaseModel):

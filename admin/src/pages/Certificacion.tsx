@@ -17,14 +17,22 @@ function nextStep(p: CustodyPiece): string {
   return 'Certificada y bloqueada';
 }
 
+const DESIGN_LABELS: Record<string, string> = {
+  draft: 'Diseño en borrador',
+  in_review: 'Diseño con el artesano',
+  approved: 'Diseño aprobado',
+  published: 'Diseño publicado',
+  superseded: 'Diseño anterior',
+};
+
 export default function Certificacion() {
   const state = useLoad('custody:pieces', (signal) => adminApi.custodyPieces(signal));
   return (
     <div className="max-w-6xl mx-auto pb-12">
       <PageHeader title="Certificación" subtitle="Área de Custodios: certificados, claves y etiquetas NFC de cada pieza." />
       <p className="mb-6 rounded-xl border border-botanica-jade/25 bg-botanica-jade/5 p-4 text-sm text-botanica-grafito">
-        Solo los Custodios ven esta sección. Abre una pieza para certificarla y grabar su chip desde un Android con Chrome
-        (ADR-030). La clave de la tarjeta del comprador llega en la siguiente fase.
+        Solo los Custodios ven esta sección. Abre una pieza para emitir su certificado, grabar el chip desde un Android con
+        Chrome, generar la tarjeta del comprador y, desde ahí, diseñar su certificado original.
       </p>
       <div className="bg-white rounded-xl border border-botanica-gris/20 overflow-hidden shadow-sm">
         {state.status === 'loading' && <Loading label="Cargando certificación..." />}
@@ -42,6 +50,7 @@ export default function Certificacion() {
                   <th scope="col" className="py-4 px-6 font-medium">Publicación</th>
                   <th scope="col" className="py-4 px-6 font-medium">Certificado</th>
                   <th scope="col" className="py-4 px-6 font-medium">Etiqueta NFC</th>
+                  <th scope="col" className="py-4 px-6 font-medium">Tarjeta y diseño</th>
                   <th scope="col" className="py-4 px-6 font-medium">Siguiente paso</th>
                 </tr>
               </thead>
@@ -63,6 +72,16 @@ export default function Certificacion() {
                       {p.tag_status
                         ? <Badge tone={p.tag_status === 'locked' ? 'jade' : 'neutral'}>{labels.nfc(p.tag_status)}</Badge>
                         : <span className="text-botanica-gris">Sin etiqueta</span>}
+                    </td>
+                    <td className="py-4 px-6">
+                      <div className="flex flex-wrap gap-1">
+                        {p.card_status
+                          ? <Badge tone={p.card_status === 'active' ? 'jade' : 'lavanda'}>{p.card_status === 'active' ? 'Tarjeta' : 'Tarjeta bloqueada'}{p.claimed ? ' · con dueño' : ''}</Badge>
+                          : <span className="text-xs text-botanica-gris">Sin tarjeta</span>}
+                        {p.design_status && <Badge tone={p.design_status === 'published' ? 'jade' : 'neutral'}>{DESIGN_LABELS[p.design_status] ?? p.design_status}</Badge>}
+                        {p.sold && <Badge tone="neutral">Vendida</Badge>}
+                        {p.reported_stolen && <Badge tone="lavanda">Robada</Badge>}
+                      </div>
                     </td>
                     <td className="py-4 px-6">
                       <Link to={`/certificacion/${p.id}`} className={p.ready_to_certify ? 'btn-primary !py-1.5 !px-3 text-xs' : 'text-botanica-grafito underline hover:text-botanica-jade'}>

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import uuid
 from collections import Counter
+from datetime import date, datetime, time, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import String, cast, func, or_, select
@@ -43,6 +44,9 @@ from app.schemas.media import media_asset_to_public
 from app.services import media as media_service
 from app.services import sales as sales_service
 from app.services import trash as trash_service
+
+# Mexico (Oaxaca): UTC-6, no daylight saving time since 2022.
+_LOCAL = timezone(timedelta(hours=-6))
 
 router = APIRouter(prefix="/api/admin/v1", tags=["admin"], dependencies=[Depends(require_admin)])
 
@@ -289,10 +293,26 @@ def get_piece(piece_id: uuid.UUID, db: Session = Depends(get_db),
     )
 
 
+@router.get("/summary")
+def summary(db: Session = Depends(get_db), identity: AdminIdentity = Depends(require_admin)) -> dict:
+    """P-026 G5/G8: what needs attention, shaped by the caller's roles."""
+    from dataclasses import asdict
+
+    from app.services import summary as summary_service
+
+    data = summary_service.build(db, identity)
+    return {k: asdict(v) if hasattr(v, "__dataclass_fields__") else v for k, v in data.items()}
+
+
 @router.get("/audit-events", response_model=ListEnvelope[AdminAuditEvent])
 def list_audit_events(
     entity_type: str | None = Query(default=None, max_length=50),
     entity_id: uuid.UUID | None = None,
+    # P-026 G7: filters for the Auditoría page.
+    action_prefix: str | None = Query(default=None, max_length=40, pattern=r"^[a-z_]+\.?[a-z_]*$"),
+    actor_email: str | None = Query(default=None, max_length=254),
+    since: date | None = None,
+    until: date | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     db: Session = Depends(get_db),
 ) -> ListEnvelope[AdminAuditEvent]:
@@ -301,6 +321,15 @@ def list_audit_events(
         stmt = stmt.where(AuditEvent.entity_type == entity_type)
     if entity_id is not None:
         stmt = stmt.where(AuditEvent.entity_id == entity_id)
+    if action_prefix:
+        stmt = stmt.where(AuditEvent.action.startswith(action_prefix, autoescape=True))
+    if actor_email:
+        stmt = stmt.where(func.lower(AuditEvent.actor_email) == actor_email.strip().lower())
+    # Dates are Mexico's local days (UTC-6, no DST since 2022).
+    if since is not None:
+        stmt = stmt.where(AuditEvent.occurred_at >= datetime.combine(since, time.min, _LOCAL))
+    if until is not None:
+        stmt = stmt.where(AuditEvent.occurred_at < datetime.combine(until + timedelta(days=1), time.min, _LOCAL))
     events = db.execute(stmt.order_by(AuditEvent.occurred_at.desc(), AuditEvent.id.asc()).limit(limit)).scalars().all()
     data = [
         AdminAuditEvent(
