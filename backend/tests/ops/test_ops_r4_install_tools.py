@@ -69,7 +69,8 @@ def test_tool_version_is_1_4_0():
     # 1.5.0 = ADR-029: shared/.env admin keys (ADMIN_ACCESS_*, ADMIN_EMAILS), all or none
     # 1.6.0 = Gestión phase 4: optional MEDIA_ROOT (absolute, with originales/ and publico/)
     # 1.7.0 = M3: artesa-backup copies the media originals off-host (backup_media.py)
-    assert rc.TOOL_VERSION == "1.7.0"
+    # 1.8.0 = B-032: artesa-backup puts the Finanzas SQLite in the bundle (backup_sqlite.py)
+    assert rc.TOOL_VERSION == "1.8.0"
     assert ad.target_tool_version(OPS_DIR) == rc.TOOL_VERSION
 
 

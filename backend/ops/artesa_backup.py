@@ -53,7 +53,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import backup_media as bm  # noqa: E402
+import backup_media as bm
+import backup_sqlite as bsq
 import backup_remote as br  # noqa: E402
 import deploy_db as ddb  # noqa: E402
 import deploy_layout as dl  # noqa: E402
@@ -178,6 +179,16 @@ def read_recipients(path: Path) -> list[str]:
     if recipients[0] == recipients[1]:
         raise rc.OpsError(rc.Exit.CONFIG, "K1 and K2 must be different recipients")
     return recipients
+
+
+def read_extra_sqlite(path: Path) -> Path | None:
+    """Optional ``FINANZAS_DB_PATH`` from backup.env (docs/BACKUP.md §17).
+    read_recipients() has already checked the file's type, mode and owner."""
+    try:
+        values = rp.parse_env_text(path.read_text(encoding="utf-8", errors="replace"))
+    except OSError:
+        return None
+    return bsq.configured_path(values)
 
 
 # --- state and log --------------------------------------------------------------------------------
@@ -326,6 +337,7 @@ class Tool:
             if removed:
                 self.ctx.say(f"removed {len(removed)} leftover staging director(y/ies) of an interrupted run (they could hold plaintext)")
             recipients = read_recipients(self.blayout.config)
+            finanzas_db = read_extra_sqlite(self.blayout.config)
             state["encryption"] = {"algorithm": "age", "recipients": recipients}
             self._check_age()
             remote_cfg, remote_error = self._remote_config()
@@ -347,7 +359,9 @@ class Tool:
             os.mkdir(staging, 0o700)
             self.log().event("run_start", backup_id=backup_id, release_id=current, git_sha=(commit or "")[:12] or None, alembic=db.revision)
             media_index = bm.index_document(originals, rc.utc_iso(self.ctx.clock())) if originals_dir is not None else None
-            result = self._pipeline(backup_id, staging, env, db, current, commit, release, recipients, media_index)
+            result = self._pipeline(backup_id, staging, env, db, current, commit, release, recipients, media_index,
+                                    finanzas_db=finanzas_db)
+            state["finanzas"] = result["finanzas"]
             staging = None
             state.update({"last_result": "success", "last_success_at": rc.utc_iso(self.ctx.clock()), "last_backup_id": backup_id,
                           "last_encrypted_sha256": result["encrypted_sha256"], "last_restore_check": result["restore_check"],
@@ -371,6 +385,8 @@ class Tool:
             self.ctx.say(f"BACKUP OK {backup_id}: encrypted to K1+K2 ({result['encrypted_size']} bytes, sha256 {result['encrypted_sha256'][:16]}...), "
                          f"restore-check PASS, no plaintext left")
             self._say_media(state["media"])
+            finanzas_ok = self._say_finanzas(state["finanzas"])
+            media_ok = media_ok and finanzas_ok
             if remote_cfg is None and remote_error is None:
                 self.ctx.say("OFFSITE: NOT CONFIGURED -- D10: INCOMPLETE (off-host copies are phase D10.2)")
                 return 0 if media_ok else int(rc.Exit.BACKUP)
@@ -379,7 +395,10 @@ class Tool:
                 return int(rc.Exit.BACKUP)
             self.ctx.say(f"OFFSITE: VERIFIED ({state['offsite']['provider']}, bucket {state['offsite']['bucket']}) -- D10: INCOMPLETE (recovery drills: D10.3)")
             if not media_ok:
-                self.ctx.say("MEDIA OFFSITE: FAILED -- the database backup is fine; the originals are retried on the next run")
+                if not finanzas_ok:
+                    self.ctx.say("FINANZAS: FAILED -- the ArtesaNFC backup is fine; the Finanzas copy is retried on the next run")
+                else:
+                    self.ctx.say("MEDIA OFFSITE: FAILED -- the database backup is fine; the originals are retried on the next run")
                 return int(rc.Exit.BACKUP)
             if remote_cfg is not None and remote_cfg.deadman_url:
                 pinged = br.ping_deadman(remote_cfg.deadman_url, transport=self.ctx.http, rehearsal=self.ctx.rehearsal)
@@ -539,6 +558,18 @@ class Tool:
             if staging.exists():
                 _remove_tree(staging)
 
+    def _say_finanzas(self, finanzas: dict) -> bool:
+        status = finanzas.get("status")
+        if status == "not-configured":
+            self.ctx.say("FINANZAS: NOT CONFIGURED (no FINANZAS_DB_PATH in backup.env)")
+            return True
+        if status == "included":
+            self.ctx.say(f"FINANZAS: included in the encrypted bundle ({finanzas.get('size', 0)} bytes, integrity ok, "
+                         f"{sum((finanzas.get('table_counts') or {}).values())} rows)")
+            return True
+        self.ctx.say(f"FINANZAS: FAILED ({finanzas.get('error', '?')})")
+        return False
+
     def _say_media(self, media: dict) -> None:
         status = media.get("status")
         if status == "not-configured":
@@ -594,7 +625,8 @@ class Tool:
             return None
 
     def _pipeline(self, backup_id: str, staging: Path, env: rp.EnvFile, db: ddb.DbState, current: str, commit: str | None,
-                  release: dict | None, recipients: list[str], media_index: dict | None = None) -> dict:
+                  release: dict | None, recipients: list[str], media_index: dict | None = None,
+                  finanzas_db: Path | None = None) -> dict:
         dump = staging / "database.dump"
         digest, dump_text = self._dump_under_deploy_lock(env, db, dump)
         size = os.stat(dump).st_size
@@ -610,6 +642,17 @@ class Tool:
                    "alembic_revision": report.alembic_revision, "counts_match": report.counts_match, "target_destroyed": report.cleanup_ok}
         if not report.ok:
             raise rc.OpsError(rc.Exit.BACKUP, "restore-check of the fresh dump failed (" + "; ".join(report.problems[:2]) + "); no backup was kept")
+        # §17: the Finanzas SQLite copy; a failure is reported, never fatal to the dump.
+        if finanzas_db is None:
+            finanzas = {"status": "not-configured"}
+        else:
+            try:
+                finanzas = {"status": "included",
+                            **bsq.snapshot(finanzas_db, staging / "finanzas.sqlite")}
+            except (bsq.SnapshotError, OSError) as exc:
+                (staging / "finanzas.sqlite").unlink(missing_ok=True)
+                message = str(exc) if isinstance(exc, bsq.SnapshotError) else f"cannot read the database ({type(exc).__name__})"
+                finanzas = {"status": "failed", "error": self.ctx.guard.scrub(message)[:200]}
         manifest = {
             "schema_version": MANIFEST_SCHEMA, "backup_id": backup_id, "created_at": rc.utc_iso(self.ctx.clock()), "hostname": self.ctx.hostname(),
             "backup_tool_version": rc.TOOL_VERSION,
@@ -623,6 +666,7 @@ class Tool:
             "remote": dict(self._remote_meta),
             "media": ({"index": bm.INDEX_NAME, **media_index["totals"]} if media_index is not None
                       else {"status": "not-configured (no MEDIA_ROOT)"}),
+            "finanzas": finanzas,
         }
         if media_index is not None:
             _write_private(staging / bm.INDEX_NAME, json.dumps(media_index, indent=2, sort_keys=True) + "\n")
@@ -659,7 +703,8 @@ class Tool:
         final = sorted(p.name for p in (self.blayout.encrypted / backup_id).iterdir())
         if leftovers or final != sorted([BUNDLE_NAME, META_NAME]):
             raise rc.OpsError(rc.Exit.INTERNAL, "plaintext check failed after the backup; inspect shared/backup/ by hand")
-        return {"encrypted_sha256": enc_sha, "encrypted_size": enc_size, "restore_check": restore}
+        return {"encrypted_sha256": enc_sha, "encrypted_size": enc_size, "restore_check": restore,
+                "finanzas": {k: v for k, v in finanzas.items() if k != "member"}}
 
     def _dump_under_deploy_lock(self, env: rp.EnvFile, db: ddb.DbState, dump: Path) -> tuple[str, str]:
         """The deploy lock is held only while pg_dump runs (seconds). Order is
@@ -697,6 +742,8 @@ class Tool:
         members = [(staging / "database.dump", "database.dump"), (staging / "manifest.json", "manifest.json")]
         if (staging / bm.INDEX_NAME).is_file():
             members.append((staging / bm.INDEX_NAME, bm.INDEX_NAME))
+        if (staging / "finanzas.sqlite").is_file():
+            members.append((staging / "finanzas.sqlite", bsq.MEMBER_NAME))
         for source, name in ((self.layout.release_dir(current) / "RELEASE.json", "recovery/RELEASE.json"),
                              (self.layout.bin / "TOOL.json", "recovery/TOOL.json"),
                              (self.layout.deploy_log, "recovery/deploy-log.jsonl")):
@@ -858,8 +905,11 @@ class Tool:
         media = report.get("media") if isinstance(report.get("media"), dict) else {"status": "not-configured"}
         if media.get("status") not in (None, "not-configured"):
             self._say_media(media)
+        finanzas = report.get("finanzas") if isinstance(report.get("finanzas"), dict) else {"status": "not-configured"}
+        if finanzas.get("status") not in (None, "not-configured"):
+            self._say_finanzas(finanzas)
         healthy = (not report["stale"] and not report.get("consecutive_failures") and not report["offsite_stale"]
-                   and media.get("status") != "failed")
+                   and media.get("status") != "failed" and finanzas.get("status") != "failed")
         return 0 if healthy else int(rc.Exit.PREFLIGHT)
 
     def cmd_remote_check(self, ping_deadman: bool) -> int:
