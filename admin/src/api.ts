@@ -139,6 +139,12 @@ export interface CustodyPiece {
   tag_status: 'available' | 'programmed' | 'locked' | null;
   tag_chip: string | null;
   ready_to_certify: boolean;
+  // P-026 G6.
+  card_status?: 'active' | 'blocked' | null;
+  claimed?: boolean;
+  design_status?: string | null;
+  sold?: boolean;
+  reported_stolen?: boolean;
 }
 
 export interface CustodyTag {
@@ -307,6 +313,27 @@ export interface SaleInput {
   note: string | null;
 }
 
+// P-026 G5/G8: what needs attention, shaped by role.
+export interface SummaryBucket {
+  count: number;
+  items: { id: string; name: string; detail: string | null }[];
+}
+
+export interface Summary {
+  published_artisans_without_authorization: SummaryBucket;
+  authorizations_waiting: SummaryBucket;
+  sales_last_30_days: { count: number; total_cents: number };
+  recent_answers: { at: string; text: string; link: string; positive: boolean }[];
+  designs_in_review?: SummaryBucket;
+  designs_to_publish?: SummaryBucket;
+  designs_with_changes_requested?: SummaryBucket;
+  published_without_certificate?: SummaryBucket;
+  certified_without_chip?: SummaryBucket;
+  certified_without_card?: SummaryBucket;
+  reported_stolen?: SummaryBucket;
+  cards_blocked_or_locked?: SummaryBucket;
+}
+
 export interface AuditEvent {
   id: string;
   occurred_at: string;
@@ -473,7 +500,9 @@ export const adminApi = {
   pieces: (params: { publication_status?: string; artisan_id?: string; q?: string; trashed?: string }, signal?: AbortSignal) =>
     get<ListEnvelope<PieceSummary>>('/pieces', params, signal),
   piece: (id: string, signal?: AbortSignal) => get<PieceDetail>(`/pieces/${encodeURIComponent(id)}`, undefined, signal),
-  auditEvents: (params: { entity_type?: string; entity_id?: string; limit?: string }, signal?: AbortSignal) =>
+  summary: (signal?: AbortSignal) => get<Summary>('/summary', undefined, signal),
+  auditEvents: (params: { entity_type?: string; entity_id?: string; limit?: string; action_prefix?: string;
+    actor_email?: string; since?: string; until?: string }, signal?: AbortSignal) =>
     get<ListEnvelope<AuditEvent>>('/audit-events', params, signal),
 
   createArtisan: (body: ArtisanInput) => request<ArtisanDetail>('POST', '/artisans', { body }),
