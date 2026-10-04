@@ -576,3 +576,20 @@ aditiva futura si una necesidad real de producto/auditoría lo justifica.
 otro punto no cubierto aquí pertenece explícitamente a otro documento
 (ver sección 0: `SECURITY.md`, `API_CONTRACT.md`, migración de datos
 legado) o a un ADR futuro (ownership, sección 3).
+
+## 16. Certificación v2 (ADR-030, 2026-10): tablas y campos añadidos
+
+Todas las migraciones son aditivas.
+
+| Tabla / campo | Migración | Contenido | Reglas |
+|---|---|---|---|
+| `piece.reported_stolen_at` | `91fd01294c1c` | Fecha en que un Custodio reportó la pieza como robada (nullable) | El chip sigue autenticando con un aviso; el original queda cerrado |
+| `piece.visual_theme.palette` / `palette_source` | (sin migración, JSONB de ADR-012) | De 3 a 5 colores `#rrggbb`; `auto` (sacados de la portada) o `manual` | La primera foto la llena sin cambiar `updated_at`; las ediciones de contenido nunca la tocan |
+| `ownership_card` | `91fd01294c1c` | Tarjeta del comprador: `key_hash` (scrypt con sal), `status` (`active`/`blocked`/`replaced`), `failed_attempts`, `locked_until`, fechas | Una sola tarjeta vigente (`active` o `blocked`) por pieza; las reemplazadas se conservan |
+| `piece_claim` | `91fd01294c1c` | Reclamo del dueño: `owner_email`, `pin_hash` (scrypt), `status` (`active`/`released`), fechas | Un solo reclamo activo por pieza |
+| `certificate_design` | `ea1e402ecf26` | Versiones del certificado original: `version`, `status`, `template`, `params` (JSONB), `review_token_hash` (SHA-256) y su caducidad, `change_request`, datos de aprobación (quién, cómo, nota, quién la registró) y de publicación | `UNIQUE (piece_id, version)`; como máximo una versión abierta (`draft`/`in_review`/`approved`) y una publicada por pieza; las aprobadas y publicadas no se editan; solo las abiertas se pueden descartar |
+
+Ninguna de estas tablas guarda un secreto en claro: la clave de la tarjeta,
+el PIN y el token de revisión existen solo como hash. El correo del dueño es
+dato personal: solo lo ven los Custodios, la API pública lo muestra
+enmascarado y nunca entra en `audit_event`.

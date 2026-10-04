@@ -809,7 +809,7 @@ antes.
 | `POST /designs/{id}/submit` | Lo pasa a revisión. **Única respuesta con `review_url`**, válido 14 días |
 | `POST /designs/{id}/approve` `{name, medium, note}` | Registra a mano la aprobación del artesano |
 | `POST /designs/{id}/publish` | Solo para un diseño aprobado; el publicado anterior pasa a `superseded` |
-| `POST /designs/{id}/discard` | Borra un borrador |
+| `POST /designs/{id}/discard` | Borra una versión abierta: borrador, en revisión o aprobada sin publicar (la aprobación queda en la auditoría). Una versión publicada o reemplazada no se borra (`409 design_frozen`) |
 
 - Todas las escrituras usan `If-Match` y quedan auditadas como `design.*`.
 - `params`: `template` (`clasico` \| `greca` \| `constelacion`), `variant` (`claro` \| `oscuro`), `title`, `piece_name`, `artisan_name`, `public_code`, `quote` (hasta 240 caracteres), `palette` (de 3 a 5 colores) y `seed`.

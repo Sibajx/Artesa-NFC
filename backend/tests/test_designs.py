@@ -166,3 +166,36 @@ def test_review_endpoints_have_the_body_limit_and_no_store(client):
     big = client.post("/api/v1/design-reviews/decision", content=b'{"token":"' + b"a" * 2000 + b'"}',
                       headers={"content-type": "application/json"})
     assert big.status_code == 413
+
+
+def test_an_approved_unpublished_design_can_be_discarded_to_start_again(client, db_session):
+    piece = published_piece(client)
+    d = new_design(client, piece)
+    d = act(client, d, "approve", {"name": "Rigoberto", "medium": "en persona", "note": "Lo vio en el taller"}).json()
+    assert d["status"] == "approved"
+    assert new_design_conflict(client, piece) == "open_design_exists"
+    assert act(client, d, "discard").status_code == 204
+    again = new_design(client, piece)
+    assert again["version"] == 1 and again["status"] == "draft"
+    event = db_session.execute(select(AuditEvent).where(AuditEvent.action == "design.discarded")).scalars().one()
+    assert event.event_metadata["status"] == "approved" and event.event_metadata["approved_by"] == "Rigoberto"
+    # A published version is history: it cannot be discarded.
+    again = act(client, again, "approve", {"name": "Rigoberto", "medium": "whatsapp", "note": "Mandó un audio"}).json()
+    published = act(client, again, "publish").json()
+    assert act(client, published, "discard").json()["error"]["code"] == "design_frozen"
+
+
+def new_design_conflict(client, piece) -> str:
+    return client.post(f"/api/admin/v1/pieces/{piece['id']}/designs", json={}, headers=CH()).json()["error"]["code"]
+
+
+def test_the_approval_date_is_mexico_local_time(client):
+    from datetime import datetime, timezone
+    piece = published_piece(client)
+    d = new_design(client, piece)
+    d = act(client, d, "approve", {"name": "Rigoberto", "medium": "en persona", "note": "Lo vio en el taller"}).json()
+    design = designs.CertificateDesign(params=d["params"], version=1, status=designs.DesignStatus.approved,
+                                       approved_at=datetime(2026, 10, 5, 3, 0, tzinfo=timezone.utc),
+                                       approved_by_name="Rigoberto")
+    # 03:00 UTC on the 5th is still the 4th in Oaxaca (UTC-6).
+    assert "04/10/2026" in designs.svg(design)

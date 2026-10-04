@@ -72,7 +72,7 @@ export default function PiezaDetalle() {
               <>
             <section aria-labelledby="cert-heading">
               <h2 id="cert-heading" className="text-2xl font-serif text-botanica-negro mb-2">Certificados</h2>
-              <p className="text-sm text-botanica-gris mb-4">Solo consulta. Emitir, reemplazar o revocar se hace con la CLI de provisioning (ADR-026).</p>
+              <p className="text-sm text-botanica-gris mb-4">Solo consulta. Emitir, reemplazar o revocar se hace en <Link to={`/certificacion/${p.id}`} className="underline text-botanica-jade">Certificación</Link>.</p>
               <div className="bg-white border border-botanica-gris/15 rounded-xl overflow-hidden shadow-sm">
                 {p.certificates.length === 0 ? (
                   <p className="p-8 text-center text-botanica-gris">Sin certificado emitido.</p>
@@ -103,7 +103,7 @@ export default function PiezaDetalle() {
 
             <section aria-labelledby="nfc-heading">
               <h2 id="nfc-heading" className="text-2xl font-serif text-botanica-negro mb-2">Etiquetas NFC</h2>
-              <p className="text-sm text-botanica-gris mb-4">Solo consulta. Programar y bloquear etiquetas se hace con la CLI de provisioning.</p>
+              <p className="text-sm text-botanica-gris mb-4">Solo consulta. Grabar y bloquear chips se hace en <Link to={`/certificacion/${p.id}`} className="underline text-botanica-jade">Certificación</Link>.</p>
               <div className="bg-white border border-botanica-gris/15 rounded-xl overflow-hidden shadow-sm">
                 {p.nfc_tags.length === 0 ? (
                   <p className="p-8 text-center text-botanica-gris">Sin etiqueta asignada.</p>

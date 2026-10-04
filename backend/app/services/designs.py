@@ -9,7 +9,7 @@ from __future__ import annotations
 import hashlib
 import secrets
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import func, select
@@ -28,6 +28,8 @@ APPROVAL_MEDIA = ("enlace", "en persona", "whatsapp", "llamada", "otro")
 OPEN = (DesignStatus.draft, DesignStatus.in_review, DesignStatus.approved)
 _REVIEW_PATH = "/revision/#"
 _REHEARSAL_REVIEW_BASE = "http://127.0.0.1:5500" + _REVIEW_PATH
+# Mexico (Oaxaca) has no daylight saving time since 2022: a fixed UTC-6.
+_LOCAL = timezone(timedelta(hours=-6), "CST")
 TEXT_LIMITS = {"title": 60, "piece_name": 120, "artisan_name": 120, "quote": 240, "public_code": 32}
 
 
@@ -95,7 +97,8 @@ def defaults(db: Session, piece: Piece) -> dict[str, Any]:
 
 
 def svg(design: CertificateDesign) -> str:
-    approved_on = design.approved_at.strftime("%d/%m/%Y") if design.approved_at else None
+    # The date printed on the certificate is the artisan's local date.
+    approved_on = design.approved_at.astimezone(_LOCAL).strftime("%d/%m/%Y") if design.approved_at else None
     watermark = None if design.status in (DesignStatus.approved, DesignStatus.published, DesignStatus.superseded) \
         else ("EN REVISIÓN" if design.status == DesignStatus.in_review else "BORRADOR")
     return renderer.render(design.params, version=design.version, approved_by=design.approved_by_name,
@@ -238,11 +241,16 @@ def publish(db: Session, actor: Actor, design_id: uuid.UUID, expected: datetime)
 
 
 def discard(db: Session, actor: Actor, design_id: uuid.UUID, expected: datetime) -> None:
-    """Deletes a draft that was never approved (nothing was frozen)."""
+    """Deletes a version nobody has seen as the certificate yet: a draft, one
+    under review, or one approved but never published (to start again). A
+    published or superseded version is history and stays. An approval that
+    is discarded remains in the audit trail."""
     design = _locked(db, design_id, expected)
-    if design.status not in (DesignStatus.draft, DesignStatus.in_review):
-        raise ContentConflict("design_frozen", "Only a draft can be discarded.")
-    _audit(db, actor=actor, design=design, action="discarded")
+    if design.status not in OPEN:
+        raise ContentConflict("design_frozen", "A published version cannot be discarded.")
+    _audit(db, actor=actor, design=design, action="discarded", metadata={
+        "status": design.status.value, "approved_by": design.approved_by_name,
+        "approval_medium": design.approval_medium})
     db.delete(design)
     db.commit()
 

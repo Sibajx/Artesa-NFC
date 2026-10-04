@@ -25,6 +25,13 @@ en español. Los subcomandos y los códigos siguen en inglés: `list`, `status`,
 >
 > Los casos de tarjeta perdida o robada, PIN olvidado, venta y robo de la pieza
 > están en la misma sección y piden una nota con la prueba revisada.
+>
+> **Chips compatibles (B-031, 2026-10-04):** los chips del piloto son clones
+> NTAG213 (NFC Forum Type 2, 137 bytes, se pueden grabar y bloquear) cuyo UID
+> empieza con `53`, no con `04` (NXP). Desde Gestión, donde el teléfono lee el
+> UID, se acepta cualquier UID de 7 bytes y el byte de fabricante se registra
+> en `custody.issued`. Esta CLI, donde el UID se teclea, conserva la regla del
+> `04` para atrapar errores de dedo.
 
 ## 1. Alcance y prerrequisitos
 
