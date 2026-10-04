@@ -159,6 +159,14 @@ function OriginalView({
       aria-labelledby="original-open-title"
       data-state="original-open"
     >
+      {data.design && (
+        <img
+          className="original__design"
+          src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(data.design.svg)}`}
+          alt={`Certificado original de ${piece.name}, versión ${data.design.version} del diseño`}
+          data-state="original-design"
+        />
+      )}
       <div className="original__card">
         <p className="certificate__seal">
           <span aria-hidden="true">✓</span> Certificado original

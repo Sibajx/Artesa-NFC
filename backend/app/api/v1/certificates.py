@@ -24,10 +24,11 @@ from app.schemas.certificate import (
     CertificateResolveUnavailable,
     CertificateUnlockRefused,
     CertificateUnlockRequest,
+    OriginalDesignPublic,
     OwnershipPublic,
 )
 from app.schemas.piece import piece_to_public
-from app.services import ownership
+from app.services import designs, ownership
 from app.services.certificates import hash_certificate_token, is_syntactically_plausible_token
 
 router = APIRouter(prefix="/certificates", tags=["certificates"])
@@ -144,7 +145,11 @@ def _too_many(exc: ownership.TooManyAttempts) -> HTTPException:
 def _original(db: Session, outcome: ownership.UnlockOutcome) -> CertificateOriginal:
     claim = outcome.claim
     db.refresh(outcome.card)
+    design = designs.published(db, outcome.certificate.piece_id)
     return CertificateOriginal(
+        design=OriginalDesignPublic(version=design.version, svg=designs.svg(design),
+                                    approved_by_name=design.approved_by_name, approved_at=design.approved_at)
+        if design else None,
         **_public_parts(db, outcome.certificate),
         ownership=OwnershipPublic(
             claimed=claim is not None,

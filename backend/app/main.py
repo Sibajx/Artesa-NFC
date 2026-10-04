@@ -5,6 +5,8 @@ from starlette.datastructures import Headers, MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.api.admin.custody import router as admin_custody_router
+from app.api.admin.designs import reads as admin_designs_reads
+from app.api.admin.designs import writes as admin_designs_writes
 from app.api.admin.custody import writes_router as admin_custody_writes_router
 from app.api.admin.media import router as admin_media_router
 from app.api.admin.media import upload_router as admin_upload_router
@@ -25,6 +27,9 @@ _CERTIFICATE_POST_PATHS = frozenset({
     _RESOLVE_PATH,
     "/api/v1/certificates/unlock",
     "/api/v1/certificates/claim",
+    # ADR-030 phase 5: the artisan's review link carries its token in the body.
+    "/api/v1/design-reviews/resolve",
+    "/api/v1/design-reviews/decision",
 })
 
 # The only body certificates/resolve accepts is {"token": "<43 chars>"}
@@ -183,6 +188,10 @@ app.include_router(api_v1_router)
 app.include_router(admin_router)
 app.include_router(admin_custody_router)
 app.include_router(admin_custody_writes_router)
+# ADR-030 phase 5. Before the content writes: POST /pieces/{id}/designs would
+# otherwise match their /pieces/{id}/{action} transition route.
+app.include_router(admin_designs_reads)
+app.include_router(admin_designs_writes)
 # Before the writes: POST /{owner}/{id}/media would otherwise match their
 # /{owner}/{id}/{action} transition route and fail as an unknown action.
 app.include_router(admin_upload_router)
