@@ -23,6 +23,7 @@ interface Values {
   description: string;
   history: string;
   availability_status: string;
+  price: string;
 }
 
 const AVAILABILITY = ['available', 'reserved', 'exhibited', 'archived'];
@@ -36,6 +37,7 @@ function fromDetail(p: PieceDetail): Values {
     creation_year: p.creation_year ? String(p.creation_year) : '',
     height_cm: num(d.alto_cm), width_cm: num(d.ancho_cm), depth_cm: num(d.profundidad_cm),
     description: p.description ?? '', history: p.history ?? '', availability_status: p.availability_status,
+    price: p.price_cents === null || p.price_cents === undefined ? '' : (p.price_cents / 100).toFixed(2),
   };
 }
 
@@ -46,6 +48,14 @@ function dimensions(v: Values): Record<string, number> | null {
     if (raw.trim() && Number.isFinite(n) && n > 0) out[key] = n;
   }
   return Object.keys(out).length ? out : null;
+}
+
+// "$1,250.50" or "1250,5" -> 125050 cents; blank -> null.
+function priceCents(raw: string): number | null {
+  const cleaned = raw.replace(/[$\s]/g, '').replace(/,(?=\d{3}(\D|$))/g, '').replace(',', '.');
+  if (!cleaned) return null;
+  const n = Number(cleaned);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : null;
 }
 
 function toInput(v: Values, isDraft: boolean, isNew: boolean): PieceInput {
@@ -63,6 +73,7 @@ function toInput(v: Values, isDraft: boolean, isNew: boolean): PieceInput {
     description: blankToNull(v.description),
     history: blankToNull(v.history),
     ...(isNew ? { availability_status: v.availability_status } : {}),
+    price_cents: priceCents(v.price),
   };
 }
 
@@ -124,6 +135,8 @@ function Form({ initial, existing, artisans }: { initial: Values; existing?: Pie
           <TextInput id="materials" label="Materiales" value={values.materials} onChange={set('materials')} hint="Separados por comas." error={fieldError('materials')} />
           <TextInput id="origin" label="Origen" value={values.origin} onChange={set('origin')} />
           <TextInput id="creation_year" label="Año de creación" type="number" value={values.creation_year} onChange={set('creation_year')} error={fieldError('creation_year')} />
+          <TextInput id="price" label="Precio de lista (MXN)" value={values.price} onChange={set('price')} error={fieldError('price_cents')}
+            hint="Solo se ve en Gestión. Ej. 3500 o 3,500.00" />
         </div>
         <div className="grid grid-cols-3 gap-4">
           <TextInput id="height_cm" label="Alto (cm)" value={values.height_cm} onChange={set('height_cm')} />
@@ -165,7 +178,7 @@ export default function PiezaForm() {
         ) : (
           <Form
             initial={{ artisan_id: preselected, name: '', public_code: '', slug: '', technique: '', materials: '', origin: '',
-              creation_year: '', height_cm: '', width_cm: '', depth_cm: '', description: '', history: '', availability_status: 'available' }}
+              creation_year: '', height_cm: '', width_cm: '', depth_cm: '', description: '', history: '', availability_status: 'available', price: '' }}
             artisans={state.data.artisans}
           />
         )

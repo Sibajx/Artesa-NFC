@@ -70,6 +70,7 @@ const AVAILABILITY_LABELS: Readonly<Record<string, string>> = {
   reserved: "Reservada",
   exhibited: "En exhibición",
   archived: "Pieza de archivo",
+  sold: "Vendida",
 };
 
 // Unknown future enum values are ignored safely (API_CONTRACT.md §13).
