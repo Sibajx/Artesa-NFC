@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 
 from app.api.admin import router as reads
 from app.api.deps import get_db
+from app.models.artisan import Artisan
 from app.core.access import AdminIdentity, require_admin
 from app.schemas.admin import AdminArtisanDetail, AdminPieceDetail
 from app.schemas.admin_write import (
@@ -204,6 +205,59 @@ def set_availability(piece_id: uuid.UUID, body: AvailabilityBody, expected: date
     except ContentError as exc:
         raise _fail(exc) from None
     return reads.get_piece(piece_id, db, who.identity)
+
+
+# P-026 G3: the artisan's authorization to publish. Declared before the
+# generic /artisans/{id}/{action} transition.
+class AuthorizationNote(BaseModel):
+    note: str = Field(min_length=5, max_length=500)
+
+
+class AuthorizationLink(BaseModel):
+    """The only response that carries the authorization link (shown once)."""
+    url: str
+    whatsapp: str | None
+    contact_name: str | None
+    artisan_name: str
+
+
+@router.post("/artisans/{artisan_id}/authorization/request", response_model=AuthorizationLink)
+def request_authorization(artisan_id: uuid.UUID, who: Actor = Depends(actor),
+                          db: Session = Depends(get_db)) -> AuthorizationLink:
+    from app.services import authorizations
+
+    try:
+        _row, token = authorizations.request(db, who, artisan_id)
+    except ContentError as exc:
+        raise _fail(exc) from None
+    artisan = db.get(Artisan, artisan_id)
+    return AuthorizationLink(url=authorizations.link(token), whatsapp=artisan.validation_whatsapp,
+                             contact_name=artisan.validation_contact_name,
+                             artisan_name=artisan.artistic_name or artisan.full_name)
+
+
+@router.post("/artisans/{artisan_id}/authorization/record", response_model=AdminArtisanDetail)
+def record_authorization(artisan_id: uuid.UUID, body: AuthorizationNote, who: Actor = Depends(actor),
+                         db: Session = Depends(get_db)) -> AdminArtisanDetail:
+    from app.services import authorizations
+
+    try:
+        authorizations.record_in_person(db, who, artisan_id, body.note)
+    except ContentError as exc:
+        raise _fail(exc) from None
+    return reads.get_artisan(artisan_id, db, who.identity)
+
+
+@router.post("/artisans/{artisan_id}/authorization/revoke", response_model=AdminArtisanDetail)
+def revoke_authorization(artisan_id: uuid.UUID, body: AuthorizationNote, who: Actor = Depends(actor),
+                         db: Session = Depends(get_db)) -> AdminArtisanDetail:
+    from app.services import authorizations
+
+    try:
+        authorizations.revoke(db, who, artisan_id, body.note)
+    except ContentError as exc:
+        raise _fail(exc) from None
+    return reads.get_artisan(artisan_id, db, who.identity)
 
 
 # P-026 G1. Declared before the generic /{action} transition.

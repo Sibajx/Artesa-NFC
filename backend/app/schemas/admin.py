@@ -75,6 +75,18 @@ class AdminMedia(BaseModel):
     deletable: bool = False
 
 
+class AdminAuthorization(BaseModel):
+    """P-026 G3: the artisan's current authorization request or grant."""
+    id: uuid.UUID
+    status: str
+    medium: str
+    requested_by: str
+    created_at: datetime
+    expires_at: datetime | None
+    decided_at: datetime | None
+    note: str | None
+
+
 class AdminArtisanDetail(BaseModel):
     id: uuid.UUID
     slug: str
@@ -90,6 +102,10 @@ class AdminArtisanDetail(BaseModel):
     history: str | None
     techniques: list | None
     public_contact: dict | None
+    # P-026 G3: private validation contact and the authorization to publish.
+    validation_whatsapp: str | None = None
+    validation_contact_name: str | None = None
+    authorization: AdminAuthorization | None = None
     publication_status: str
     created_at: datetime
     updated_at: datetime

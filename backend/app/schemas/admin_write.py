@@ -5,6 +5,7 @@ change. Text is trimmed; an empty optional text becomes null.
 """
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import date
 from typing import Annotated, Literal
@@ -48,10 +49,27 @@ class ArtisanFields(_Body):
     history: LongText | None = None
     techniques: list[Tag] | None = Field(default=None, max_length=20)
     public_contact: dict[Tag, ShortText] | None = Field(default=None, max_length=10)
+    # P-026 G3: private; where approval and authorization links are sent.
+    validation_whatsapp: str | None = Field(default=None, max_length=30)
+    validation_contact_name: ShortText | None = None
 
     _blank = field_validator(
-        "artistic_name", "locality", "municipality", "state", "country", "biography", "history", mode="before"
+        "artistic_name", "locality", "municipality", "state", "country", "biography", "history",
+        "validation_contact_name", mode="before"
     )(_blank_to_none)
+
+    @field_validator("validation_whatsapp", mode="before")
+    @classmethod
+    def _whatsapp(cls, value):
+        """Digits with country code; a 10-digit Mexican number gets 52."""
+        if value is None or not str(value).strip():
+            return None
+        digits = re.sub(r"\D", "", str(value))
+        if len(digits) == 10:
+            digits = "52" + digits
+        if not 11 <= len(digits) <= 15:
+            raise ValueError("Escribe el WhatsApp con lada, por ejemplo 951 123 4567.")
+        return digits
 
 
 class ArtisanCreate(ArtisanFields):

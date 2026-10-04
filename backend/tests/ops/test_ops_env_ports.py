@@ -23,7 +23,9 @@ def test_only_the_variables_the_app_reads_are_loaded_and_the_rest_are_names_only
     assert set(env.values) == {"APP_ENV", "DATABASE_URL", "DEBUG", "CORS_ALLOWED_ORIGINS"}
     assert set(rp.ALLOWED_ENV_KEYS) == {"APP_ENV", "DATABASE_URL", "DEBUG", "CORS_ALLOWED_ORIGINS",
                                         "ADMIN_ACCESS_TEAM_DOMAIN", "ADMIN_ACCESS_AUD", "ADMIN_EMAILS", "MEDIA_ROOT",
-                                        "CUSTODIAN_EMAILS", "DESIGNER_EMAILS", "CUSTODY_ACCESS_AUD"}
+                                        "CUSTODIAN_EMAILS", "DESIGNER_EMAILS", "CUSTODY_ACCESS_AUD",
+                                        "OWNER_EMAILS", "ACCESS_SYNC_API_TOKEN", "ACCESS_SYNC_ACCOUNT_ID",
+                                        "ACCESS_SYNC_GROUP_ID"}
     assert env.ignored_keys == ["CLOUDFLARE_API_TOKEN", "SECRET_KEY"]
     for secret in (DATABASE_URL, CANARY_PASSWORD, CANARY_OTHER, "another-secret-value-123"):
         assert secret in env.guard._values  # guarded even though the app never receives them

@@ -213,6 +213,25 @@ la guarda de escritura de ADR-029) usa los mismos servicios de provisioning:
     del artesano. Se acota con la caducidad y con la auditoría (IP y fecha).
     Además, publicar sigue siendo una acción de un Diseñador.
 
+**Actualización P-026 (2026-10, cuentas y autorización del artesano):**
+
+- **Cuentas:** solo el dueño (`OWNER_EMAILS`, fijo en `.env`) las da de alta,
+  les cambia el rol o las quita, y cada cambio queda en la auditoría.
+  - Una cuenta nueva solo entra si además pasa Cloudflare Access: Gestión
+    agrega el correo a un grupo de Access, si está configurado, o el dueño lo
+    hace a mano.
+  - Quitar una cuenta corta el acceso en Gestión de inmediato, aunque falle la
+    sincronización con Cloudflare.
+  - El token de Cloudflare (`ACCESS_SYNC_API_TOKEN`) debe limitarse a
+    "Access: Groups Edit". Nunca se registra ni se devuelve.
+- **Autorización del artesano:** el enlace de WhatsApp sigue las mismas reglas
+  que el de revisión del diseño (token de 256 bits en el fragmento, SHA-256,
+  14 días, respuesta uniforme).
+  - Se guarda una copia exacta de lo que se le mostró.
+  - El número de WhatsApp es dato personal: solo en Gestión, y en la
+    auditoría solo consta que cambió.
+
+
 ## 3. Hash y verificación del token
 
 `DATA_MODEL.md` §2.3 deja deliberadamente el algoritmo exacto para este

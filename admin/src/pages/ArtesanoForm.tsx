@@ -23,11 +23,14 @@ interface Values {
   history: string;
   contact_phone: string;
   contact_email: string;
+  validation_whatsapp: string;
+  validation_contact_name: string;
 }
 
 const EMPTY: Values = {
   full_name: '', artistic_name: '', slug: '', locality: '', municipality: '', state: 'Oaxaca', country: 'México',
   languages: '', languages_public: false, techniques: '', biography: '', history: '', contact_phone: '', contact_email: '',
+  validation_whatsapp: '', validation_contact_name: '',
 };
 
 function fromDetail(a: ArtisanDetail): Values {
@@ -38,6 +41,7 @@ function fromDetail(a: ArtisanDetail): Values {
     languages: (a.languages ?? []).join(', '), languages_public: a.languages_public,
     techniques: (a.techniques ?? []).join(', '), biography: a.biography ?? '', history: a.history ?? '',
     contact_phone: String(contact.telefono ?? ''), contact_email: String(contact.email ?? ''),
+    validation_whatsapp: a.validation_whatsapp ?? '', validation_contact_name: a.validation_contact_name ?? '',
   };
 }
 
@@ -59,6 +63,8 @@ function toInput(v: Values, isDraft: boolean): ArtisanInput {
     biography: blankToNull(v.biography),
     history: blankToNull(v.history),
     public_contact: Object.keys(contact).length ? contact : null,
+    validation_whatsapp: blankToNull(v.validation_whatsapp),
+    validation_contact_name: blankToNull(v.validation_contact_name),
   };
 }
 
@@ -115,6 +121,18 @@ function Form({ initial, existing }: { initial: Values; existing?: ArtisanDetail
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <TextInput id="contact_phone" label="Teléfono" value={values.contact_phone} onChange={set('contact_phone')} />
           <TextInput id="contact_email" label="Email" value={values.contact_email} onChange={set('contact_email')} />
+        </div>
+      </Section>
+      <Section title="WhatsApp para aprobaciones (no se publica)">
+        <p className="text-sm text-botanica-grafito">
+          A este número se mandan los enlaces para que el artesano autorice su publicación y apruebe sus certificados.
+          Si no usa WhatsApp, pon el de un familiar de confianza que le enseñe el enlace.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <TextInput id="validation_whatsapp" label="WhatsApp" value={values.validation_whatsapp} onChange={set('validation_whatsapp')}
+            hint="Con lada, por ejemplo 951 123 4567." error={fieldError('validation_whatsapp')} />
+          <TextInput id="validation_contact_name" label="Si es de otra persona: su nombre" value={values.validation_contact_name}
+            onChange={set('validation_contact_name')} hint="Ej. Juana, su hija. Déjalo vacío si es del artesano." />
         </div>
       </Section>
       <div className="flex gap-4">

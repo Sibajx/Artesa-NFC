@@ -21,6 +21,7 @@ import type {
   ArtisanSummary,
   CertificateAuthentic,
   CertificateOriginal,
+  ArtisanAuthorizationOpen,
   DesignReviewOpen,
   ListEnvelope,
   Piece,
@@ -57,6 +58,11 @@ export type UnlockResult =
   | { readonly kind: "refused"; readonly result: "invalid" | "pin_required" | "reported_stolen" }
   | { readonly kind: "locked"; readonly retryAfter: number | null }
   | { readonly kind: "rejected"; readonly code: string }
+  | { readonly kind: "error"; readonly reason: UnavailableReason };
+
+export type AuthorizationResult =
+  | { readonly kind: "open"; readonly data: ArtisanAuthorizationOpen }
+  | { readonly kind: "unavailable" }
   | { readonly kind: "error"; readonly reason: UnavailableReason };
 
 export type ReviewResult =
@@ -243,6 +249,27 @@ export function createApiClient(options: ApiClientOptions = {}) {
       if (isRecord(payload) && payload.status === "unavailable") return { kind: "unavailable" };
       return { kind: "error", reason: "malformed" };
     },
+    resolveAuthorization: (token: string) => resolveAuthorizationImpl(token),
+    async decideAuthorization(
+      token: string,
+      decision: "authorize" | "decline",
+      comment: string | null,
+    ): Promise<"recorded" | "unavailable" | "error"> {
+      const response = await postJson("/artisan-authorizations/decision", {
+        token,
+        decision,
+        comment,
+      });
+      if (typeof response === "string" || !response.ok) return "error";
+      const payload = await readJson(response);
+      if (
+        isRecord(payload) &&
+        (payload.status === "recorded" || payload.status === "unavailable")
+      ) {
+        return payload.status;
+      }
+      return "error";
+    },
     async decideReview(
       token: string,
       decision: "approve" | "changes",
@@ -260,6 +287,19 @@ export function createApiClient(options: ApiClientOptions = {}) {
       return "error";
     },
   };
+
+  // P-026 G3: the artisan's authorization link. Token in the body only.
+  async function resolveAuthorizationImpl(token: string): Promise<AuthorizationResult> {
+    const response = await postJson("/artisan-authorizations/resolve", { token });
+    if (typeof response === "string") return { kind: "error", reason: response };
+    if (!response.ok) return { kind: "error", reason: reasonForStatus(response.status) };
+    const payload = await readJson(response);
+    if (isRecord(payload) && payload.status === "open" && isString(payload.full_name)) {
+      return { kind: "open", data: payload as unknown as ArtisanAuthorizationOpen };
+    }
+    if (isRecord(payload) && payload.status === "unavailable") return { kind: "unavailable" };
+    return { kind: "error", reason: "malformed" };
+  }
 
   function postJson(path: string, body: Record<string, unknown>) {
     return send(path, {

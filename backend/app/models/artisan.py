@@ -28,6 +28,12 @@ class Artisan(Base):
     history: Mapped[str | None] = mapped_column(Text)
     techniques: Mapped[list | None] = mapped_column(JSONB)
     public_contact: Mapped[dict | None] = mapped_column(JSONB)
+    # P-026 G3: where validation links go (design approval, authorization to
+    # publish). Private, Gestión only: digits with country code, e.g.
+    # 5219511234567. ``validation_contact_name`` when it is a trusted person
+    # (a relative) who shows the link to the artisan.
+    validation_whatsapp: Mapped[str | None] = mapped_column(Text)
+    validation_contact_name: Mapped[str | None] = mapped_column(Text)
     publication_status: Mapped[PublicationStatus] = mapped_column(
         publication_status_enum,
         nullable=False,

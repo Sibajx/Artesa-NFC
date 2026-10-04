@@ -75,6 +75,7 @@ const CONFLICT_TEXT: Record<string, string> = {
   draft_only: 'Ese dato solo se puede cambiar mientras el registro está en borrador.',
   invalid_transition: 'Esa acción no aplica al estado actual del registro.',
   incomplete: 'Faltan datos obligatorios para publicar.',
+  authorization_missing: 'El artesano todavía no autoriza su publicación. Pídela por WhatsApp en la sección "Autorización para publicar".',
   has_published_pieces: 'Primero pasa a borrador o archiva las piezas publicadas de este artesano.',
   active_certificate: 'La pieza tiene un certificado activo. Revócalo en Certificación antes de archivarla.',
   unknown_artisan: 'El artesano seleccionado no existe.',
