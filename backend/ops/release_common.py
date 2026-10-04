@@ -21,7 +21,7 @@ from enum import IntEnum
 from pathlib import PurePosixPath
 
 PROJECT = "artesa-nfc"
-TOOL_VERSION = "1.7.0"
+TOOL_VERSION = "1.8.0"
 BUILDER_VERSION = "3"  # 3: git.tag removed from RELEASE.json (reproducibility)
 RELEASE_SCHEMA_VERSION = 1
 # built_at_utc follows the SOURCE_DATE_EPOCH convention so the same commit
