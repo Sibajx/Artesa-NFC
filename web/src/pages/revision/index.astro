@@ -1,0 +1,23 @@
+---
+// /revision/#{token} — the artisan reviews the design of a certificate
+// (ADR-030 phase 5). The token lives in the URL fragment: it never reaches
+// a server log; the island sends it only in the POST body to the API.
+import "@/styles/islands.css";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import NoScript from "@/components/ui/NoScript.astro";
+import DesignReview from "@/components/islands/DesignReview";
+---
+
+<BaseLayout
+  title="Revisión del certificado"
+  description="Revisión del diseño de un certificado por su artesano."
+  noindex
+  privateRoute
+>
+  <div class="container page-top review-page">
+    <NoScript>
+      Para revisar el certificado necesitas JavaScript habilitado en tu navegador.
+    </NoScript>
+    <DesignReview client:only="react" />
+  </div>
+</BaseLayout>

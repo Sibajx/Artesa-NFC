@@ -5,11 +5,13 @@ import { useState } from 'react';
 import { useLoad } from '../hooks';
 import { MediaSection } from '../MediaSection';
 import { PaletteSection } from '../PaletteSection';
+import { useRoles } from '../roles-context';
 import { PublishChecklist } from '../PublishChecklist';
 import { RecordActions } from '../RecordActions';
 import { Badge, ErrorState, Field, Loading, PublicationBadge } from '../ui';
 
 export default function PiezaDetalle() {
+  const roles = useRoles();
   const { id = '' } = useParams<{ id: string }>();
   const [revision, setRevision] = useState(0);
   const state = useLoad(`piece:${id}:${revision}`, (signal) => adminApi.piece(id, signal));
@@ -133,6 +135,16 @@ export default function PiezaDetalle() {
               ownerArchived={p.publication_status === 'archived'} onChanged={() => setRevision((r) => r + 1)} />
 
             <PaletteSection key={p.updated_at} piece={p} onChanged={() => setRevision((r) => r + 1)} />
+
+            {roles.includes('designer') && (
+              <section className="card-elevated p-5 sm:p-6 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-serif text-botanica-negro">Certificado original</h2>
+                  <p className="text-sm text-botanica-grafito">El diseño que ve el dueño con su tarjeta, aprobado por el artesano.</p>
+                </div>
+                <Link to={`/diseno/${p.id}`} className="btn-primary">Diseñar</Link>
+              </section>
+            )}
           </div>
         );
       })()}

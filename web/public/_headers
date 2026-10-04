@@ -33,3 +33,10 @@ https://staging.artesanfc.com/*
 
 https://:project.pages.dev/*
   X-Robots-Tag: noindex, nofollow
+
+# Artisan review of a certificate design (/revision/#token, ADR-030 phase 5).
+# The token lives in the fragment; the page is still private and uncached.
+/revision/*
+  Cache-Control: no-store
+  X-Robots-Tag: noindex, nofollow
+  Referrer-Policy: no-referrer

@@ -790,6 +790,30 @@ antes.
   - ambas quedan auditadas como `piece.palette_set`.
 - La web (`/c/{token}`) muestra la franja de colores y usa el color más saturado como acento. Si la paleta no tiene la forma esperada, se ignora y la página usa los colores del sitio.
 
+### 7.3 Certificado original diseñado (ADR-030 fase 5)
+
+- **Al abrir el original:** `POST /api/v1/certificates/unlock` y `/claim` añaden `design: {version, svg, approved_by_name, approved_at} | null`, el diseño publicado de la pieza. El SVG lo dibuja la API, con los textos escapados, sin referencias externas ni scripts. La web lo muestra dentro de un `<img>`.
+- **Enlace de revisión del artesano:** la web lo abre en `/revision/#<token>`, con el token en el fragmento, así que nunca llega a un log.
+  - `POST /api/v1/design-reviews/resolve` `{"token"}` → `{"status": "open", piece_name, artisan_name, version, expires_at, svg}` o `{"status": "unavailable"}`. Es la misma respuesta para un token desconocido, vencido o ya decidido.
+  - `POST /api/v1/design-reviews/decision` `{"token", "decision": "approve" | "changes", "comment"?}` → `{"status": "recorded" | "unavailable"}`.
+  - Las dos rutas comparten con `resolve` el límite de 1 KB y `no-store`.
+- **API de Gestión** (rol Diseñador; los Custodios también lo tienen; los Editores reciben 403):
+
+| Ruta | Qué hace |
+|---|---|
+| `GET /pieces/{id}/designs` | Lista las versiones |
+| `GET /designs/{id}` | Una versión, con su SVG |
+| `POST /designs/preview` `{params, version}` | Dibuja el SVG sin guardar nada |
+| `POST /pieces/{id}/designs` | Crea un borrador; copia la última versión (`409 open_design_exists` si ya hay una abierta) |
+| `PATCH /designs/{id}` `{params}` | Edita un borrador; si estaba en revisión, el enlace deja de servir (`409 design_frozen` si ya está aprobado) |
+| `POST /designs/{id}/submit` | Lo pasa a revisión. **Única respuesta con `review_url`**, válido 14 días |
+| `POST /designs/{id}/approve` `{name, medium, note}` | Registra a mano la aprobación del artesano |
+| `POST /designs/{id}/publish` | Solo para un diseño aprobado; el publicado anterior pasa a `superseded` |
+| `POST /designs/{id}/discard` | Borra un borrador |
+
+- Todas las escrituras usan `If-Match` y quedan auditadas como `design.*`.
+- `params`: `template` (`clasico` \| `greca` \| `constelacion`), `variant` (`claro` \| `oscuro`), `title`, `piece_name`, `artisan_name`, `public_code`, `quote` (hasta 240 caracteres), `palette` (de 3 a 5 colores) y `seed`.
+
 ### 14.1 Fase 1 de Gestión (ADR-029, 2026-09-28)
 
 El texto anterior de esta sección se conserva como historia. Desde ADR-029:
