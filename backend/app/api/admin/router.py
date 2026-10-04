@@ -34,11 +34,13 @@ from app.schemas.admin import (
     AdminMedia,
     AdminNfcTag,
     AdminPieceDetail,
+    AdminSale,
     AdminPieceSummary,
 )
 from app.schemas.common import ListEnvelope, ListMeta
 from app.schemas.media import media_asset_to_public
 from app.services import media as media_service
+from app.services import sales as sales_service
 from app.services import trash as trash_service
 
 router = APIRouter(prefix="/api/admin/v1", tags=["admin"], dependencies=[Depends(require_admin)])
@@ -223,8 +225,12 @@ def get_piece(piece_id: uuid.UUID, db: Session = Depends(get_db),
         creation_date=piece.creation_date,
         dimensions=piece.dimensions,
         visual_theme=piece.visual_theme,
+        price_cents=piece.price_cents,
+        price_currency=piece.price_currency,
         availability_status=piece.availability_status.value,
         publication_status=piece.publication_status.value,
+        sales=[AdminSale(**{f: getattr(s, f) for f in AdminSale.model_fields if f != "status"}, status=s.status.value)
+               for s in sales_service.sales_of(db, piece.id)],
         publicly_visible=(
             piece.publication_status == PublicationStatus.published
             and artisan.publication_status == PublicationStatus.published

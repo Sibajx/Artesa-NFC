@@ -188,6 +188,10 @@ export interface PieceDetail {
   creation_year: number | null;
   creation_date: string | null;
   dimensions: Record<string, unknown> | null;
+  // P-026: list price in cents (Gestión only) and every sale, newest first.
+  price_cents?: number | null;
+  price_currency?: string;
+  sales?: Sale[];
   // ADR-030 phase 4: { palette: string[], palette_source: 'auto' | 'manual' } and any other keys.
   visual_theme: Record<string, unknown> | null;
   availability_status: string;
@@ -239,6 +243,36 @@ export interface Design {
   published_at: string | null;
   published_by: string | null;
   svg?: string;
+}
+
+// P-026 G1: the sale of a piece.
+export interface Sale {
+  id: string;
+  status: 'active' | 'cancelled';
+  sold_on: string;
+  price_cents: number;
+  currency: string;
+  channel: 'taller' | 'tienda' | 'en_linea' | 'feria' | 'otro';
+  sold_by: string;
+  buyer_name: string | null;
+  buyer_contact: string | null;
+  note: string | null;
+  recorded_by: string;
+  created_at: string;
+  cancelled_at: string | null;
+  cancel_reason: string | null;
+  cancelled_by: string | null;
+}
+
+export interface SaleInput {
+  sold_on: string;
+  price_cents: number;
+  currency: string;
+  channel: Sale['channel'];
+  sold_by: string;
+  buyer_name: string | null;
+  buyer_contact: string | null;
+  note: string | null;
 }
 
 export interface AuditEvent {
@@ -379,6 +413,8 @@ export interface PieceInput {
   creation_year?: number | null;
   dimensions?: Record<string, number | string> | null;
   availability_status?: string;
+  price_cents?: number | null;
+  price_currency?: string;
 }
 
 export const adminApi = {
@@ -440,6 +476,10 @@ export const adminApi = {
     request<Design>('POST', `/designs/${encodeURIComponent(id)}/publish`, { body: {}, version }),
   discardDesign: (id: string, version: string) =>
     request<void>('POST', `/designs/${encodeURIComponent(id)}/discard`, { body: {}, version }),
+  registerSale: (id: string, body: SaleInput, version: string) =>
+    request<PieceDetail>('POST', `/pieces/${encodeURIComponent(id)}/sale`, { body, version }),
+  cancelSale: (id: string, reason: string, version: string) =>
+    request<PieceDetail>('POST', `/pieces/${encodeURIComponent(id)}/sale/cancel`, { body: { reason }, version }),
   generatePalette: (id: string, version: string) =>
     request<PieceDetail>('POST', `/pieces/${encodeURIComponent(id)}/palette/generate`, { body: {}, version }),
   setPalette: (id: string, colors: string[], version: string) =>

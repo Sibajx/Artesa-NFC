@@ -157,7 +157,10 @@ export function RecordActions({ kind, id, version, status, availability, trashed
           <button type="button" disabled={busy} onClick={() => void toTrash()}
             className="btn-secondary text-red-700 border-red-200 hover:bg-red-50">Mover a la papelera</button>
         )}
-        {kind === 'pieces' && availability && status !== 'archived' && (
+        {kind === 'pieces' && availability === 'sold' && (
+          <p className="ml-auto text-sm text-botanica-grafito">Disponibilidad: <strong>Vendida</strong> (se cambia cancelando la venta)</p>
+        )}
+        {kind === 'pieces' && availability && availability !== 'sold' && status !== 'archived' && (
           <label className="flex items-center gap-2 text-sm text-botanica-grafito ml-auto">
             Disponibilidad
             <select value={availability} disabled={busy}

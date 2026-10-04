@@ -4,7 +4,7 @@ import enum
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Enum, ForeignKey, SmallInteger, Text, func
+from sqlalchemy import CheckConstraint, Date, DateTime, Enum, ForeignKey, Integer, SmallInteger, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -17,10 +17,15 @@ class AvailabilityStatus(str, enum.Enum):
     reserved = "reserved"
     exhibited = "exhibited"
     archived = "archived"
+    # P-026 G1: only set by registering a sale (services/sales.py).
+    sold = "sold"
 
 
 class Piece(Base):
     __tablename__ = "piece"
+    __table_args__ = (
+        CheckConstraint("price_cents IS NULL OR price_cents >= 0", name="ck_piece_price_cents"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     slug: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
@@ -66,6 +71,10 @@ class Piece(Base):
     # still proves it is authentic, with a visible warning; unlocking the
     # original certificate is refused while it is set.
     reported_stolen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # P-026 G2: list price, Gestión only (never in the public API). Cents, so
+    # sums never drift.
+    price_cents: Mapped[int | None] = mapped_column(Integer)
+    price_currency: Mapped[str] = mapped_column(Text, nullable=False, server_default="MXN", default="MXN")
 
     artisan: Mapped["Artisan"] = relationship(back_populates="pieces")
     media_assets: Mapped[list["MediaAsset"]] = relationship(back_populates="piece")

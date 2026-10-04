@@ -32,6 +32,10 @@
     "ea1e402ecf26": {
       "class": "additive",
       "note": "Creates certificate_design (enum type, partial unique indexes) for the designed original certificate (ADR-030 phase 5). Older code never reads or writes it."
+    },
+    "e22db92223f2": {
+      "class": "additive",
+      "note": "Creates sale (enum type, partial unique index, checks), adds nullable piece.price_cents, piece.price_currency (default MXN) with a check, and the 'sold' value of piece_availability_status (P-026). Only the new code writes 'sold'."
     }
   }
 }

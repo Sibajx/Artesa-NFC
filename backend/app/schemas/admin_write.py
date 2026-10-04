@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
@@ -76,6 +76,9 @@ class PieceFields(_Body):
     creation_year: int | None = Field(default=None, ge=1000, le=2100)
     creation_date: date | None = None
     dimensions: dict[Tag, float | ShortText] | None = Field(default=None, max_length=10)
+    # P-026 G2: list price in cents, Gestión only.
+    price_cents: int | None = Field(default=None, ge=0, le=10_000_000_000)
+    price_currency: Literal["MXN", "USD"] | None = None
 
     _blank = field_validator("description", "history", "technique", "origin", mode="before")(_blank_to_none)
 
@@ -124,3 +127,23 @@ def provided(body: BaseModel, *, never_null: tuple[str, ...] = ()) -> dict:
     may not be cleared are dropped when sent as null."""
     data = body.model_dump(include=body.model_fields_set)
     return {k: v for k, v in data.items() if not (k in never_null and v is None)}
+
+
+# --- P-026 G1: sales -----------------------------------------------------------------
+
+
+class SaleBody(_Body):
+    sold_on: date
+    price_cents: int = Field(ge=0, le=10_000_000_000)
+    currency: Literal["MXN", "USD"] = "MXN"
+    channel: Literal["taller", "tienda", "en_linea", "feria", "otro"]
+    sold_by: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
+    buyer_name: Annotated[str, StringConstraints(strip_whitespace=True, max_length=120)] | None = None
+    buyer_contact: Annotated[str, StringConstraints(strip_whitespace=True, max_length=120)] | None = None
+    note: Annotated[str, StringConstraints(strip_whitespace=True, max_length=500)] | None = None
+
+    _blank = field_validator("buyer_name", "buyer_contact", "note", mode="before")(_blank_to_none)
+
+
+class SaleCancelBody(_Body):
+    reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=5, max_length=500)]

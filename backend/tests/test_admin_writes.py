@@ -196,9 +196,13 @@ def test_availability_change_is_audited(client, db_session):
                     headers=H(**{"If-Match": piece["updated_at"]}))
     assert r.status_code == 200 and r.json()["availability_status"] == "exhibited"
     assert audit_actions(db_session, piece["id"]) == ["piece.created", "piece.availability_changed"]
-    bad = client.post(f"/api/admin/v1/pieces/{piece['id']}/availability", json={"availability_status": "sold"},
+    bad = client.post(f"/api/admin/v1/pieces/{piece['id']}/availability", json={"availability_status": "vendida"},
                       headers=H(**{"If-Match": r.json()["updated_at"]}))
     assert bad.status_code == 422
+    # "sold" exists (P-026) but only a registered sale sets it.
+    sold = client.post(f"/api/admin/v1/pieces/{piece['id']}/availability", json={"availability_status": "sold"},
+                       headers=H(**{"If-Match": r.json()["updated_at"]}))
+    assert sold.status_code == 409 and sold.json()["error"]["code"] == "use_sale"
 
 
 # --- request guard --------------------------------------------------------------------
