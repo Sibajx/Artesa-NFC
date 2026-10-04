@@ -87,6 +87,15 @@ class OwnershipPublic(BaseModel):
     card_issued_at: datetime
 
 
+class OriginalDesignPublic(BaseModel):
+    """ADR-030 phase 5: the published design, drawn as SVG."""
+
+    version: int
+    svg: str
+    approved_by_name: str | None
+    approved_at: datetime | None
+
+
 class CertificateOriginal(BaseModel):
     result: Literal["unlocked"] = "unlocked"
     authenticity: AuthenticityAuthentic
@@ -94,3 +103,4 @@ class CertificateOriginal(BaseModel):
     artisan: ArtisanPublic
     authenticity_metadata: AuthenticityMetadataPublic
     ownership: OwnershipPublic
+    design: OriginalDesignPublic | None = None

@@ -28,6 +28,10 @@
     "91fd01294c1c": {
       "class": "additive",
       "note": "Creates ownership_card and piece_claim (enum types, partial unique indexes) and adds nullable piece.reported_stolen_at (ADR-030 phase 3). Older code never reads or writes them."
+    },
+    "ea1e402ecf26": {
+      "class": "additive",
+      "note": "Creates certificate_design (enum type, partial unique indexes) for the designed original certificate (ADR-030 phase 5). Older code never reads or writes it."
     }
   }
 }
