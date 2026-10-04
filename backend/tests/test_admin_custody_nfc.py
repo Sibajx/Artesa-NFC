@@ -86,8 +86,8 @@ def test_rules_and_validation(client):
     assert r.status_code == 409 and r.json()["error"]["code"] == "piece_not_published"
 
     piece = published_piece(client)
-    bad = post(client, piece, "issue", {"uid": "05:A1:B2:C3:D4:E5:F6"})
-    assert bad.status_code == 422 and bad.json()["error"]["code"] == "uid_not_nxp"
+    bad = post(client, piece, "issue", {"uid": "05:A1:B2:C3:D4:E5"})
+    assert bad.status_code == 422 and bad.json()["error"]["code"] == "uid_wrong_length"
     assert post(client, piece, "rotate", {"reason": "nope"}).json()["error"]["code"] in ("no_active_certificate", "invalid_reason")
     post(client, piece, "issue", {"uid": UID})
     again = post(client, piece, "issue", {"uid": OTHER_UID})
@@ -102,3 +102,27 @@ def test_only_custodians_with_the_write_guard(client):
                            headers={ACCESS_JWT_HEADER: make_token(email=CUSTODIAN_EMAIL)})
     assert no_guard.status_code == 403
     assert client.get(f"/api/admin/v1/custody/pieces/{piece['id']}/state", headers=auth(make_token())).status_code == 403
+
+
+def test_compatible_ntag213_clone_is_accepted_from_web_nfc(client, db_session):
+    """B-031: the chips the team bought are NTAG213-compatible clones whose
+    UID does not start with 04 (NXP). The phone reads the UID from the chip,
+    so Gestión accepts any 7-byte UID; the typed CLI path stays strict."""
+    clone = "53:44:9e:14:24:00:01"
+    piece = published_piece(client)
+    issued = post(client, piece, "issue", {"uid": clone})
+    assert issued.status_code == 200, issued.text
+    assert issued.json()["uid"] == "53:44:9E:14:24:00:01"
+    ok = post(client, piece, "program", {"tag_id": issued.json()["tag_id"], "uid": clone})
+    assert ok.status_code == 200 and [t["status"] for t in ok.json()["tags"]] == ["programmed"]
+    assert post(client, piece, "lock", {"uid": clone}).status_code == 200
+    event = db_session.execute(select(AuditEvent).where(AuditEvent.action == "custody.issued")).scalars().one()
+    assert event.event_metadata["manufacturer_byte"] == "53"
+
+    from app.services.nfc_tags import InvalidPhysicalUid, normalize_physical_uid
+    try:
+        normalize_physical_uid(clone)
+    except InvalidPhysicalUid as exc:
+        assert exc.reason == "not_nxp"
+    else:
+        raise AssertionError("the CLI path must still require 04")

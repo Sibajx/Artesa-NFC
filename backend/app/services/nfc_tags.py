@@ -176,7 +176,7 @@ def _reject_state(stale: bool, tag: NfcTag, invalid: NfcTagServiceError) -> None
     raise invalid
 
 
-def normalize_physical_uid(raw: str) -> str:
+def normalize_physical_uid(raw: str, *, any_manufacturer: bool = False) -> str:
     """Canonical `nfc_tag.physical_uid`: upper-case hex bytes joined by ':',
     e.g. `04:A1:B2:C3:D4:E5:F6` (the shape NFC apps display and the suite's
     fixtures already use).
@@ -186,6 +186,10 @@ def normalize_physical_uid(raw: str) -> str:
     a mistakenly pasted token or URL out of the column, since neither can be
     14 hex digits. The UID is inventory metadata, never a credential
     (SECURITY.md section 6); the strictness is about typos, not secrecy.
+
+    ``any_manufacturer`` (ADR-030, Web NFC): the phone read the UID from the
+    chip itself, so a typo is impossible and the 0x04 (NXP) rule only blocks
+    compatible NTAG213 clones (B-031: UID 53:...). The 7-byte length stays.
     """
     if not isinstance(raw, str):
         raise InvalidPhysicalUid("physical_uid must be text.", reason="not_hex")
@@ -198,12 +202,13 @@ def normalize_physical_uid(raw: str) -> str:
         raise InvalidPhysicalUid("The UID must contain only hexadecimal digits.", reason="not_hex")
     if len(compact) != _UID_BYTES * 2:
         raise InvalidPhysicalUid(f"The UID must be {_UID_BYTES} bytes.", reason="wrong_length")
-    if not compact.startswith(_UID_MANUFACTURER_BYTE):
+    if not any_manufacturer and not compact.startswith(_UID_MANUFACTURER_BYTE):
         raise InvalidPhysicalUid("An NTAG213 UID starts with 04.", reason="not_nxp")
     return ":".join(compact[i : i + 2] for i in range(0, len(compact), 2))
 
 
-def register_nfc_tag(db: Session, *, physical_uid: str, notes: str | None = None) -> NfcTag:
+def register_nfc_tag(db: Session, *, physical_uid: str, notes: str | None = None,
+                     any_manufacturer: bool = False) -> NfcTag:
     """Create an unassigned `available` NTAG213 tag with a normalized UID.
 
     Registration is inventory only: no piece, no `programmed_at`, no lock. A
@@ -212,7 +217,7 @@ def register_nfc_tag(db: Session, *, physical_uid: str, notes: str | None = None
     lookup and backed by the UNIQUE constraint for a concurrent duplicate. The
     caller owns the commit.
     """
-    uid = normalize_physical_uid(physical_uid)
+    uid = normalize_physical_uid(physical_uid, any_manufacturer=any_manufacturer)
 
     def _already_registered() -> NfcTagUidAlreadyRegistered:
         return NfcTagUidAlreadyRegistered("An NFC tag with this physical UID is already registered.")
