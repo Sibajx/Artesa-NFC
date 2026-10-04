@@ -825,6 +825,27 @@ antes.
   - el detalle de la pieza trae `price_cents`, `price_currency` y `sales` (de la más reciente a la más antigua).
 - **Auditoría:** `piece.sold` y `piece.sale_cancelled`, sin los datos del comprador.
 
+### 7.5 Autorización del artesano y cuentas (P-026 G3/G4)
+
+- **Enlace de autorización:** la web lo abre en `/autorizacion/#<token>`, con el token en el fragmento.
+  - `POST /api/v1/artisan-authorizations/resolve` `{"token"}` → `{"status": "open", full_name, artistic_name, place, biography, portrait, expires_at}` o `{"status": "unavailable"}`.
+  - `POST /api/v1/artisan-authorizations/decision` `{"token", "decision": "authorize" | "decline", "comment"?}` → `{"status": "recorded" | "unavailable"}`.
+  - Las dos rutas tienen el límite de 1 KB y `no-store`.
+- **API de Gestión, autorización:**
+  - `POST /artisans/{id}/authorization/request` → `{url, whatsapp, contact_name, artisan_name}`. Es la única respuesta con el enlace; vale 14 días y reemplaza al pendiente;
+  - `POST /artisans/{id}/authorization/record` `{note}`, cuando el artesano autorizó en persona;
+  - `POST /artisans/{id}/authorization/revoke` `{note}`;
+  - el detalle del artesano trae `validation_whatsapp`, `validation_contact_name` y `authorization`;
+  - publicar sin autorización responde `409 authorization_missing`.
+- **API de Gestión, cuentas** (solo el dueño; los demás reciben 403):
+  - `GET /accounts`;
+  - `POST /accounts` `{email, role, note?}`;
+  - `POST /accounts/{email}/role` `{role}`;
+  - `POST /accounts/{email}/remove`;
+  - `POST /accounts/sync`.
+
+  Todas responden `{data, cloudflare, sync_configured}`, donde `cloudflare` es `synced`, `not_configured`, `unchanged` o el texto del error. Las cuentas de `ADMIN_EMAILS` aparecen como fijas (`409 fixed_account`).
+
 ### 14.1 Fase 1 de Gestión (ADR-029, 2026-09-28)
 
 El texto anterior de esta sección se conserva como historia. Desde ADR-029:

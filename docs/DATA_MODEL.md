@@ -603,3 +603,13 @@ Migración `e22db92223f2`, aditiva.
 | `piece.price_cents`, `piece.price_currency` | Precio de lista en centavos (MXN o USD) | Solo en Gestión; la API pública nunca lo expone |
 | `piece.availability_status = 'sold'` | Pieza vendida | Solo lo pone una venta registrada; solo se quita cancelando la venta |
 | `sale` | `sold_on`, `price_cents`, `currency`, `channel` (`taller`/`tienda`/`en_linea`/`feria`/`otro`), `sold_by`, `buyer_name`/`buyer_contact` (opcionales, datos personales), `note`, `status` (`active`/`cancelled`), quién la registró o canceló y el motivo | Una venta activa por pieza; las canceladas quedan como historial; una pieza con ventas no se puede eliminar; los datos del comprador no entran en `audit_event` |
+
+## 18. Cuentas de Gestión y autorización del artesano (P-026 G3/G4, 2026-10)
+
+Migración `dcea9092a406`, aditiva.
+
+| Tabla / campo | Contenido | Reglas |
+|---|---|---|
+| `admin_account` | Correo (en minúsculas), `role` (`editor`/`designer`/`custodian`), `active`, nota, quién la dio de alta o de baja y cuándo | La administra solo el dueño (`OWNER_EMAILS`) desde Gestión → Usuarios. Se suma a `ADMIN_EMAILS`, que queda fijo. Una baja deja la fila con `active = false` |
+| `artisan.validation_whatsapp`, `artisan.validation_contact_name` | Número (dígitos con lada de país) al que se mandan los enlaces de autorización y de aprobación de diseños; nombre de la persona de confianza, si no es el artesano | Privado: solo en Gestión; en la auditoría solo consta que cambió |
+| `artisan_authorization` | `status` (`pending`/`authorized`/`declined`/`revoked`), `medium` (`whatsapp`/`en persona`), `snapshot` (lo que se le mostró), `token_hash` (SHA-256) y su caducidad, fecha e IP de la respuesta, nota | Como máximo una abierta (`pending` o `authorized`) por artesano. Publicar un artesano exige una autorizada (`409 authorization_missing`) |

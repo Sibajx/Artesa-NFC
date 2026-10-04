@@ -13,12 +13,15 @@ The token is never logged or echoed.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import lru_cache
 
 import jwt
 from fastapi import Depends, HTTPException, Request
+from sqlalchemy.orm import Session
 
+from app.api.deps import get_db
 from app.api.v1.common import not_found
 from app.core.config import get_settings
 
@@ -43,7 +46,9 @@ AUTH_UNAVAILABLE_ERROR = {
 }
 
 
-EDITOR, DESIGNER, CUSTODIAN = "editor", "designer", "custodian"
+EDITOR, DESIGNER, CUSTODIAN, OWNER = "editor", "designer", "custodian", "owner"
+# Roles an account can be given from Gestión (the owner is fixed in .env).
+ASSIGNABLE_ROLES = (EDITOR, DESIGNER, CUSTODIAN)
 
 
 @dataclass(frozen=True)
@@ -78,13 +83,16 @@ class AccessVerifier:
         custodians: tuple[str, ...] = (),
         designers: tuple[str, ...] = (),
         extra_audiences: tuple[str, ...] = (),
+        owners: tuple[str, ...] = (),
     ) -> None:
         self.issuer = f"https://{team_domain}"
         # The custody path may sit behind its own Access application: its
         # tokens carry that application's AUD (ADR-030).
         self.audience = [audience, *[a for a in extra_audiences if a]]
         self.allowed_emails = frozenset(email.lower() for email in allowed_emails)
-        self.custodians = frozenset(email.lower() for email in custodians)
+        # The owner is also a custodian (and so a designer).
+        self.owners = frozenset(email.lower() for email in owners)
+        self.custodians = frozenset(email.lower() for email in custodians) | self.owners
         self.designers = frozenset(email.lower() for email in designers) | self.custodians
         self._jwks = jwks_client or jwt.PyJWKClient(
             f"{self.issuer}/cdn-cgi/access/certs",
@@ -94,7 +102,10 @@ class AccessVerifier:
             headers={"User-Agent": "artesanfc-admin-api"},
         )
 
-    def verify(self, token: str) -> AdminIdentity:
+    def verify(self, token: str, accounts: Callable[[str], frozenset[str] | None] | None = None) -> AdminIdentity:
+        """``accounts`` (P-026 G4): the roles of an account managed from
+        Gestión, or None. An email must be in ADMIN_EMAILS or be an active
+        account; the roles are the union of both."""
         try:
             signing_key = self._jwks.get_signing_key_from_jwt(token)
         except jwt.PyJWKClientConnectionError:
@@ -117,24 +128,31 @@ class AccessVerifier:
             raise AccessDenied(401) from None
 
         email = claims.get("email")
-        if not isinstance(email, str) or email.strip().lower() not in self.allowed_emails:
+        if not isinstance(email, str):
             raise AccessDenied(403)
         email = email.strip().lower()
-        roles = {EDITOR}
+        managed = accounts(email) if accounts else None
+        if email not in self.allowed_emails and managed is None:
+            raise AccessDenied(403)
+        roles = {EDITOR, *(managed or ())}
         if email in self.designers:
             roles.add(DESIGNER)
         if email in self.custodians:
             roles.add(CUSTODIAN)
+        if CUSTODIAN in roles:
+            roles.add(DESIGNER)
+        if email in self.owners:
+            roles.add(OWNER)
         return AdminIdentity(email=email, roles=frozenset(roles))
 
 
 @lru_cache
 def _verifier_for(team_domain: str, audience: str, allowed_emails: tuple[str, ...],
                   custodians: tuple[str, ...], designers: tuple[str, ...],
-                  extra_audiences: tuple[str, ...]) -> AccessVerifier:
+                  extra_audiences: tuple[str, ...], owners: tuple[str, ...] = ()) -> AccessVerifier:
     # One verifier (and one key cache) per configuration for the process.
     return AccessVerifier(team_domain, audience, allowed_emails, custodians=custodians,
-                          designers=designers, extra_audiences=extra_audiences)
+                          designers=designers, extra_audiences=extra_audiences, owners=owners)
 
 
 def get_access_verifier() -> AccessVerifier | None:
@@ -149,12 +167,14 @@ def get_access_verifier() -> AccessVerifier | None:
         tuple(settings.custodian_emails_list),
         tuple(settings.designer_emails_list),
         (settings.custody_access_aud,) if settings.custody_access_aud else (),
+        tuple(settings.owner_emails_list),
     )
 
 
 def require_admin(
     request: Request,
     verifier: AccessVerifier | None = Depends(get_access_verifier),
+    db: Session = Depends(get_db),
 ) -> AdminIdentity:
     if verifier is None:
         # Not configured: the same 404 body as a route that does not exist.
@@ -163,7 +183,10 @@ def require_admin(
     if not token:
         raise HTTPException(status_code=401, detail=UNAUTHENTICATED_ERROR)
     try:
-        return verifier.verify(token)
+        # Imported here: the accounts service imports models, which import config.
+        from app.services import admin_accounts
+
+        return verifier.verify(token, accounts=lambda email: admin_accounts.roles_for(db, email))
     except AccessUnavailable:
         raise HTTPException(status_code=503, detail=AUTH_UNAVAILABLE_ERROR) from None
     except AccessDenied as exc:

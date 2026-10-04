@@ -29,7 +29,7 @@ src/
 │   ├── ui/         SiteHeader, SiteFooter, ResponsivePicture, NoScript
 │   └── islands/    PieceGallery, PieceDetail, PieceViewer, PassportPanel,
 │                   ArtisanList, ArtisanDetail, CertificateView (+ estados compartidos)
-├── pages/          /, /piezas/, /artesanos/, /c/, /revision/, /shell/pieza/, /shell/artesano/, 404
+├── pages/          /, /piezas/, /artesanos/, /c/, /revision/, /autorizacion/, /shell/pieza/, /shell/artesano/, 404
 ├── scripts/site.ts header dinámico y reveal (mejora progresiva)
 └── styles/         global.css (tokens), islands.css
 public/             _redirects, _headers, robots.txt, favicon, media/placeholders/
@@ -45,6 +45,7 @@ public/             _redirects, _headers, robots.txt, favicon, media/placeholder
 | `/artesanos/`, `/artesanos/{slug}` | lista / `/shell/artesano/`  | Igual que piezas                                                                               |
 | `/c/{token}`                       | `/c/` (rewrite)             | Ruta privada existente (Issue #72); no se creó otra                                            |
 | `/revision/#{token}`               | `/revision/`                | Revisión del certificado original por el artesano (ADR-030 fase 5); token en el fragmento      |
+| `/autorizacion/#{token}`           | `/autorizacion/`            | Autorización del artesano para publicar su información (P-026 G3); token en el fragmento       |
 | otra                               | `404.html` con **HTTP 404** | Antes: fallback SPA a la home                                                                  |
 
 Los shells viven en `/shell/` (Astro ignora carpetas con `_`, por eso no es

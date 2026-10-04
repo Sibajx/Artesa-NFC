@@ -7,6 +7,7 @@ import { useConfirm, useToast } from '../feedback-context';
 import { useLoad } from '../hooks';
 import { TextArea, TextInput } from '../forms';
 import { Badge, ErrorState, Loading } from '../ui';
+import { whatsappUrl } from '../whatsapp';
 
 // ADR-030 phase 5: design the piece's original certificate, get the artisan's
 // approval and publish it. One server-side renderer draws every preview.
@@ -58,6 +59,12 @@ export default function DisenoCertificado() {
   const [revision, setRevision] = useState(0);
   const piece = useLoad(`piece:${id}`, (signal) => adminApi.piece(id, signal));
   const list = useLoad(`designs:${id}:${revision}`, (signal) => adminApi.designs(id, signal));
+  const artisanId = piece.status === 'ready' ? piece.data.artisan.id : '';
+  const artisan = useLoad(`artisan-contact:${artisanId}`, (signal) =>
+    artisanId ? adminApi.artisan(artisanId, signal) : Promise.resolve(null));
+  const contact = artisan.status === 'ready' && artisan.data
+    ? { whatsapp: artisan.data.validation_whatsapp ?? null, name: artisan.data.validation_contact_name ?? null }
+    : null;
   const [selected, setSelected] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const reload = () => setRevision((r) => r + 1);
@@ -113,7 +120,7 @@ export default function DisenoCertificado() {
 
       {current ? (
         <Editor key={`${current.id}:${current.updated_at}`} designId={current.id} onChanged={reload} setError={setError}
-          piecePalette={piecePalette(piece.data.visual_theme)} />
+          piecePalette={piecePalette(piece.data.visual_theme)} contact={contact} />
       ) : (
         <div className="card-elevated p-6 text-sm text-botanica-grafito">
           Esta pieza aún no tiene certificado original. Empieza un diseño: toma su nombre, su artesano y sus colores.
@@ -123,17 +130,19 @@ export default function DisenoCertificado() {
   );
 }
 
-function Editor({ designId, onChanged, setError, piecePalette }: {
-  designId: string; onChanged: () => void; setError: (m: string | null) => void; piecePalette: string[];
+type Contact = { whatsapp: string | null; name: string | null } | null;
+
+function Editor({ designId, onChanged, setError, piecePalette, contact }: {
+  designId: string; onChanged: () => void; setError: (m: string | null) => void; piecePalette: string[]; contact: Contact;
 }) {
   const loaded = useLoad(`design:${designId}`, (signal) => adminApi.design(designId, signal));
   if (loaded.status === 'loading') return <Loading label="Cargando versión..." />;
   if (loaded.status === 'error') return <div className="card-elevated"><ErrorState error={loaded.error} /></div>;
-  return <EditorForm design={loaded.data} onChanged={onChanged} setError={setError} piecePalette={piecePalette} />;
+  return <EditorForm design={loaded.data} onChanged={onChanged} setError={setError} piecePalette={piecePalette} contact={contact} />;
 }
 
-function EditorForm({ design, onChanged, setError, piecePalette }: {
-  design: Design; onChanged: () => void; setError: (m: string | null) => void; piecePalette: string[];
+function EditorForm({ design, onChanged, setError, piecePalette, contact }: {
+  design: Design; onChanged: () => void; setError: (m: string | null) => void; piecePalette: string[]; contact: Contact;
 }) {
   const editable = design.status === 'draft' || design.status === 'in_review';
   const [params, setParams] = useState<DesignParams>(design.params);
@@ -228,7 +237,11 @@ function EditorForm({ design, onChanged, setError, piecePalette }: {
             <div className="flex flex-wrap gap-2">
               <button type="button" className="btn-secondary" onClick={() => void navigator.clipboard?.writeText(reviewUrl).then(() => toast('Enlace copiado'), () => undefined)}>Copiar</button>
               <a className="btn-primary" target="_blank" rel="noreferrer"
-                href={`https://wa.me/?text=${encodeURIComponent(`Hola, este es el diseño del certificado de tu pieza. Ábrelo y dinos si lo apruebas: ${reviewUrl}`)}`}>Mandar por WhatsApp</a>
+                href={whatsappUrl(contact?.whatsapp, contact?.name
+                  ? `Hola ${contact.name}. Somos de ArtesaNFC. Por favor enséñale a ${design.params.artisan_name} el diseño del certificado de su pieza "${design.params.piece_name}" y, si le gusta, toca "Sí, lo apruebo": ${reviewUrl}`
+                  : `Hola, somos de ArtesaNFC. Este es el diseño del certificado de tu pieza "${design.params.piece_name}". Si te gusta, toca "Sí, lo apruebo": ${reviewUrl}`)}>
+                {contact?.whatsapp ? `Mandar por WhatsApp${contact.name ? ` a ${contact.name}` : ''}` : 'Mandar por WhatsApp'}
+              </a>
               <button type="button" className="btn-secondary" onClick={() => { setReviewUrl(null); onChanged(); }}>Listo</button>
             </div>
           </section>

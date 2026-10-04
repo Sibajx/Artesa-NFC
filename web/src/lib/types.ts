@@ -137,6 +137,18 @@ export interface CertificateOriginal extends CertificateAuthentic {
   } | null;
 }
 
+// P-026 G3: the artisan's authorization link (/autorizacion/#token): what
+// will be published about them.
+export interface ArtisanAuthorizationOpen {
+  readonly status: "open";
+  readonly full_name: string;
+  readonly artistic_name: string | null;
+  readonly place: string;
+  readonly biography: string;
+  readonly portrait: string | null;
+  readonly expires_at: string;
+}
+
 // ADR-030 phase 5: the artisan's review link (/revision/#token).
 export interface DesignReviewOpen {
   readonly status: "open";

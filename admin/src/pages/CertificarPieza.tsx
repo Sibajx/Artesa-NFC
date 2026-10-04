@@ -161,13 +161,19 @@ function Wizard({ state, reload, error, setError }: WizardProps) {
   }
 
   async function lock() {
-    const answer = await confirm({
+    // Irreversible: the code must be typed, so it cannot happen by a slip.
+    const typed = await confirm({
       title: '¿Bloquear el chip para siempre?',
-      body: 'Ya no se podrá volver a grabar. Hazlo solo con la pieza terminada y el chip escaneado con éxito.',
-      confirmLabel: 'Bloquear',
+      body: `Ya no se podrá volver a grabar ni corregir. Hazlo solo con la pieza terminada y el chip escaneado con éxito desde otro teléfono. Para confirmar, escribe el código de la pieza: ${state.public_code}`,
+      confirmLabel: 'Bloquear para siempre',
       tone: 'danger',
+      reason: { label: 'Código de la pieza', placeholder: state.public_code },
     });
-    if (answer === null) return;
+    if (typed === null) return;
+    if (typed.trim().toUpperCase() !== state.public_code.toUpperCase()) {
+      setError('El código no coincide. El chip no se bloqueó.');
+      return;
+    }
     setError(null);
     setPhase({ step: 'locking' });
     try {

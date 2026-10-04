@@ -33,6 +33,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.access import AdminIdentity
+from app.core.config import get_settings
 from app.models.artisan import Artisan
 from app.models.audit_event import AuditActorType, AuditEvent, AuditResult
 from app.models.certificate import Certificate, CertificateStatus
@@ -42,7 +43,10 @@ from app.models.piece import AvailabilityStatus, Piece
 ARTISAN_FIELDS = (
     "full_name", "artistic_name", "locality", "municipality", "state", "country",
     "languages", "languages_public", "biography", "history", "techniques", "public_contact",
+    "validation_whatsapp", "validation_contact_name",
 )
+# Personal data: the audit records only that it changed (P-026 G3).
+_PRIVATE_ARTISAN_FIELDS = ("public_contact", "validation_whatsapp", "validation_contact_name")
 PIECE_FIELDS = (
     "name", "description", "history", "technique", "materials", "origin",
     "creation_year", "creation_date", "dimensions", "price_cents", "price_currency",
@@ -208,7 +212,8 @@ def create_artisan(db: Session, actor: Actor, data: dict[str, Any]) -> Artisan:
     db.add(artisan)
     _flush(db)
     _audit(db, actor, "artisan", artisan.id, "artisan.created",
-           {"fields": {k: _jsonable(getattr(artisan, k)) for k in ("slug", *ARTISAN_FIELDS) if k != "public_contact"}})
+           {"fields": {k: _jsonable(getattr(artisan, k)) for k in ("slug", *ARTISAN_FIELDS)
+                       if k not in _PRIVATE_ARTISAN_FIELDS}})
     _finish(db, artisan)
     return artisan
 
@@ -222,8 +227,8 @@ def update_artisan(db: Session, actor: Actor, artisan_id: uuid.UUID, expected: d
     if diff:
         _touch(db, artisan)
         _audit(db, actor, "artisan", artisan.id, "artisan.updated",
-               {"changes": {k: v for k, v in diff.items() if k != "public_contact"}
-                | ({"public_contact": {"changed": True}} if "public_contact" in diff else {})})
+               {"changes": {k: v for k, v in diff.items() if k not in _PRIVATE_ARTISAN_FIELDS}
+                | {k: {"changed": True} for k in _PRIVATE_ARTISAN_FIELDS if k in diff}})
     _finish(db, artisan)
     return artisan
 
@@ -237,6 +242,13 @@ def transition_artisan(db: Session, actor: Actor, artisan_id: uuid.UUID, expecte
             raise ContentConflict("invalid_transition", "Only a draft can be published.")
         if not (artisan.full_name or "").strip():
             raise ContentConflict("incomplete", "A published artisan needs a full name.", "full_name")
+        if get_settings().require_artisan_authorization:
+            # P-026 G3: imported here (authorizations imports this module).
+            from app.services import authorizations
+
+            if not authorizations.is_authorized(db, artisan.id):
+                raise ContentConflict("authorization_missing",
+                                      "The artisan has not authorized the publication yet.")
         target = PublicationStatus.published
     elif action == "unpublish":
         if status != PublicationStatus.published:
