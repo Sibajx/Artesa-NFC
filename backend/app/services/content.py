@@ -45,7 +45,7 @@ ARTISAN_FIELDS = (
 )
 PIECE_FIELDS = (
     "name", "description", "history", "technique", "materials", "origin",
-    "creation_year", "creation_date", "dimensions",
+    "creation_year", "creation_date", "dimensions", "price_cents", "price_currency",
 )
 # Public URLs and the code printed with the piece: only editable while the
 # record is a draft (never published, or taken back to draft).
@@ -280,6 +280,8 @@ def _require_artisan(db: Session, artisan_id: uuid.UUID) -> Artisan:
 
 def create_piece(db: Session, actor: Actor, data: dict[str, Any]) -> Piece:
     _require_artisan(db, data["artisan_id"])
+    if data.get("availability_status") == AvailabilityStatus.sold:
+        raise ContentConflict("use_sale", "Mark a piece as sold by registering its sale.", "availability_status")
     piece = Piece(
         artisan_id=data["artisan_id"],
         slug=data.get("slug") or _unique_slug(db, Piece, slugify(data["name"])),
@@ -355,6 +357,12 @@ def set_availability(db: Session, actor: Actor, piece_id: uuid.UUID, expected: d
                      availability: AvailabilityStatus) -> Piece:
     piece = _locked(db, Piece, piece_id, expected, "piece")
     before = piece.availability_status
+    # P-026 G1: "sold" comes only from registering a sale, and a sold piece
+    # changes back only by cancelling it, so a sale is never lost.
+    if availability == AvailabilityStatus.sold:
+        raise ContentConflict("use_sale", "Mark a piece as sold by registering its sale.", "availability_status")
+    if before == AvailabilityStatus.sold and availability != before:
+        raise ContentConflict("use_sale", "A sold piece changes by cancelling its sale.", "availability_status")
     if before != availability:
         piece.availability_status = availability
         _touch(db, piece)

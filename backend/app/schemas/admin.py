@@ -128,6 +128,25 @@ class AdminNfcTag(BaseModel):
     created_at: datetime
 
 
+class AdminSale(BaseModel):
+    """P-026 G1. The buyer's name and contact are personal data: Gestión only."""
+    id: uuid.UUID
+    status: str
+    sold_on: date
+    price_cents: int
+    currency: str
+    channel: str
+    sold_by: str
+    buyer_name: str | None
+    buyer_contact: str | None
+    note: str | None
+    recorded_by: str
+    created_at: datetime
+    cancelled_at: datetime | None
+    cancel_reason: str | None
+    cancelled_by: str | None
+
+
 class AdminPieceDetail(BaseModel):
     id: uuid.UUID
     slug: str
@@ -142,6 +161,9 @@ class AdminPieceDetail(BaseModel):
     creation_date: date | None
     dimensions: dict | None
     visual_theme: dict | None
+    # P-026 G2: list price (cents), Gestión only.
+    price_cents: int | None = None
+    price_currency: str = "MXN"
     availability_status: str
     publication_status: str
     # True only when the piece and its artisan are both published
@@ -162,6 +184,8 @@ class AdminPieceDetail(BaseModel):
     # False when the caller is not a custodian: certificates and nfc_tags are
     # then empty on purpose, not because the piece has none (ADR-030).
     custody_visible: bool = False
+    # P-026 G1: every sale of the piece, newest first; at most one active.
+    sales: list[AdminSale] = []
 
 
 class AdminAuditEvent(BaseModel):

@@ -593,3 +593,13 @@ Ninguna de estas tablas guarda un secreto en claro: la clave de la tarjeta,
 el PIN y el token de revisión existen solo como hash. El correo del dueño es
 dato personal: solo lo ven los Custodios, la API pública lo muestra
 enmascarado y nunca entra en `audit_event`.
+
+## 17. Ventas y precio (P-026, 2026-10)
+
+Migración `e22db92223f2`, aditiva.
+
+| Tabla / campo | Contenido | Reglas |
+|---|---|---|
+| `piece.price_cents`, `piece.price_currency` | Precio de lista en centavos (MXN o USD) | Solo en Gestión; la API pública nunca lo expone |
+| `piece.availability_status = 'sold'` | Pieza vendida | Solo lo pone una venta registrada; solo se quita cancelando la venta |
+| `sale` | `sold_on`, `price_cents`, `currency`, `channel` (`taller`/`tienda`/`en_linea`/`feria`/`otro`), `sold_by`, `buyer_name`/`buyer_contact` (opcionales, datos personales), `note`, `status` (`active`/`cancelled`), quién la registró o canceló y el motivo | Una venta activa por pieza; las canceladas quedan como historial; una pieza con ventas no se puede eliminar; los datos del comprador no entran en `audit_event` |

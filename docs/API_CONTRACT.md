@@ -814,6 +814,17 @@ antes.
 - Todas las escrituras usan `If-Match` y quedan auditadas como `design.*`.
 - `params`: `template` (`clasico` \| `greca` \| `constelacion`), `variant` (`claro` \| `oscuro`), `title`, `piece_name`, `artisan_name`, `public_code`, `quote` (hasta 240 caracteres), `palette` (de 3 a 5 colores) y `seed`.
 
+### 7.4 Ventas y precio (P-026)
+
+- **API pública:** `availability_status` puede ser `sold` ("Vendida"). El precio no se expone.
+- **API de Gestión:**
+  - `PATCH /pieces/{id}` acepta `price_cents` (≥ 0) y `price_currency` (`MXN` \| `USD`);
+  - `POST /pieces/{id}/sale` `{sold_on, price_cents, currency, channel, sold_by, buyer_name?, buyer_contact?, note?}` con `If-Match` pone la pieza en `sold` (`409 already_sold`; `invalid_sale` si la fecha es futura);
+  - `POST /pieces/{id}/sale/cancel` `{reason}` la regresa a `available` (`409 not_sold`);
+  - `POST /pieces/{id}/availability` rechaza poner o quitar `sold` (`409 use_sale`);
+  - el detalle de la pieza trae `price_cents`, `price_currency` y `sales` (de la más reciente a la más antigua).
+- **Auditoría:** `piece.sold` y `piece.sale_cancelled`, sin los datos del comprador.
+
 ### 14.1 Fase 1 de Gestión (ADR-029, 2026-09-28)
 
 El texto anterior de esta sección se conserva como historia. Desde ADR-029:

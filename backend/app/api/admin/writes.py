@@ -31,13 +31,15 @@ from app.schemas.admin_write import (
     AvailabilityBody,
     PieceCreate,
     PieceUpdate,
+    SaleBody,
+    SaleCancelBody,
     TransitionBody,
     provided,
 )
 from pathlib import Path
 
 from app.core.config import get_settings
-from app.services import content, palette, trash
+from app.services import content, palette, sales, trash
 from app.services.content import Actor, ContentError
 
 ADMIN_WRITE_HEADER = "X-Artesa-Admin"
@@ -98,7 +100,7 @@ router = APIRouter(
 )
 
 _ARTISAN_NEVER_NULL = ("full_name", "slug", "languages_public")
-_PIECE_NEVER_NULL = ("name", "slug", "public_code", "artisan_id")
+_PIECE_NEVER_NULL = ("name", "slug", "public_code", "artisan_id", "price_currency")
 
 
 # --- Papelera (services/trash.py) -------------------------------------------------------
@@ -199,6 +201,27 @@ def set_availability(piece_id: uuid.UUID, body: AvailabilityBody, expected: date
                      who: Actor = Depends(actor), db: Session = Depends(get_db)) -> AdminPieceDetail:
     try:
         content.set_availability(db, who, piece_id, expected, body.availability_status)
+    except ContentError as exc:
+        raise _fail(exc) from None
+    return reads.get_piece(piece_id, db, who.identity)
+
+
+# P-026 G1. Declared before the generic /{action} transition.
+@router.post("/pieces/{piece_id}/sale", response_model=AdminPieceDetail)
+def register_sale(piece_id: uuid.UUID, body: SaleBody, expected: datetime = Depends(expected_version),
+                  who: Actor = Depends(actor), db: Session = Depends(get_db)) -> AdminPieceDetail:
+    try:
+        sales.register(db, who, piece_id, expected, body.model_dump())
+    except ContentError as exc:
+        raise _fail(exc) from None
+    return reads.get_piece(piece_id, db, who.identity)
+
+
+@router.post("/pieces/{piece_id}/sale/cancel", response_model=AdminPieceDetail)
+def cancel_sale(piece_id: uuid.UUID, body: SaleCancelBody, expected: datetime = Depends(expected_version),
+                who: Actor = Depends(actor), db: Session = Depends(get_db)) -> AdminPieceDetail:
+    try:
+        sales.cancel(db, who, piece_id, expected, body.reason)
     except ContentError as exc:
         raise _fail(exc) from None
     return reads.get_piece(piece_id, db, who.identity)

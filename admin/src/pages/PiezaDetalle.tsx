@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useLoad } from '../hooks';
 import { MediaSection } from '../MediaSection';
 import { PaletteSection } from '../PaletteSection';
+import { VentaSection } from '../VentaSection';
 import { useRoles } from '../roles-context';
 import { PublishChecklist } from '../PublishChecklist';
 import { RecordActions } from '../RecordActions';
@@ -133,6 +134,8 @@ export default function PiezaDetalle() {
 
             <MediaSection kind="pieces" ownerId={p.id} media={p.media}
               ownerArchived={p.publication_status === 'archived'} onChanged={() => setRevision((r) => r + 1)} />
+
+            <VentaSection key={`sale:${p.updated_at}`} piece={p} onChanged={() => setRevision((r) => r + 1)} />
 
             <PaletteSection key={p.updated_at} piece={p} onChanged={() => setRevision((r) => r + 1)} />
 

@@ -26,6 +26,7 @@ const AVAILABILITY_LABELS: Record<string, string> = {
   reserved: 'Reservada',
   exhibited: 'En exhibición',
   archived: 'Archivada',
+  sold: 'Vendida',
 };
 
 const CERTIFICATE_LABELS: Record<string, string> = { draft: 'Borrador', active: 'Activo', revoked: 'Revocado' };
@@ -52,6 +53,7 @@ export const PURGE_BLOCKERS: Record<string, string> = {
   may_have_been_public: 'Ya estuvo publicado: puede quedarse en la papelera, pero no eliminarse definitivamente.',
   has_certificate: 'Tiene un certificado emitido (Certificación): no se puede eliminar.',
   has_nfc_tag: 'Tiene un chip NFC asignado (Certificación): no se puede eliminar.',
+  has_sale: 'Tiene una venta registrada: no se puede eliminar.',
   has_pieces: 'Tiene piezas: elimínalas primero desde la papelera.',
 };
 
@@ -97,6 +99,7 @@ const CONFLICT_TEXT: Record<string, string> = {
   has_pieces: 'Primero envía a la papelera (o elimina) las piezas de este artesano.',
   has_certificate: 'La pieza tiene un certificado (se gestiona en Certificación); no se puede eliminar.',
   has_nfc_tag: 'La pieza tiene un chip NFC (se gestiona en Certificación); no se puede eliminar.',
+  has_sale: 'La pieza tiene una venta registrada; no se puede eliminar.',
   not_trashed: 'Primero envíalo a la papelera.',
   may_have_been_public: 'Ya pudo verse en el sitio, así que no se puede eliminar definitivamente: archívalo o déjalo en la papelera.',
 };

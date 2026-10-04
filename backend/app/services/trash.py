@@ -30,6 +30,7 @@ from sqlalchemy.orm import Session
 from app.models.artisan import Artisan
 from app.models.certificate import Certificate
 from app.models.certificate_design import CertificateDesign
+from app.models.sale import Sale
 from app.models.enums import PublicationStatus
 from app.models.media_asset import MediaAsset
 from app.models.nfc_tag import NfcTag
@@ -60,6 +61,8 @@ def purge_blocker(db: Session, kind: str, row: Any) -> str | None:
             return "has_certificate"
         if _count(db, select(NfcTag.id).where(NfcTag.piece_id == row.id)):
             return "has_nfc_tag"
+        if _count(db, select(Sale.id).where(Sale.piece_id == row.id)):
+            return "has_sale"
     elif _count(db, select(Piece.id).where(Piece.artisan_id == row.id)):
         return "has_pieces"
     return None
@@ -71,6 +74,7 @@ _BLOCKER_TEXT = {
     "has_certificate": "The piece has a certificate (Certificación); it cannot be deleted.",
     "has_nfc_tag": "The piece has an NFC tag (Certificación); it cannot be deleted.",
     "has_pieces": "Delete or move this artisan's pieces first.",
+    "has_sale": "The piece has a recorded sale (a financial record); it cannot be deleted.",
 }
 
 
