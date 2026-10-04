@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import io
 
-from PIL import Image
+import random
+
+from PIL import Image, ImageDraw
 from sqlalchemy import select
 
 from app.models.audit_event import AuditEvent
@@ -42,6 +44,40 @@ def test_extract_finds_the_main_colours(tmp_path):
     assert all(palette.HEX_RE.fullmatch(c) for c in colors)
     for rgb in (WOOD, CLAY, CEMPASUCHIL):
         assert any(near(c, rgb) for c in colors), (rgb, colors)
+
+
+def mask_photo() -> bytes:
+    """Like a real cover: a dark mask in the middle of a textured brown
+    background, with a small red mouth and smaller white eyes and teeth."""
+    rng = random.Random(7)
+    image = Image.new("RGB", (900, 675))
+    px = image.load()
+    for y in range(675):
+        for x in range(900):
+            base = (104, 84, 61) if (x // 30 + y // 45) % 3 else (64, 46, 32)
+            px[x, y] = tuple(max(0, min(255, c + rng.randint(-18, 18))) for c in base)
+    d = ImageDraw.Draw(image)
+    d.ellipse((248, 90, 652, 615), fill=(16, 12, 11))
+    d.ellipse((315, 150, 420, 248), fill=(70, 66, 64))
+    d.ellipse((352, 285, 405, 322), fill=(236, 230, 220))
+    d.ellipse((495, 285, 548, 322), fill=(236, 230, 220))
+    d.ellipse((405, 450, 495, 518), fill=(200, 24, 30))
+    d.rectangle((431, 469, 469, 488), fill=(240, 236, 228))
+    out = io.BytesIO()
+    image.save(out, "JPEG", quality=90)
+    return out.getvalue()
+
+
+def test_mask_photo_keeps_its_small_accents_and_leads_with_the_piece(tmp_path):
+    """El Negrito (2026-10-04): area alone gave five browns and greys and lost
+    the red mouth and white eyes that identify the piece."""
+    path = tmp_path / "mask.jpg"
+    path.write_bytes(mask_photo())
+    colors = palette.extract(path)
+    assert near(colors[0], (16, 12, 11), 30), colors          # the mask, not the background
+    assert near(colors[1], (200, 24, 30), 40), colors         # the red mouth as the accent
+    assert any(near(c, (236, 230, 220), 30) for c in colors), colors  # white eyes / teeth
+    assert any(near(c, (84, 65, 46), 45) for c in colors), colors     # the wood/earth
 
 
 def test_flat_photo_is_completed_with_shades(tmp_path):
