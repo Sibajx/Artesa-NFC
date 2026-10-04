@@ -41,7 +41,10 @@ ALLOWED_ENV_KEYS = ("APP_ENV", "DATABASE_URL", "DEBUG", "CORS_ALLOWED_ORIGINS",
                     # Gestión admin API (ADR-029): all three or none.
                     "ADMIN_ACCESS_TEAM_DOMAIN", "ADMIN_ACCESS_AUD", "ADMIN_EMAILS",
                     # Gestión phase 4 media (docs/MEDIA.md): optional.
-                    "MEDIA_ROOT")
+                    "MEDIA_ROOT",
+                    # ADR-030 roles (subsets of ADMIN_EMAILS) and the optional
+                    # custody Access application: optional (#187).
+                    "CUSTODIAN_EMAILS", "DESIGNER_EMAILS", "CUSTODY_ACCESS_AUD")
 _ADMIN_ENV_KEYS = ("ADMIN_ACCESS_TEAM_DOMAIN", "ADMIN_ACCESS_AUD", "ADMIN_EMAILS")
 _SECRET_NAME_HINTS = ("SECRET", "PASSWORD", "PASSWD", "TOKEN", "KEY", "DATABASE_URL", "CREDENTIAL")
 _PASSTHROUGH_ENV = ("PATH", "HOME", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "TMPDIR")

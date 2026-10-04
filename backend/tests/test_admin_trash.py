@@ -124,3 +124,17 @@ def test_purge_needs_the_trash_the_version_and_no_pieces(client):
     artisan = post(client, "artisans", get(client, "artisans", artisan), "trash").json()
     assert artisan["purge_blocker"] == "has_pieces"
     assert post(client, "artisans", artisan, "purge").json()["error"]["code"] == "has_pieces"
+
+
+def test_purge_takes_the_certificate_designs_of_a_never_public_piece(client, db_session):
+    """Review 2026-10-04: a design can exist for a draft piece; without
+    deleting it the foreign key made the purge fail with a 500."""
+    from tests.test_admin_custody_nfc import CH
+    artisan = new_artisan(client, name="Taller Prueba")
+    piece = new_piece(client, artisan["id"], name="Máscara de prueba")
+    assert client.post(f"/api/admin/v1/pieces/{piece['id']}/designs", json={}, headers=CH()).status_code == 201
+    piece = post(client, "pieces", get(client, "pieces", piece), "trash").json()
+    assert piece["purge_blocker"] is None
+    assert post(client, "pieces", piece, "purge").status_code == 204
+    deleted = db_session.execute(select(AuditEvent).where(AuditEvent.action == "piece.deleted")).scalars().one()
+    assert deleted.event_metadata["designs_deleted"] == 1

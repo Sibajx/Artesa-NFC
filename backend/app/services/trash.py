@@ -29,6 +29,7 @@ from sqlalchemy.orm import Session
 
 from app.models.artisan import Artisan
 from app.models.certificate import Certificate
+from app.models.certificate_design import CertificateDesign
 from app.models.enums import PublicationStatus
 from app.models.media_asset import MediaAsset
 from app.models.nfc_tag import NfcTag
@@ -67,8 +68,8 @@ def purge_blocker(db: Session, kind: str, row: Any) -> str | None:
 _BLOCKER_TEXT = {
     "not_trashed": "Move it to the trash first.",
     "may_have_been_public": "It may have been public: it can stay archived or in the trash, but not be deleted.",
-    "has_certificate": "The piece has a certificate (CLI only); it cannot be deleted.",
-    "has_nfc_tag": "The piece has an NFC tag (CLI only); it cannot be deleted.",
+    "has_certificate": "The piece has a certificate (Certificación); it cannot be deleted.",
+    "has_nfc_tag": "The piece has an NFC tag (Certificación); it cannot be deleted.",
     "has_pieces": "Delete or move this artisan's pieces first.",
 }
 
@@ -131,7 +132,17 @@ def purge(db: Session, actor: Actor, media_root: Path | None, kind: str, entity_
             "reason": f"{kind}.deleted",
         })
         db.delete(asset)
+    designs_deleted = 0
+    if kind == "piece":
+        # Certificate designs of a never-public piece (ADR-030 phase 5) were
+        # never seen by anyone: they go with it. Without this the foreign key
+        # would make the purge fail.
+        for design in db.execute(select(CertificateDesign).where(CertificateDesign.piece_id == row.id)).scalars():
+            db.delete(design)
+            designs_deleted += 1
     snapshot = {"slug": row.slug, "media_deleted": len(assets)}
+    if designs_deleted:
+        snapshot["designs_deleted"] = designs_deleted
     snapshot["name" if kind == "piece" else "full_name"] = row.name if kind == "piece" else row.full_name
     if kind == "piece":
         snapshot["public_code"] = row.public_code
