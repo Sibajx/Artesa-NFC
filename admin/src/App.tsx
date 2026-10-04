@@ -12,6 +12,8 @@ import Auditoria from './pages/Auditoria';
 import Apartado from './pages/Apartado';
 import Certificacion from './pages/Certificacion';
 import CertificarPieza from './pages/CertificarPieza';
+import DisenoCertificado from './pages/DisenoCertificado';
+import { RolesContext } from './roles-context';
 import ArtesanoForm from './pages/ArtesanoForm';
 import PiezaForm from './pages/PiezaForm';
 
@@ -161,6 +163,7 @@ export default function App() {
       </aside>
 
       <main className="flex-1 p-6 md:p-10 overflow-auto">
+        <RolesContext.Provider value={roles}>
         <Routes>
           <Route path="/resumen" element={<Dashboard />} />
           <Route path="/artesanos/nuevo" element={<ArtesanoForm />} />
@@ -173,11 +176,13 @@ export default function App() {
           <Route path="/piezas" element={<Piezas />} />
           {roles.includes('custodian') && <Route path="/certificacion" element={<Certificacion />} />}
           {roles.includes('custodian') && <Route path="/certificacion/:id" element={<CertificarPieza />} />}
+          {roles.includes('designer') && <Route path="/diseno/:id" element={<DisenoCertificado />} />}
           <Route path="/archivados" element={<Apartado key="archivados" mode="archivados" />} />
           <Route path="/papelera" element={<Apartado key="papelera" mode="papelera" />} />
           <Route path="/auditoria" element={<Auditoria />} />
           <Route path="*" element={<Navigate to="/resumen" replace />} />
         </Routes>
+        </RolesContext.Provider>
       </main>
     </div>
   );

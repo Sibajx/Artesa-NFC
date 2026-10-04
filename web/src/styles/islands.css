@@ -689,3 +689,62 @@
     transform: none;
   }
 }
+
+/* --- Artisan review of a certificate design (ADR-030 phase 5) ------------ */
+
+.review {
+  display: grid;
+  gap: var(--space-md);
+  max-width: 720px;
+  margin-inline: auto;
+  padding-block: var(--space-md);
+}
+
+.review__image {
+  width: 100%;
+  max-width: 560px;
+  justify-self: center;
+  border-radius: 10px;
+  box-shadow: 0 18px 50px -24px color-mix(in srgb, var(--color-wood) 80%, transparent);
+}
+
+.review__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  justify-content: center;
+}
+
+.review__actions .button {
+  min-height: 56px;
+  min-width: 12rem;
+  font-size: 1.05rem;
+}
+
+.review__actions .review__approve {
+  background: var(--color-text);
+  border-color: var(--color-text);
+  color: var(--color-text-inverse);
+}
+
+.review__actions .review__approve:hover {
+  background: var(--color-clay);
+  border-color: var(--color-clay);
+}
+
+.button--quiet {
+  background: transparent;
+}
+
+.review__form {
+  display: grid;
+  gap: var(--space-sm);
+}
+
+/* The published design inside the unlocked original certificate. */
+.original__design {
+  width: 100%;
+  max-width: 520px;
+  border-radius: 10px;
+  box-shadow: 0 18px 50px -24px color-mix(in srgb, var(--color-wood) 80%, transparent);
+}

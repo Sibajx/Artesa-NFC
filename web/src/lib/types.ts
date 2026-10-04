@@ -128,4 +128,21 @@ export interface CertificateOriginal extends CertificateAuthentic {
     readonly owner_email_masked: string | null;
     readonly card_issued_at: string;
   };
+  // ADR-030 phase 5: the published design, drawn by the API as SVG.
+  readonly design?: {
+    readonly version: number;
+    readonly svg: string;
+    readonly approved_by_name: string | null;
+    readonly approved_at: string | null;
+  } | null;
+}
+
+// ADR-030 phase 5: the artisan's review link (/revision/#token).
+export interface DesignReviewOpen {
+  readonly status: "open";
+  readonly piece_name: string;
+  readonly artisan_name: string;
+  readonly version: number;
+  readonly expires_at: string;
+  readonly svg: string;
 }

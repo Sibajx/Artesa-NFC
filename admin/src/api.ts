@@ -205,6 +205,42 @@ export interface PieceDetail {
   purge_blocker?: string | null;
 }
 
+// ADR-030 phase 5: the designed original certificate.
+export interface DesignParams {
+  template: 'clasico' | 'greca' | 'constelacion';
+  variant: 'claro' | 'oscuro';
+  title: string;
+  piece_name: string;
+  artisan_name: string;
+  public_code: string;
+  quote: string;
+  palette: string[];
+  seed: number;
+}
+
+export interface Design {
+  id: string;
+  piece_id: string;
+  version: number;
+  status: 'draft' | 'in_review' | 'approved' | 'published' | 'superseded';
+  template: string;
+  params: DesignParams;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  submitted_at: string | null;
+  review_expires_at: string | null;
+  change_request: string | null;
+  approved_at: string | null;
+  approved_by_name: string | null;
+  approval_medium: string | null;
+  approval_note: string | null;
+  approval_recorded_by: string | null;
+  published_at: string | null;
+  published_by: string | null;
+  svg?: string;
+}
+
 export interface AuditEvent {
   id: string;
   occurred_at: string;
@@ -388,6 +424,22 @@ export const adminApi = {
     request<void>('POST', `/${kind}/${encodeURIComponent(id)}/purge`, { body: {}, version }),
   setAvailability: (id: string, version: string, availability_status: string) =>
     request<PieceDetail>('POST', `/pieces/${encodeURIComponent(id)}/availability`, { body: { availability_status }, version }),
+  designs: (pieceId: string, signal?: AbortSignal) =>
+    get<{ data: Design[] }>(`/pieces/${encodeURIComponent(pieceId)}/designs`, undefined, signal),
+  design: (id: string, signal?: AbortSignal) => get<Design>(`/designs/${encodeURIComponent(id)}`, undefined, signal),
+  createDesign: (pieceId: string) => request<Design>('POST', `/pieces/${encodeURIComponent(pieceId)}/designs`, { body: {} }),
+  previewDesign: (params: DesignParams, version: number) =>
+    request<{ svg: string }>('POST', '/designs/preview', { body: { params, version } }),
+  updateDesign: (id: string, params: Partial<DesignParams>, version: string) =>
+    request<Design>('PATCH', `/designs/${encodeURIComponent(id)}`, { body: { params }, version }),
+  submitDesign: (id: string, version: string) =>
+    request<Design & { review_url: string }>('POST', `/designs/${encodeURIComponent(id)}/submit`, { body: {}, version }),
+  approveDesign: (id: string, body: { name: string; medium: string; note: string }, version: string) =>
+    request<Design>('POST', `/designs/${encodeURIComponent(id)}/approve`, { body, version }),
+  publishDesign: (id: string, version: string) =>
+    request<Design>('POST', `/designs/${encodeURIComponent(id)}/publish`, { body: {}, version }),
+  discardDesign: (id: string, version: string) =>
+    request<void>('POST', `/designs/${encodeURIComponent(id)}/discard`, { body: {}, version }),
   generatePalette: (id: string, version: string) =>
     request<PieceDetail>('POST', `/pieces/${encodeURIComponent(id)}/palette/generate`, { body: {}, version }),
   setPalette: (id: string, colors: string[], version: string) =>

@@ -21,6 +21,7 @@ import type {
   ArtisanSummary,
   CertificateAuthentic,
   CertificateOriginal,
+  DesignReviewOpen,
   ListEnvelope,
   Piece,
   PieceSummary,
@@ -56,6 +57,11 @@ export type UnlockResult =
   | { readonly kind: "refused"; readonly result: "invalid" | "pin_required" | "reported_stolen" }
   | { readonly kind: "locked"; readonly retryAfter: number | null }
   | { readonly kind: "rejected"; readonly code: string }
+  | { readonly kind: "error"; readonly reason: UnavailableReason };
+
+export type ReviewResult =
+  | { readonly kind: "open"; readonly data: DesignReviewOpen }
+  | { readonly kind: "unavailable" }
   | { readonly kind: "error"; readonly reason: UnavailableReason };
 
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
@@ -224,7 +230,47 @@ export function createApiClient(options: ApiClientOptions = {}) {
       postUnlock("/certificates/unlock", { token, key, pin }),
     claimPiece: (token: string, key: string, email: string, pin: string) =>
       postUnlock("/certificates/claim", { token, key, email, pin }),
+
+    // ADR-030 phase 5: the artisan's review link. Token in the body only.
+    async resolveReview(token: string): Promise<ReviewResult> {
+      const response = await postJson("/design-reviews/resolve", { token });
+      if (typeof response === "string") return { kind: "error", reason: response };
+      if (!response.ok) return { kind: "error", reason: reasonForStatus(response.status) };
+      const payload = await readJson(response);
+      if (isRecord(payload) && payload.status === "open" && isString(payload.svg)) {
+        return { kind: "open", data: payload as unknown as DesignReviewOpen };
+      }
+      if (isRecord(payload) && payload.status === "unavailable") return { kind: "unavailable" };
+      return { kind: "error", reason: "malformed" };
+    },
+    async decideReview(
+      token: string,
+      decision: "approve" | "changes",
+      comment: string | null,
+    ): Promise<"recorded" | "unavailable" | "error"> {
+      const response = await postJson("/design-reviews/decision", { token, decision, comment });
+      if (typeof response === "string" || !response.ok) return "error";
+      const payload = await readJson(response);
+      if (
+        isRecord(payload) &&
+        (payload.status === "recorded" || payload.status === "unavailable")
+      ) {
+        return payload.status;
+      }
+      return "error";
+    },
   };
+
+  function postJson(path: string, body: Record<string, unknown>) {
+    return send(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(body),
+      credentials: "omit",
+      referrerPolicy: "no-referrer",
+      cache: "no-store",
+    });
+  }
 
   async function postUnlock(path: string, body: Record<string, unknown>): Promise<UnlockResult> {
     const response = await send(path, {
