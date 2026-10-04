@@ -144,6 +144,40 @@ def decrypt_and_extract(age: str, identity: Path, backup_dir: Path, work: Path, 
     return manifest
 
 
+def check_finanzas(extract: Path, manifest: dict, export_to: Path | None) -> None:
+    """docs/BACKUP.md §17: the Finanzas SQLite copy inside the bundle, when the
+    backup has one: checksum, PRAGMA integrity_check and row counts against
+    the manifest. With ``export_to`` the recovered file is copied there (0600)
+    for an actual restore."""
+    import sqlite3
+
+    info = manifest.get("finanzas") or {"status": "not-configured"}
+    if info.get("status") != "included":
+        say(f"  [INFO] Finanzas: {info.get('status')} in this backup")
+        if export_to is not None:
+            raise DrillError("--export-finanzas was given but this backup has no Finanzas copy")
+        return
+    copy = extract / info["member"]
+    if not copy.is_file() or copy.stat().st_size != info["size"] or sha256_file(copy) != info["sha256"]:
+        raise DrillError("the Finanzas copy does not match the manifest checksum")
+    conn = sqlite3.connect(f"file:{copy}?mode=ro", uri=True)
+    try:
+        if conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+            raise DrillError("the Finanzas copy fails PRAGMA integrity_check")
+        counts = {t: conn.execute(f'SELECT count(*) FROM "{t}"').fetchone()[0] for t in info["table_counts"]}
+    finally:
+        conn.close()
+    if counts != info["table_counts"]:
+        raise DrillError(f"Finanzas row counts {counts} != manifest {info['table_counts']}")
+    say(f"  [PASS] Finanzas: checksum, integrity_check and row counts match ({sum(counts.values())} rows)")
+    if export_to is not None:
+        if export_to.exists():
+            raise DrillError(f"{export_to} already exists; choose a new path")
+        shutil.copyfile(copy, export_to)
+        os.chmod(export_to, 0o600)
+        say(f"  [OK] Finanzas database written to {export_to}")
+
+
 class Container:
     """A throw-away PostgreSQL with no network: reached only through docker exec."""
 
@@ -213,6 +247,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("backup_dir", type=Path, help="directory with bundle.tar.age and meta.json of ONE backup")
     parser.add_argument("identity", type=Path, help="age identity file (K1 or K2) on this trusted machine")
     parser.add_argument("--recipients", type=int, default=2, help="expected X25519 recipients in the header (default 2: K1+K2)")
+    parser.add_argument("--export-finanzas", type=Path, default=None,
+                        help="also write the recovered Finanzas SQLite to this NEW path (docs/BACKUP.md §17)")
     args = parser.parse_args(argv)
     age = os.environ.get("AGE", "age")
     docker = os.environ.get("DOCKER", "docker")
@@ -227,6 +263,7 @@ def main(argv: list[str] | None = None) -> int:
             raise DrillError(f"age binary not found ({age}); install age on THIS machine (never on the server)", EXIT_SETUP)
         meta = check_meta(args.backup_dir, args.recipients)
         manifest = decrypt_and_extract(age, args.identity, args.backup_dir, work, meta)
+        check_finanzas(work / "bundle", manifest, args.export_finanzas)
         restore_test(docker, image, work / "bundle" / "database.dump", manifest)
         say(f"DRILL PASS: backup {meta['backup_id']} recovered with {args.identity.name}")
         return EXIT_OK

@@ -800,3 +800,86 @@ Para devolver los originales al servidor, copiar `~/m3/originales/` a
 `MEDIA_ROOT/originales/` sin sobrescribir nada (`rsync --ignore-existing`).
 `publico/` se puede regenerar volviendo a subir en Gestión, o copiarlo aparte.
 
+
+## 17. Finanzas dentro del respaldo (B-032, TOOL 1.8.0)
+
+Finanzas (`finanzas.artesanfc.com`) es otra app, y guarda sus libros en un
+solo archivo SQLite en `/home/energias/artesa-finanzas-backend/`. Hasta
+TOOL 1.8.0 no tenía ningún respaldo automático.
+
+### 17.1 Qué hace `run`
+
+Cuando `shared/backup/backup.env` tiene
+`FINANZAS_DB_PATH=/ruta/absoluta/artesa_finanzas.db`, cada `artesa-backup run`
+hace lo siguiente (módulo `ops/backup_sqlite.py`):
+
+1. **Abre el archivo en solo lectura** (`mode=ro`) y saca una **copia
+   consistente** con la API de respaldo en línea de SQLite. Finanzas sigue
+   funcionando.
+2. **Verifica la copia** con `PRAGMA integrity_check`, cuenta las filas de cada
+   tabla y calcula su SHA-256.
+3. **Mete la copia en el mismo bundle cifrado** que el dump de PostgreSQL,
+   como `finanzas/finanzas.sqlite`. El manifest cifrado lleva el tamaño, el
+   SHA-256, la integridad y los conteos. El `meta.json` público no dice nada
+   de Finanzas.
+
+Así hereda todo lo de D10: cifrado K1+K2, retención local, copia fuera del
+host con Object Lock, dead-man y `status`.
+
+**Si la copia de Finanzas falla** (archivo inexistente, corrupto o ilegible):
+
+- el respaldo de ArtesaNFC se guarda igual;
+- el run termina con exit 31 (`FINANZAS: FAILED`) y **no** manda el ping al
+  dead-man, así que el monitor avisa;
+- `status` deja de estar sano hasta el siguiente run bueno.
+
+Sin la variable no cambia nada: `FINANZAS: NOT CONFIGURED`.
+
+### 17.2 Activación (humano, en el servidor)
+
+**Requisitos:** un release con TOOL 1.8.0 desplegado, y la herramienta
+actualizada a ese release con `install-tools` (§11.7 de DEPLOYMENT.md):
+
+```bash
+cd /home/energias/artesa-nfc
+/usr/bin/python3 -I -B /home/energias/artesa-nfc/releases/<id>/ops/artesa_deploy.py install-tools <id>
+cat bin/TOOL.json | grep tool_version        # "1.8.0"
+```
+
+**Configuración y primer respaldo a mano:**
+
+```bash
+cd /home/energias/artesa-nfc
+grep -q '^FINANZAS_DB_PATH=' shared/backup/backup.env || \
+  printf 'FINANZAS_DB_PATH=/home/energias/artesa-finanzas-backend/artesa_finanzas.db\n' >> shared/backup/backup.env
+stat -c '%a %U' shared/backup/backup.env       # debe seguir en 600 y del usuario del servicio
+bin/artesa-backup run                           # busca "FINANZAS: included in the encrypted bundle (…, integrity ok, N rows)"
+bin/artesa-backup status
+```
+
+Desde ahí, el timer diario de `artesa-backup` lo incluye en cada respaldo.
+
+### 17.3 Recuperar Finanzas (máquina del operador, nunca easerver)
+
+1. **Recuperar la copia.** Con el simulacro de §13.7 y la opción
+   `--export-finanzas`, se verifica el respaldo completo y se escribe la base
+   de Finanzas recuperada:
+
+   ```bash
+   python3 qa/d10-offhost-drill/drill.py ~/d10-drill/$BID ~/artesa-keys/artesa-backup-K1.key.age \
+     --export-finanzas ~/finanzas-recuperada.sqlite
+   # "[PASS] Finanzas: checksum, integrity_check and row counts match" y "[OK] Finanzas database written to …"
+   ```
+
+2. **Devolverla al servidor.** Antes de reemplazar nada, conservar la base
+   actual:
+
+   ```bash
+   scp ~/finanzas-recuperada.sqlite energias@100.93.35.86:/home/energias/artesa-finanzas-backend/artesa_finanzas.db.recuperada
+   # en el servidor:
+   cd /home/energias/artesa-finanzas-backend
+   sudo systemctl stop artesa-finanzas.service
+   cp artesa_finanzas.db artesa_finanzas.db.antes-de-recuperar-$(date +%Y%m%d)
+   mv artesa_finanzas.db.recuperada artesa_finanzas.db
+   sudo systemctl start artesa-finanzas.service
+   ```
