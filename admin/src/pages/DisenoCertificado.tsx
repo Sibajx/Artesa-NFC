@@ -46,6 +46,11 @@ function message(e: unknown): string {
   return writeErrorMessage(e instanceof ApiError ? e : new ApiError('network', 0));
 }
 
+function piecePalette(theme: Record<string, unknown> | null): string[] {
+  const value = (theme as { palette?: unknown } | null)?.palette;
+  return Array.isArray(value) ? value.filter((c): c is string => typeof c === 'string') : [];
+}
+
 const svgSrc = (svg: string) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 
 export default function DisenoCertificado() {
@@ -107,7 +112,8 @@ export default function DisenoCertificado() {
       )}
 
       {current ? (
-        <Editor key={`${current.id}:${current.updated_at}`} designId={current.id} onChanged={reload} setError={setError} />
+        <Editor key={`${current.id}:${current.updated_at}`} designId={current.id} onChanged={reload} setError={setError}
+          piecePalette={piecePalette(piece.data.visual_theme)} />
       ) : (
         <div className="card-elevated p-6 text-sm text-botanica-grafito">
           Esta pieza aún no tiene certificado original. Empieza un diseño: toma su nombre, su artesano y sus colores.
@@ -117,14 +123,18 @@ export default function DisenoCertificado() {
   );
 }
 
-function Editor({ designId, onChanged, setError }: { designId: string; onChanged: () => void; setError: (m: string | null) => void }) {
+function Editor({ designId, onChanged, setError, piecePalette }: {
+  designId: string; onChanged: () => void; setError: (m: string | null) => void; piecePalette: string[];
+}) {
   const loaded = useLoad(`design:${designId}`, (signal) => adminApi.design(designId, signal));
   if (loaded.status === 'loading') return <Loading label="Cargando versión..." />;
   if (loaded.status === 'error') return <div className="card-elevated"><ErrorState error={loaded.error} /></div>;
-  return <EditorForm design={loaded.data} onChanged={onChanged} setError={setError} />;
+  return <EditorForm design={loaded.data} onChanged={onChanged} setError={setError} piecePalette={piecePalette} />;
 }
 
-function EditorForm({ design, onChanged, setError }: { design: Design; onChanged: () => void; setError: (m: string | null) => void }) {
+function EditorForm({ design, onChanged, setError, piecePalette }: {
+  design: Design; onChanged: () => void; setError: (m: string | null) => void; piecePalette: string[];
+}) {
   const editable = design.status === 'draft' || design.status === 'in_review';
   const [params, setParams] = useState<DesignParams>(design.params);
   const [svg, setSvg] = useState(design.svg ?? '');
@@ -176,8 +186,16 @@ function EditorForm({ design, onChanged, setError }: { design: Design; onChanged
   }
 
   async function discard() {
-    const answer = await confirm({ title: '¿Descartar este borrador?', body: 'Se borra esta versión. Las versiones aprobadas o publicadas no se tocan.', confirmLabel: 'Descartar', tone: 'danger' });
-    if (answer !== null) await run(() => adminApi.discardDesign(design.id, design.updated_at), 'Borrador descartado');
+    const approved = design.status === 'approved';
+    const answer = await confirm({
+      title: approved ? '¿Descartar este diseño aprobado?' : '¿Descartar este borrador?',
+      body: approved
+        ? 'Se borra esta versión para empezar de nuevo; la aprobación del artesano queda registrada en la auditoría. Si ya hay una versión publicada, sigue siendo la que ve el dueño.'
+        : 'Se borra esta versión. Las versiones publicadas no se tocan.',
+      confirmLabel: 'Descartar',
+      tone: 'danger',
+    });
+    if (answer !== null) await run(() => adminApi.discardDesign(design.id, design.updated_at), 'Versión descartada');
   }
 
   async function publish() {
@@ -247,6 +265,12 @@ function EditorForm({ design, onChanged, setError }: { design: Design; onChanged
               hint={`${params.quote.length}/240 · Opcional. Sus palabras sobre la pieza.`} />
             <fieldset className="flex flex-col gap-2">
               <legend className="text-xs font-medium text-botanica-grafito mb-1">Colores</legend>
+              {piecePalette.length >= 3 && piecePalette.join() !== params.palette.join() && (
+                <button type="button" className="self-start text-xs font-medium text-botanica-jade underline"
+                  onClick={() => set('palette', piecePalette)}>
+                  Usar los colores actuales de la pieza
+                </button>
+              )}
               <div className="flex flex-wrap gap-2">
                 {params.palette.map((c, i) => (
                   <input key={i} type="color" value={c} aria-label={`Color ${i + 1}`}
@@ -284,7 +308,10 @@ function EditorForm({ design, onChanged, setError }: { design: Design; onChanged
               {design.published_at && <div><dt className="text-botanica-gris">Publicado</dt><dd>{formatDateTime(design.published_at)}</dd></div>}
             </dl>
             {design.status === 'approved' && (
-              <div><button type="button" className="btn-primary btn-publish" disabled={busy} onClick={() => void publish()}>Publicar</button></div>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" className="btn-primary btn-publish" disabled={busy} onClick={() => void publish()}>Publicar</button>
+                <button type="button" className="btn-secondary" disabled={busy} onClick={() => void discard()}>Descartar y empezar de nuevo</button>
+              </div>
             )}
             {design.status !== 'approved' && <p className="text-xs text-botanica-gris">Esta versión ya no cambia. Para rediseñar, crea una versión nueva.</p>}
           </section>

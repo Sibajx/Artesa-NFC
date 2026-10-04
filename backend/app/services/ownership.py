@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.audit_event import AuditActorType, AuditEvent, AuditResult
@@ -245,7 +246,13 @@ def unlock(db: Session, certificate: Certificate | None, raw_key: str, pin: str 
     card.failed_attempts = 0
     card.locked_until = None
     _audit(db, action="ownership.unlocked", result=AuditResult.success, piece_id=piece.id, ip=ip)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Two first claims at the same moment: the unique index lets one in;
+        # the other is told the piece already has an owner.
+        db.rollback()
+        return UnlockOutcome("pin_required")
     return UnlockOutcome("unlocked", certificate=certificate, card=card, claim=claim)
 
 

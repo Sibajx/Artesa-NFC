@@ -50,8 +50,8 @@ const ROLE_LABELS: Record<string, string> = {
 // Why a trashed record cannot be deleted for good (services/trash.py codes).
 export const PURGE_BLOCKERS: Record<string, string> = {
   may_have_been_public: 'Ya estuvo publicado: puede quedarse en la papelera, pero no eliminarse definitivamente.',
-  has_certificate: 'Tiene un certificado emitido (CLI): no se puede eliminar.',
-  has_nfc_tag: 'Tiene una etiqueta NFC asignada (CLI): no se puede eliminar.',
+  has_certificate: 'Tiene un certificado emitido (Certificación): no se puede eliminar.',
+  has_nfc_tag: 'Tiene un chip NFC asignado (Certificación): no se puede eliminar.',
   has_pieces: 'Tiene piezas: elimínalas primero desde la papelera.',
 };
 
@@ -74,7 +74,7 @@ const CONFLICT_TEXT: Record<string, string> = {
   invalid_transition: 'Esa acción no aplica al estado actual del registro.',
   incomplete: 'Faltan datos obligatorios para publicar.',
   has_published_pieces: 'Primero pasa a borrador o archiva las piezas publicadas de este artesano.',
-  active_certificate: 'La pieza tiene un certificado activo. Revócalo con la CLI de provisioning antes de archivarla.',
+  active_certificate: 'La pieza tiene un certificado activo. Revócalo en Certificación antes de archivarla.',
   unknown_artisan: 'El artesano seleccionado no existe.',
   archived_artisan: 'El artesano está archivado; restáuralo o elige otro.',
   archived: 'El registro está archivado; restáuralo antes de agregar medios.',
@@ -95,8 +95,8 @@ const CONFLICT_TEXT: Record<string, string> = {
   trashed_artisan: 'Su artesano está en la papelera. Restáuralo primero.',
   published: 'Está publicado: pásalo a borrador antes de enviarlo a la papelera.',
   has_pieces: 'Primero envía a la papelera (o elimina) las piezas de este artesano.',
-  has_certificate: 'La pieza tiene un certificado (se gestiona con la CLI); no se puede eliminar.',
-  has_nfc_tag: 'La pieza tiene una etiqueta NFC (se gestiona con la CLI); no se puede eliminar.',
+  has_certificate: 'La pieza tiene un certificado (se gestiona en Certificación); no se puede eliminar.',
+  has_nfc_tag: 'La pieza tiene un chip NFC (se gestiona en Certificación); no se puede eliminar.',
   not_trashed: 'Primero envíalo a la papelera.',
   may_have_been_public: 'Ya pudo verse en el sitio, así que no se puede eliminar definitivamente: archívalo o déjalo en la papelera.',
 };

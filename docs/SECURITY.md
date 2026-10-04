@@ -190,6 +190,29 @@ la guarda de escritura de ADR-029) usa los mismos servicios de provisioning:
   - Si alguien reclama antes que el comprador (por ejemplo, quien tuvo el sobre), lo delata el sello VOID; el Custodio puede liberar el reclamo.
   - El correo no se verifica con un enlace: decisión del PO para no depender de un servicio de envío de correos.
 
+**Actualización ADR-030 (fases 4 y 5, certificado diseñado):**
+
+- **El SVG del certificado lo dibuja solo el servidor**, a partir de
+  parámetros validados:
+  - los textos se escapan como XML;
+  - los colores tienen que ser `#rrggbb`;
+  - no hay referencias externas, scripts ni fuentes remotas.
+
+  Gestión y la web lo muestran dentro de `<img>` (CSP `img-src data:`), donde
+  un SVG tampoco ejecuta nada.
+- **Enlace de revisión del artesano:** el token es aleatorio (256 bits) y
+  caduca en 14 días.
+  - Se guarda solo como SHA-256 y sale una sola vez, en la respuesta de
+    `submit`.
+  - Viaja en el **fragmento** de la URL (`/revision/#token`), que el
+    navegador no envía al servidor, y en el cuerpo del POST: nunca en una
+    ruta, un query string ni un log.
+  - Un token desconocido, vencido o ya decidido recibe la misma respuesta.
+    Editar el diseño invalida el enlace.
+  - Riesgo residual: quien reciba el enlace reenviado puede aprobar en nombre
+    del artesano. Se acota con la caducidad y con la auditoría (IP y fecha).
+    Además, publicar sigue siendo una acción de un Diseñador.
+
 ## 3. Hash y verificación del token
 
 `DATA_MODEL.md` §2.3 deja deliberadamente el algoritmo exacto para este

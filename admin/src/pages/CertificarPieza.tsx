@@ -207,6 +207,9 @@ function Wizard({ state, reload, error, setError }: WizardProps) {
         <p className="text-xs font-mono text-botanica-gris">{state.public_code}</p>
         <h1 className="text-3xl font-serif text-botanica-negro">{state.name}</h1>
         <p className="text-botanica-grafito">{state.artisan_name}</p>
+        <Link to={`/diseno/${state.piece_id}`} className="self-start text-sm font-medium text-botanica-jade underline">
+          Diseño del certificado original →
+        </Link>
         <div className="flex flex-wrap gap-2 mt-2">
           <Badge tone={state.certificate_active ? 'jade' : 'neutral'}>
             {state.certificate_active ? `Certificado activo · ${formatDateTime(state.certificate_issued_at)}` : 'Sin certificado activo'}

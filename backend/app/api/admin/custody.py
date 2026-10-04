@@ -311,9 +311,11 @@ def _issued(db: Session, code: str, raw_token: str, *, certificate_id, tag_id, u
 def custody_issue(piece_id: uuid.UUID, body: UidBody, who: Actor = Depends(actor),
                   db: Session = Depends(get_db)) -> CustodyIssued:
     code = _public_code(db, piece_id)
-    result = _run(db, lambda: prov.execute_issue(db, code, body.uid, operator=_operator(who)))
+    result = _run(db, lambda: prov.execute_issue(db, code, body.uid, operator=_operator(who),
+                                                                any_manufacturer=True))
     _audit_custody(db, who, piece_id, "issued", {"certificate_id": str(result.certificate_id),
-                                                 "tag_id": str(result.tag_id), "uid": result.physical_uid})
+                                                 "tag_id": str(result.tag_id), "uid": result.physical_uid,
+                                                 "manufacturer_byte": result.physical_uid[:2]})
     db.commit()
     return _issued(db, code, result.raw_token, certificate_id=result.certificate_id, tag_id=result.tag_id,
                    uid=result.physical_uid, needs_program=True)
@@ -324,7 +326,7 @@ def custody_rotate(piece_id: uuid.UUID, body: RotateBody, who: Actor = Depends(a
                    db: Session = Depends(get_db)) -> CustodyIssued:
     code = _public_code(db, piece_id)
     result = _run(db, lambda: prov.execute_rotate(db, code, reason=body.reason, new_physical_uid=body.uid,
-                                                  operator=_operator(who)))
+                                                  operator=_operator(who), any_manufacturer=True))
     _audit_custody(db, who, piece_id, "rotated", {"certificate_id": str(result.certificate_id),
                                                   "revoked_certificate_id": str(result.revoked_certificate_id),
                                                   "tag_id": str(result.tag_id), "uid": result.physical_uid,
@@ -343,7 +345,7 @@ def custody_program(piece_id: uuid.UUID, body: ProgramBody, who: Actor = Depends
     tag = db.get(NfcTag, body.tag_id)
     if tag is None or tag.piece_id != piece_id:
         raise _conflict("tag_not_found", 404)
-    read_back = _run(db, lambda: normalize_physical_uid(body.uid))
+    read_back = _run(db, lambda: normalize_physical_uid(body.uid, any_manufacturer=True))
     if read_back != tag.physical_uid:
         raise _conflict("uid_mismatch")
     if tag.status == NfcTagStatus.programmed:
@@ -359,7 +361,7 @@ def custody_program(piece_id: uuid.UUID, body: ProgramBody, who: Actor = Depends
 def custody_lock(piece_id: uuid.UUID, body: UidBody, who: Actor = Depends(actor),
                  db: Session = Depends(get_db)) -> CustodyState:
     code = _public_code(db, piece_id)
-    read_back = _run(db, lambda: normalize_physical_uid(body.uid))
+    read_back = _run(db, lambda: normalize_physical_uid(body.uid, any_manufacturer=True))
     state = prov.load_piece_state(db, code)
     if len(state.programmed_tags) != 1 or state.programmed_tags[0].physical_uid != read_back:
         raise _conflict("uid_mismatch")
