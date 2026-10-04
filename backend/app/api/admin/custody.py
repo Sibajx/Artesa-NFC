@@ -92,6 +92,23 @@ def custody_pieces(db: Session = Depends(get_db)) -> ListEnvelope[CustodyPiece]:
             .order_by(NfcTag.created_at.asc())
         ).scalars():
             tags[tag.piece_id] = tag
+    # P-026 G6: card, claim, newest design and sale, one query each.
+    cards: dict[uuid.UUID, str] = {}
+    claimed: set[uuid.UUID] = set()
+    designs: dict[uuid.UUID, str] = {}
+    if ids:
+        from app.models.certificate_design import CertificateDesign
+        from app.models.ownership import OwnershipCard, OwnershipCardStatus, PieceClaim, PieceClaimStatus
+
+        for card in db.execute(select(OwnershipCard).where(
+                OwnershipCard.piece_id.in_(ids),
+                OwnershipCard.status.in_((OwnershipCardStatus.active, OwnershipCardStatus.blocked)))).scalars():
+            cards[card.piece_id] = card.status.value
+        claimed = set(db.execute(select(PieceClaim.piece_id).where(
+            PieceClaim.piece_id.in_(ids), PieceClaim.status == PieceClaimStatus.active)).scalars())
+        for design in db.execute(select(CertificateDesign).where(CertificateDesign.piece_id.in_(ids))
+                                 .order_by(CertificateDesign.version.asc())).scalars():
+            designs[design.piece_id] = design.status.value  # newest version wins
     data = [
         CustodyPiece(
             id=piece.id,
@@ -108,6 +125,11 @@ def custody_pieces(db: Session = Depends(get_db)) -> ListEnvelope[CustodyPiece]:
                 piece.publication_status.value == "published"
                 and (piece.id not in certs or certs[piece.id].status != CertificateStatus.active)
             ),
+            card_status=cards.get(piece.id),
+            claimed=piece.id in claimed,
+            design_status=designs.get(piece.id),
+            sold=piece.availability_status.value == "sold",
+            reported_stolen=piece.reported_stolen_at is not None,
         )
         for piece, artisan_name in pieces
     ]
