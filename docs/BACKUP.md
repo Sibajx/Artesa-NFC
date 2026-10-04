@@ -857,6 +857,15 @@ bin/artesa-backup run                           # busca "FINANZAS: included in t
 bin/artesa-backup status
 ```
 
+Después, una corrida **con la unit real**, que monta `/home` en solo lectura
+como lo hará el timer:
+
+```bash
+sudo systemctl start artesa-backup.service      # espera a que termine (oneshot)
+systemctl show artesa-backup.service -p Result  # Result=success
+bin/artesa-backup status                        # la línea FINANZAS: included …
+```
+
 Desde ahí, el timer diario de `artesa-backup` lo incluye en cada respaldo.
 
 ### 17.3 Recuperar Finanzas (máquina del operador, nunca easerver)
@@ -883,3 +892,31 @@ Desde ahí, el timer diario de `artesa-backup` lo incluye en cada respaldo.
    mv artesa_finanzas.db.recuperada artesa_finanzas.db
    sudo systemctl start artesa-finanzas.service
    ```
+
+
+### 17.4 Modo de diario de SQLite y `ProtectHome=read-only`
+
+La unit monta `/home` en solo lectura, y la copia abre la base en solo
+lectura.
+
+- **Modo por defecto (`DELETE`):** el que usa Finanzas hoy (su `main.py` no
+  cambia el modo). La copia funciona con `/home` en solo lectura; lo cubre
+  una prueba.
+- **Modo `WAL`:** si alguien lo activa, SQLite necesita escribir el archivo
+  `-shm` junto a la base. Bajo la unit fallaría con
+  `FINANZAS: FAILED (SQLite copy failed (OperationalError))`, aunque a mano
+  funcione.
+
+Para revisar el modo actual:
+
+```bash
+python3 -c "import sqlite3; print(sqlite3.connect('file:/home/energias/artesa-finanzas-backend/artesa_finanzas.db?mode=ro', uri=True).execute('pragma journal_mode').fetchone()[0])"
+```
+
+Si sale `wal`, hay dos salidas (decisión humana):
+
+1. volver a `DELETE` con Finanzas detenido;
+2. un drop-in de la unit con
+   `ReadWritePaths=/home/energias/artesa-finanzas-backend`. Esta afloja el
+   aislamiento.
+

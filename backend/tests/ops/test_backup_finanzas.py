@@ -97,3 +97,17 @@ def test_snapshot_rejects_relative_paths_and_symlinks(tmp_path):
         bsq.snapshot(link, tmp_path / "out2")
     info = bsq.snapshot(source, tmp_path / "out3")
     assert info["integrity"] == "ok" and oct((tmp_path / "out3").stat().st_mode & 0o777) == "0o600"
+
+
+def test_the_default_journal_copies_from_a_read_only_directory(tmp_path):
+    # The scheduled unit mounts /home read-only (ProtectHome=read-only). Finanzas
+    # uses SQLite's default journal, which a read-only reader can copy; a WAL
+    # database there would fail and needs ReadOnlyPaths... see docs/BACKUP.md §17.4.
+    folder = tmp_path / "finanzas"
+    folder.mkdir()
+    source = make_finanzas(folder / "artesa_finanzas.db")
+    folder.chmod(0o555)
+    try:
+        assert bsq.snapshot(source, tmp_path / "copy.sqlite")["table_counts"] == {"invoices": 1, "transactions": 3}
+    finally:
+        folder.chmod(0o755)
