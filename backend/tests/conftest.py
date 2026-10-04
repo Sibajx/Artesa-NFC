@@ -50,3 +50,12 @@ def db_session(db_connection):
         yield session
     finally:
         session.close()
+
+
+@pytest.fixture(autouse=True)
+def _artisan_authorization_off_by_default(monkeypatch):
+    """P-026 G3: most tests publish artisans freely; tests of the rule turn
+    it back on with ``monkeypatch.setattr(get_settings(), ...)``."""
+    from app.core.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "require_artisan_authorization", False)

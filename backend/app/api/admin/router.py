@@ -26,6 +26,7 @@ from app.models.nfc_tag import NfcTag
 from app.models.piece import Piece
 from app.schemas.admin import (
     AdminArtisanDetail,
+    AdminAuthorization,
     AdminArtisanRef,
     AdminArtisanSummary,
     AdminAuditEvent,
@@ -137,6 +138,17 @@ def list_artisans(
     return ListEnvelope(data=data, meta=ListMeta(total=len(data)))
 
 
+def _authorization(db: Session, artisan_id: uuid.UUID) -> AdminAuthorization | None:
+    from app.services import authorizations
+
+    row = authorizations.current(db, artisan_id)
+    if row is None:
+        return None
+    return AdminAuthorization(id=row.id, status=row.status.value, medium=row.medium, requested_by=row.requested_by,
+                              created_at=row.created_at, expires_at=row.expires_at, decided_at=row.decided_at,
+                              note=row.note)
+
+
 @router.get("/artisans/{artisan_id}", response_model=AdminArtisanDetail)
 def get_artisan(artisan_id: uuid.UUID, db: Session = Depends(get_db),
                 identity: AdminIdentity = Depends(require_admin)) -> AdminArtisanDetail:
@@ -161,6 +173,9 @@ def get_artisan(artisan_id: uuid.UUID, db: Session = Depends(get_db),
         history=artisan.history,
         techniques=artisan.techniques,
         public_contact=artisan.public_contact,
+        validation_whatsapp=artisan.validation_whatsapp,
+        validation_contact_name=artisan.validation_contact_name,
+        authorization=_authorization(db, artisan.id),
         publication_status=artisan.publication_status.value,
         created_at=artisan.created_at,
         updated_at=artisan.updated_at,

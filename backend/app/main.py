@@ -4,6 +4,8 @@ from fastapi.responses import JSONResponse
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from app.api.admin.accounts import reads as admin_accounts_reads
+from app.api.admin.accounts import writes as admin_accounts_writes
 from app.api.admin.custody import router as admin_custody_router
 from app.api.admin.designs import reads as admin_designs_reads
 from app.api.admin.designs import writes as admin_designs_writes
@@ -30,6 +32,9 @@ _CERTIFICATE_POST_PATHS = frozenset({
     # ADR-030 phase 5: the artisan's review link carries its token in the body.
     "/api/v1/design-reviews/resolve",
     "/api/v1/design-reviews/decision",
+    # P-026 G3: the artisan's authorization link, same treatment.
+    "/api/v1/artisan-authorizations/resolve",
+    "/api/v1/artisan-authorizations/decision",
 })
 
 # The only body certificates/resolve accepts is {"token": "<43 chars>"}
@@ -190,6 +195,8 @@ app.include_router(admin_custody_router)
 app.include_router(admin_custody_writes_router)
 # ADR-030 phase 5. Before the content writes: POST /pieces/{id}/designs would
 # otherwise match their /pieces/{id}/{action} transition route.
+app.include_router(admin_accounts_reads)
+app.include_router(admin_accounts_writes)
 app.include_router(admin_designs_reads)
 app.include_router(admin_designs_writes)
 # Before the writes: POST /{owner}/{id}/media would otherwise match their

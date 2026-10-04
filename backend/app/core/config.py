@@ -83,6 +83,19 @@ class Settings(BaseSettings):
     # certificates. Custodians are also designers.
     custodian_emails: str = ""
     designer_emails: str = ""
+    # P-026 G3: an artisan is published only with their authorization
+    # (asked by WhatsApp or recorded in person). Tests switch it off.
+    require_artisan_authorization: bool = True
+    # P-026 G4: the owner manages Gestión's accounts from its "Usuarios" page.
+    # Fixed here (never editable from Gestión) so nobody can lock them out.
+    owner_emails: str = ""
+    # Optional: with these, adding or removing an account in Gestión also
+    # updates the Cloudflare Access group that Gestión's policy includes.
+    # The token needs only "Access: Organizations, Identity Providers, and
+    # Groups: Edit". Never logged.
+    access_sync_api_token: str = ""
+    access_sync_account_id: str = ""
+    access_sync_group_id: str = ""
     # AUD tag of the separate Access application that guards the custody
     # path (/api/admin/v1/custody). Optional: tokens of either application
     # are accepted, the custodian role is still checked here.
@@ -162,7 +175,8 @@ class Settings(BaseSettings):
             raise UnsafeConfigurationError("ADMIN_EMAILS must be a comma-separated list of email addresses.")
         admins = set(self.admin_emails_list)
         for name, emails in (("CUSTODIAN_EMAILS", self.custodian_emails_list),
-                             ("DESIGNER_EMAILS", self.designer_emails_list)):
+                             ("DESIGNER_EMAILS", self.designer_emails_list),
+                             ("OWNER_EMAILS", self.owner_emails_list)):
             if any(not _EMAIL_RE.fullmatch(email) for email in emails):
                 raise UnsafeConfigurationError(f"{name} must be a comma-separated list of email addresses.")
             if not set(emails) <= admins:
@@ -207,6 +221,14 @@ class Settings(BaseSettings):
     @property
     def custodian_emails_list(self) -> list[str]:
         return [email.strip().lower() for email in self.custodian_emails.split(",") if email.strip()]
+
+    @property
+    def owner_emails_list(self) -> list[str]:
+        return [email.strip().lower() for email in self.owner_emails.split(",") if email.strip()]
+
+    @property
+    def access_sync_enabled(self) -> bool:
+        return bool(self.access_sync_api_token and self.access_sync_account_id and self.access_sync_group_id)
 
     @property
     def designer_emails_list(self) -> list[str]:

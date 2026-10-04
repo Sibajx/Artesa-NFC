@@ -4,6 +4,7 @@ import { formatDate, joinList, labels } from '../format';
 import { useState } from 'react';
 import { useLoad } from '../hooks';
 import { MediaSection } from '../MediaSection';
+import { AutorizacionSection } from '../AutorizacionSection';
 import { PublishChecklist } from '../PublishChecklist';
 import { RecordActions } from '../RecordActions';
 import { ErrorState, Field, Loading, PublicationBadge } from '../ui';
@@ -29,6 +30,7 @@ export default function ArtesanoDetalle() {
           <div className="flex flex-col gap-8">
             <RecordActions kind="artisans" id={a.id} version={a.updated_at} status={a.publication_status} trashedAt={a.trashed_at} purgeBlocker={a.purge_blocker} name={a.full_name} draftPieces={a.pieces.filter((x) => x.publication_status === 'draft' && !x.trashed_at).map((x) => ({ kind: 'pieces' as const, id: x.id, version: x.updated_at, name: x.name }))} onChanged={() => setRevision((r) => r + 1)} />
             <PublishChecklist kind="artisans" record={a} onChanged={() => setRevision((r) => r + 1)} />
+            <AutorizacionSection key={a.id} artisan={a} onChanged={() => setRevision((r) => r + 1)} />
             <article className="bg-white rounded-xl border border-botanica-gris/15 overflow-hidden shadow-sm">
               <header className="bg-[#FCFBF9] border-b border-botanica-gris/15 p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>

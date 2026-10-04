@@ -1,0 +1,21 @@
+---
+// /autorizacion/#{token} — the artisan authorizes the publication of their
+// name, portrait and story (P-026 G3). The token lives in the URL fragment:
+// it never reaches a server log; the island sends it only in the POST body.
+import "@/styles/islands.css";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import NoScript from "@/components/ui/NoScript.astro";
+import ArtisanAuthorization from "@/components/islands/ArtisanAuthorization";
+---
+
+<BaseLayout
+  title="Autorización"
+  description="Autorización de un artesano para publicar su información."
+  noindex
+  privateRoute
+>
+  <div class="container page-top review-page">
+    <NoScript>Para responder necesitas JavaScript habilitado en tu navegador.</NoScript>
+    <ArtisanAuthorization client:only="react" />
+  </div>
+</BaseLayout>

@@ -13,6 +13,7 @@ import Apartado from './pages/Apartado';
 import Certificacion from './pages/Certificacion';
 import CertificarPieza from './pages/CertificarPieza';
 import DisenoCertificado from './pages/DisenoCertificado';
+import Usuarios from './pages/Usuarios';
 import { RolesContext } from './roles-context';
 import ArtesanoForm from './pages/ArtesanoForm';
 import PiezaForm from './pages/PiezaForm';
@@ -59,6 +60,14 @@ const icons: Record<string, ReactElement> = {
       <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
     </svg>
   ),
+  Usuarios: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+      <circle cx="9" cy="7" r="4"/>
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+      <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+    </svg>
+  ),
   Auditoría: (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -77,6 +86,7 @@ const menuItems = [
   { name: 'Archivados', path: '/archivados' },
   { name: 'Papelera', path: '/papelera' },
   { name: 'Auditoría', path: '/auditoria' },
+  { name: 'Usuarios', path: '/usuarios', role: 'owner' },
 ];
 
 export default function App() {
@@ -143,7 +153,7 @@ export default function App() {
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium text-botanica-negro truncate" title={email}>{email}</p>
               <p className="text-xs text-botanica-gris">
-                {roles.includes('custodian') ? 'Custodio' : roles.includes('designer') ? 'Diseñador' : 'Editor de contenido'}
+                {roles.includes('owner') ? 'Dueño' : roles.includes('custodian') ? 'Custodio' : roles.includes('designer') ? 'Diseñador' : 'Editor de contenido'}
               </p>
             </div>
             <a
@@ -177,6 +187,7 @@ export default function App() {
           {roles.includes('custodian') && <Route path="/certificacion" element={<Certificacion />} />}
           {roles.includes('custodian') && <Route path="/certificacion/:id" element={<CertificarPieza />} />}
           {roles.includes('designer') && <Route path="/diseno/:id" element={<DisenoCertificado />} />}
+          {roles.includes('owner') && <Route path="/usuarios" element={<Usuarios />} />}
           <Route path="/archivados" element={<Apartado key="archivados" mode="archivados" />} />
           <Route path="/papelera" element={<Apartado key="papelera" mode="papelera" />} />
           <Route path="/auditoria" element={<Auditoria />} />

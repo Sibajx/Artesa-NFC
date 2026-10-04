@@ -68,6 +68,34 @@ export function mediaUrl(url: string): string {
 
 export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
+export interface ArtisanAuthorization {
+  id: string;
+  status: 'pending' | 'authorized';
+  medium: string;
+  requested_by: string;
+  created_at: string;
+  expires_at: string | null;
+  decided_at: string | null;
+  note: string | null;
+}
+
+// P-026 G4: the owner's accounts page.
+export interface Account {
+  email: string;
+  role: 'editor' | 'designer' | 'custodian';
+  source: 'configuracion' | 'gestion';
+  owner: boolean;
+  added_by: string | null;
+  added_at: string | null;
+  note: string | null;
+}
+
+export interface AccountList {
+  data: Account[];
+  cloudflare: string;
+  sync_configured: boolean;
+}
+
 export interface ArtisanDetail {
   id: string;
   slug: string;
@@ -83,6 +111,10 @@ export interface ArtisanDetail {
   history: string | null;
   techniques: unknown[] | null;
   public_contact: Record<string, unknown> | null;
+  // P-026 G3: private WhatsApp for validations and the authorization to publish.
+  validation_whatsapp?: string | null;
+  validation_contact_name?: string | null;
+  authorization?: ArtisanAuthorization | null;
   publication_status: PublicationStatus;
   created_at: string;
   updated_at: string;
@@ -398,6 +430,8 @@ export interface ArtisanInput {
   history?: string | null;
   techniques?: string[] | null;
   public_contact?: Record<string, string> | null;
+  validation_whatsapp?: string | null;
+  validation_contact_name?: string | null;
 }
 
 export interface PieceInput {
@@ -476,6 +510,20 @@ export const adminApi = {
     request<Design>('POST', `/designs/${encodeURIComponent(id)}/publish`, { body: {}, version }),
   discardDesign: (id: string, version: string) =>
     request<void>('POST', `/designs/${encodeURIComponent(id)}/discard`, { body: {}, version }),
+  accounts: (signal?: AbortSignal) => get<AccountList>('/accounts', undefined, signal),
+  addAccount: (email: string, role: string, note: string | null) =>
+    request<AccountList>('POST', '/accounts', { body: { email, role, note } }),
+  changeAccountRole: (email: string, role: string) =>
+    request<AccountList>('POST', `/accounts/${encodeURIComponent(email)}/role`, { body: { role } }),
+  removeAccount: (email: string) => request<AccountList>('POST', `/accounts/${encodeURIComponent(email)}/remove`, { body: {} }),
+  syncAccounts: () => request<AccountList>('POST', '/accounts/sync', { body: {} }),
+  requestAuthorization: (id: string) =>
+    request<{ url: string; whatsapp: string | null; contact_name: string | null; artisan_name: string }>(
+      'POST', `/artisans/${encodeURIComponent(id)}/authorization/request`, { body: {} }),
+  recordAuthorization: (id: string, note: string) =>
+    request<ArtisanDetail>('POST', `/artisans/${encodeURIComponent(id)}/authorization/record`, { body: { note } }),
+  revokeAuthorization: (id: string, note: string) =>
+    request<ArtisanDetail>('POST', `/artisans/${encodeURIComponent(id)}/authorization/revoke`, { body: { note } }),
   registerSale: (id: string, body: SaleInput, version: string) =>
     request<PieceDetail>('POST', `/pieces/${encodeURIComponent(id)}/sale`, { body, version }),
   cancelSale: (id: string, reason: string, version: string) =>
