@@ -430,17 +430,18 @@ def _retire_tags(db: Session, state: PieceState, *, action_note: str, operator: 
     return tuple(retired)
 
 
-def execute_issue(db: Session, public_code: str, physical_uid: str, *, operator: str) -> IssueResult:
+def execute_issue(db: Session, public_code: str, physical_uid: str, *, operator: str,
+                  any_manufacturer: bool = False) -> IssueResult:
     """register tag + assign tag + issue certificate, in the caller's single
     transaction (decision E of issue #107): all of it or none of it."""
-    uid = normalize_physical_uid(physical_uid)  # before touching the database
+    uid = normalize_physical_uid(physical_uid, any_manufacturer=any_manufacturer)  # before touching the database
     state = _locked_state(db, public_code)
     blockers = issue_blockers(state)
     if blockers:
         raise PreconditionFailed(blockers)
 
     piece = db.get(Piece, state.piece_id)
-    tag = register_nfc_tag(db, physical_uid=uid)
+    tag = register_nfc_tag(db, physical_uid=uid, any_manufacturer=any_manufacturer)
     assign_nfc_tag(db, tag, piece)
     activation = issue_certificate(db, piece.id)
 
@@ -470,6 +471,7 @@ def execute_rotate(
     reason: str,
     new_physical_uid: str | None,
     operator: str,
+    any_manufacturer: bool = False,
 ) -> RotateResult:
     """Revoke the active certificate and issue a new one, plus the tag side:
 
@@ -482,7 +484,8 @@ def execute_rotate(
       `programmed` before anything was written (decision I).
     """
     _validate_reason(reason)
-    uid = normalize_physical_uid(new_physical_uid) if new_physical_uid is not None else None
+    uid = (normalize_physical_uid(new_physical_uid, any_manufacturer=any_manufacturer)
+           if new_physical_uid is not None else None)
     state = _locked_state(db, public_code)
     blockers = rotate_blockers(state)
     if blockers:
@@ -498,7 +501,7 @@ def execute_rotate(
             raise PreconditionFailed([TAG_LOCKED_REQUIRES_NEW_TAG])
     else:
         # Register first: a duplicate UID fails before anything else changes.
-        tag = register_nfc_tag(db, physical_uid=uid)
+        tag = register_nfc_tag(db, physical_uid=uid, any_manufacturer=any_manufacturer)
         retired = _retire_tags(db, state, action_note=f"replaced-by-rotate reason={reason}", operator=operator)
         assign_nfc_tag(db, tag, piece)
 
