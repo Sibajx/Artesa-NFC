@@ -186,11 +186,144 @@ def test_authorization_link_rules(owner_client, db_session):
     rec = c.post(f"/api/admin/v1/artisans/{artisan['id']}/authorization/record",
                  json={"note": "Firmó la hoja en el taller"}, headers=H()).json()
     assert rec["authorization"]["status"] == "authorized" and rec["authorization"]["medium"] == "en persona"
-    assert c.post(f"/api/admin/v1/artisans/{artisan['id']}/authorization/request", json={},
-                  headers=H()).json()["error"]["code"] == "already_authorized"
+    # In person can still be confirmed by WhatsApp (see the test below).
+    assert "/autorizacion/#" in c.post(f"/api/admin/v1/artisans/{artisan['id']}/authorization/request", json={},
+                                       headers=H()).json()["url"]
     rev = c.post(f"/api/admin/v1/artisans/{artisan['id']}/authorization/revoke",
                  json={"note": "Pidió retirar su historia"}, headers=H()).json()
     assert rev["authorization"] is None
     big = c.post("/api/v1/artisan-authorizations/resolve", content=b'{"token":"' + b"a" * 2000 + b'"}',
                  headers={"content-type": "application/json"})
     assert big.status_code == 413
+
+
+# --- G3 (2026-10-05): what the artisan sees, "Quiero cambios", "No autorizo" ---------
+
+
+def _artisan_with_pieces(c, **fields):
+    a = c.post("/api/admin/v1/artisans", json={"full_name": "Rigoberto Ramírez Robles", **fields}, headers=H()).json()
+    pieces = []
+    for name in ("El Negrito", "El Viejito", "Borrador"):
+        p = c.post("/api/admin/v1/pieces", json={"artisan_id": a["id"], "name": name}, headers=H()).json()
+        if name != "Borrador":
+            p = c.post(f"/api/admin/v1/pieces/{p['id']}/publish", json={},
+                       headers=H(**{"If-Match": p["updated_at"]})).json()
+        pieces.append(p)
+    return a, pieces
+
+
+def _link(c, artisan_id):
+    r = c.post(f"/api/admin/v1/artisans/{artisan_id}/authorization/request", json={}, headers=H()).json()
+    return r["url"].split("#", 1)[1]
+
+
+def _decide(c, token, decision, comment=None):
+    return c.post("/api/v1/artisan-authorizations/decision",
+                  json={"token": token, "decision": decision, "comment": comment}).json()["status"]
+
+
+def _detail(c, kind, record_id):
+    return c.get(f"/api/admin/v1/{kind}/{record_id}", headers=auth(make_token(email=OWNER))).json()
+
+
+def test_the_link_shows_everything_that_is_published(owner_client):
+    c = owner_client
+    bio = ("Talla máscaras de zompantle. " * 60).strip()  # longer than the old 1,200-character cut
+    a, _ = _artisan_with_pieces(c, biography=bio, history="Empezó en 2007.", techniques=["Tallado en madera"],
+                                public_contact={"telefono": "+52 951 000 0000"})
+    opened = c.post("/api/v1/artisan-authorizations/resolve", json={"token": _link(c, a["id"])}).json()
+    assert opened["biography"] == bio and opened["history"] == "Empezó en 2007."
+    assert opened["techniques"] == ["Tallado en madera"]
+    assert opened["public_contact"] == {"telefono": "+52 951 000 0000"}
+    assert [p["name"] for p in opened["pieces"]] == ["El Negrito", "El Viejito"]  # the draft is not shown
+    assert opened["confirming"] is False
+
+
+def test_a_link_sent_before_the_change_still_opens(owner_client, db_session):
+    c = owner_client
+    a, _ = _artisan_with_pieces(c)
+    token = _link(c, a["id"])
+    db_session.execute(update(ArtisanAuthorization).values(snapshot={
+        "full_name": "Rigoberto", "artistic_name": None, "place": "Cuilápam", "biography": "Bio", "portrait": None}))
+    db_session.commit()
+    opened = c.post("/api/v1/artisan-authorizations/resolve", json={"token": token}).json()
+    assert opened["status"] == "open" and opened["pieces"] == [] and opened["history"] == ""
+
+
+def test_asking_for_changes_keeps_everything_published(owner_client, db_session, monkeypatch):
+    monkeypatch.setattr(get_settings(), "require_artisan_authorization", True)
+    c = owner_client
+    a, pieces = _artisan_with_pieces(c)
+    token = _link(c, a["id"])
+    assert _decide(c, token, "changes") == "comment_required"
+    assert _decide(c, token, "changes", "  ") == "comment_required"
+    assert _decide(c, token, "changes", "Mi grupo se llama Topos Azteca") == "recorded"
+    assert _decide(c, token, "authorize") == "unavailable"  # one answer per link
+
+    detail = _detail(c, "artisans", a["id"])
+    assert detail["authorization"] is None
+    assert detail["last_answer"]["status"] == "changes_requested"
+    assert detail["last_answer"]["note"] == "Mi grupo se llama Topos Azteca"
+    assert {p["publication_status"] for p in pieces[:2]} == {"published"}
+    assert _detail(c, "pieces", pieces[0]["id"])["publication_status"] == "published"
+    summary = c.get("/api/admin/v1/summary", headers=auth(make_token(email=OWNER))).json()
+    assert summary["authorizations_with_changes_requested"]["count"] == 1
+    assert summary["recent_answers"][0]["text"] == "Rigoberto Ramírez Robles pidió cambios antes de autorizar"
+    event = db_session.execute(select(AuditEvent).where(
+        AuditEvent.action == "artisan.authorization_changes_requested")).scalar_one()
+    assert event.actor_email is None and event.event_metadata["comment"] == "Mi grupo se llama Topos Azteca"
+
+    # The team corrects and sends a new link: the request for changes is answered.
+    new = _link(c, a["id"])
+    assert _detail(c, "artisans", a["id"])["last_answer"] is None
+    summary = c.get("/api/admin/v1/summary", headers=auth(make_token(email=OWNER))).json()
+    assert summary["authorizations_with_changes_requested"]["count"] == 0
+    assert _decide(c, new, "authorize") == "recorded"
+    assert _detail(c, "artisans", a["id"])["authorization"]["status"] == "authorized"
+
+
+def test_declining_unpublishes_the_artisan_and_their_pieces(owner_client, db_session):
+    c = owner_client
+    a, pieces = _artisan_with_pieces(c)
+    a = c.post(f"/api/admin/v1/artisans/{a['id']}/publish", json={}, headers=H(**{"If-Match": a["updated_at"]})).json()
+    assert a["publication_status"] == "published"
+    token = _link(c, a["id"])
+    assert _decide(c, token, "decline", "Prefiero no salir") == "recorded"
+
+    detail = _detail(c, "artisans", a["id"])
+    assert detail["publication_status"] == "draft"
+    assert detail["last_answer"]["status"] == "declined" and detail["last_answer"]["note"] == "Prefiero no salir"
+    assert {_detail(c, "pieces", p["id"])["publication_status"] for p in pieces} == {"draft"}
+    assert c.get("/api/v1/artisans/rigoberto-ramirez-robles").status_code == 404
+    events = db_session.execute(select(AuditEvent).where(AuditEvent.actor_email.is_(None))
+                                .order_by(AuditEvent.occurred_at)).scalars().all()
+    unpublished = [e for e in events if e.action.endswith(".unpublished")]
+    assert sorted(e.action for e in unpublished) == ["artisan.unpublished", "piece.unpublished", "piece.unpublished"]
+    assert all(e.event_metadata["reason"] == "authorization_declined" for e in unpublished)
+    declined = next(e for e in events if e.action == "artisan.authorization_declined")
+    assert sorted(declined.event_metadata["unpublished"]) == ["el-negrito", "el-viejito", "rigoberto-ramirez-robles"]
+    # Gestión edits keep working: the versions moved forward.
+    edited = c.patch(f"/api/admin/v1/artisans/{a['id']}", json={"history": "Corregida"},
+                     headers=H(**{"If-Match": detail["updated_at"]}))
+    assert edited.status_code == 200, edited.text
+
+
+def test_an_in_person_authorization_can_be_confirmed_by_whatsapp(owner_client, monkeypatch):
+    monkeypatch.setattr(get_settings(), "require_artisan_authorization", True)
+    c = owner_client
+    a, _ = _artisan_with_pieces(c)
+    c.post(f"/api/admin/v1/artisans/{a['id']}/authorization/record", json={"note": "Nos dio permiso de palabra"},
+           headers=H())
+    token = _link(c, a["id"])  # allowed: it was in person
+    detail = _detail(c, "artisans", a["id"])
+    # Still authorized while the confirmation is open, so it can be published.
+    assert detail["authorization"]["status"] == "authorized" and detail["authorization"]["expires_at"]
+    ok = c.post(f"/api/admin/v1/artisans/{a['id']}/publish", json={}, headers=H(**{"If-Match": detail["updated_at"]}))
+    assert ok.status_code == 200, ok.text
+    opened = c.post("/api/v1/artisan-authorizations/resolve", json={"token": token}).json()
+    assert opened["status"] == "open" and opened["confirming"] is True
+    assert _decide(c, token, "authorize") == "recorded"
+    detail = _detail(c, "artisans", a["id"])
+    assert detail["authorization"]["medium"] == "whatsapp" and detail["authorization"]["expires_at"] is None
+    assert c.post(f"/api/admin/v1/artisans/{a['id']}/authorization/request", json={},
+                  headers=H()).json()["error"]["code"] == "already_authorized"

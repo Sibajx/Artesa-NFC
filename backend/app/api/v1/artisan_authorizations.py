@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
+from app.models.artisan_authorization import AuthorizationStatus
 from app.services import authorizations
 
 router = APIRouter(prefix="/artisan-authorizations", tags=["artisan-authorizations"])
@@ -25,8 +26,13 @@ class TokenBody(BaseModel):
 
 
 class DecisionBody(TokenBody):
-    decision: Literal["authorize", "decline"]
+    decision: Literal["authorize", "changes", "decline"]
     comment: str | None = Field(default=None, max_length=500)
+
+
+class SnapshotPiece(BaseModel):
+    name: str
+    cover: str | None = None
 
 
 class AuthorizationOpen(BaseModel):
@@ -35,7 +41,14 @@ class AuthorizationOpen(BaseModel):
     artistic_name: str | None
     place: str
     biography: str
+    history: str = ""
+    techniques: list[str] = []
+    languages: list[str] = []
+    public_contact: dict[str, str] = {}
     portrait: str | None
+    pieces: list[SnapshotPiece] = []
+    # An authorization given in person, now confirmed by WhatsApp.
+    confirming: bool = False
     expires_at: datetime
 
 
@@ -44,7 +57,7 @@ class AuthorizationUnavailable(BaseModel):
 
 
 class DecisionResult(BaseModel):
-    status: Literal["recorded", "unavailable"]
+    status: Literal["recorded", "unavailable", "comment_required"]
 
 
 def _ip(request: Request) -> str | None:
@@ -60,14 +73,17 @@ def resolve(body: TokenBody, db: Session = Depends(get_db)) -> AuthorizationOpen
     row = authorizations.by_token(db, body.token)
     if row is None:
         return AuthorizationUnavailable()
-    snap = row.snapshot
+    snap = row.snapshot  # links sent before 2026-10-05 carry only the first five keys
     return AuthorizationOpen(full_name=snap.get("full_name") or "", artistic_name=snap.get("artistic_name"),
                              place=snap.get("place") or "", biography=snap.get("biography") or "",
-                             portrait=snap.get("portrait"), expires_at=row.expires_at)
+                             history=snap.get("history") or "", techniques=snap.get("techniques") or [],
+                             languages=snap.get("languages") or [],
+                             public_contact={str(k): str(v) for k, v in (snap.get("public_contact") or {}).items()},
+                             portrait=snap.get("portrait"), pieces=snap.get("pieces") or [],
+                             confirming=row.status == AuthorizationStatus.authorized, expires_at=row.expires_at)
 
 
 @router.post("/decision", response_model=DecisionResult)
 def decision(body: DecisionBody, request: Request, db: Session = Depends(get_db)) -> DecisionResult:
-    recorded = authorizations.decide(db, body.token, authorize=body.decision == "authorize",
-                                     comment=body.comment, ip=_ip(request))
-    return DecisionResult(status="recorded" if recorded else "unavailable")
+    return DecisionResult(status=authorizations.decide(db, body.token, decision=body.decision,
+                                                       comment=body.comment, ip=_ip(request)))

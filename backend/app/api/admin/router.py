@@ -145,7 +145,16 @@ def list_artisans(
 def _authorization(db: Session, artisan_id: uuid.UUID) -> AdminAuthorization | None:
     from app.services import authorizations
 
-    row = authorizations.current(db, artisan_id)
+    return _admin_authorization(authorizations.current(db, artisan_id))
+
+
+def _last_answer(db: Session, artisan_id: uuid.UUID) -> AdminAuthorization | None:
+    from app.services import authorizations
+
+    return _admin_authorization(authorizations.last_answer(db, artisan_id))
+
+
+def _admin_authorization(row) -> AdminAuthorization | None:
     if row is None:
         return None
     return AdminAuthorization(id=row.id, status=row.status.value, medium=row.medium, requested_by=row.requested_by,
@@ -180,6 +189,7 @@ def get_artisan(artisan_id: uuid.UUID, db: Session = Depends(get_db),
         validation_whatsapp=artisan.validation_whatsapp,
         validation_contact_name=artisan.validation_contact_name,
         authorization=_authorization(db, artisan.id),
+        last_answer=_last_answer(db, artisan.id),
         publication_status=artisan.publication_status.value,
         created_at=artisan.created_at,
         updated_at=artisan.updated_at,

@@ -44,6 +44,10 @@
     "c4d1a7e2f9b3": {
       "class": "additive",
       "note": "Drops the seven empty legacy tables of the old prototype (#134) only if they exist and are empty; fails without dropping anything otherwise. No release reads or writes them, so older code keeps working (rollback-compatible); the deploy still takes a backup because it is a migration."
+    },
+    "b7e2c5a9d41f": {
+      "class": "additive",
+      "note": "Adds the 'changes_requested' value of artisan_authorization_status (P-026 G3, \"Quiero cambios\"). Only the new code writes it. After a rollback, older code would fail to read a row with that value, so before rolling back run the migration's downgrade (it maps such rows to 'declined')."
     }
   }
 }

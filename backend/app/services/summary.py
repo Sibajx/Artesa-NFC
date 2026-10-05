@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import and_, exists, func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from app.core.access import CUSTODIAN, DESIGNER, AdminIdentity
 from app.models.artisan import Artisan
@@ -70,6 +70,17 @@ def build(db: Session, identity: AdminIdentity) -> dict:
     out["authorizations_waiting"] = _bucket(db, select(Artisan).where(Artisan.trashed_at.is_(None), pending_auth)
                                             .order_by(Artisan.full_name),
                                             lambda r: r[0].artistic_name or r[0].full_name)
+    # "Quiero cambios" still unanswered: no open request and nothing decided
+    # or revoked after it (authorizations.last_answer, in SQL).
+    asked, newer = aliased(ArtisanAuthorization), aliased(ArtisanAuthorization)
+    changes = exists().where(
+        asked.artisan_id == Artisan.id, asked.status == AuthorizationStatus.changes_requested,
+        ~exists().where(newer.artisan_id == asked.artisan_id,
+                        newer.status.in_((AuthorizationStatus.pending, AuthorizationStatus.authorized))
+                        | (func.coalesce(newer.revoked_at, newer.decided_at) > asked.decided_at)))
+    out["authorizations_with_changes_requested"] = _bucket(
+        db, select(Artisan).where(Artisan.trashed_at.is_(None), changes).order_by(Artisan.full_name),
+        lambda r: r[0].artistic_name or r[0].full_name)
     since = now - timedelta(days=30)
     sales = db.execute(select(func.count(), func.coalesce(func.sum(Sale.price_cents), 0)).where(
         Sale.status == SaleStatus.active, Sale.created_at >= since)).one()
@@ -80,6 +91,7 @@ def build(db: Session, identity: AdminIdentity) -> dict:
     answers = db.execute(select(AuditEvent).where(
         AuditEvent.occurred_at >= recent, AuditEvent.actor_email.is_(None),
         AuditEvent.action.in_(("artisan.authorized", "artisan.authorization_declined",
+                               "artisan.authorization_changes_requested",
                                "design.approved", "design.changes_requested")))
         .order_by(AuditEvent.occurred_at.desc()).limit(LIST_CAP)).scalars().all()
     out["recent_answers"] = [_answer(db, e) for e in answers]
@@ -121,7 +133,8 @@ def build(db: Session, identity: AdminIdentity) -> dict:
 
 _ANSWER_TEXT = {
     "artisan.authorized": "autorizó su publicación",
-    "artisan.authorization_declined": "no autorizó su publicación",
+    "artisan.authorization_declined": "no autorizó su publicación (se pasó a borrador)",
+    "artisan.authorization_changes_requested": "pidió cambios antes de autorizar",
     "design.approved": "aprobó el diseño del certificado",
     "design.changes_requested": "pidió cambios al diseño del certificado",
 }
