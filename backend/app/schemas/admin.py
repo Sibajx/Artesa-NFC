@@ -112,6 +112,9 @@ class AdminArtisanDetail(BaseModel):
     validation_whatsapp: str | None = None
     validation_contact_name: str | None = None
     authorization: AdminAuthorization | None = None
+    # The artisan's latest "Quiero cambios" / "No autorizo", until a new link
+    # replaces it; its comment is in ``note``.
+    last_answer: AdminAuthorization | None = None
     publication_status: str
     created_at: datetime
     updated_at: datetime

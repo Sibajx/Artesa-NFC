@@ -97,6 +97,7 @@ const CARDS: { key: keyof Summary; title: string; hint: string; to: (id: string)
   { key: 'designs_with_changes_requested', title: 'Diseños con cambios pedidos', hint: 'El artesano pidió cambios', to: (id) => `/diseno/${id}` },
   { key: 'designs_in_review', title: 'Diseños esperando al artesano', hint: 'Enviados por WhatsApp', to: (id) => `/diseno/${id}` },
   { key: 'designs_to_publish', title: 'Diseños aprobados sin publicar', hint: 'Listos para publicar', to: (id) => `/diseno/${id}` },
+  { key: 'authorizations_with_changes_requested', title: 'Artesanos que pidieron cambios', hint: 'Corregir y mandar un enlace nuevo', to: (id) => `/artesanos/${id}` },
   { key: 'published_artisans_without_authorization', title: 'Artesanos publicados sin autorización registrada', hint: 'Pedirla por WhatsApp', to: (id) => `/artesanos/${id}` },
   { key: 'authorizations_waiting', title: 'Autorizaciones esperando respuesta', hint: 'Enlace enviado', to: (id) => `/artesanos/${id}` },
   { key: 'cards_blocked_or_locked', title: 'Tarjetas bloqueadas', hint: 'Revisar con el dueño', to: (id) => `/certificacion/${id}` },
