@@ -16,6 +16,11 @@ updates:
     schedule:
       interval: monthly
     open-pull-requests-limit: 3
+    ignore:
+      # typescript-eslint 8 does not accept TypeScript 7 yet (peer conflict,
+      # PR #219). Lift when typescript-eslint supports it.
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
     groups:
       admin-minor-and-patch:
         update-types: [minor, patch]
@@ -26,6 +31,16 @@ updates:
     schedule:
       interval: monthly
     open-pull-requests-limit: 3
+    ignore:
+      # @google/model-viewer pins its peer three@^0.183 (PR #218); three moves
+      # only together with model-viewer.
+      - dependency-name: three
+      # eslint-plugin-jsx-a11y does not accept eslint 10 yet (PRs #220, #222);
+      # eslint and @eslint/js must move together when it does.
+      - dependency-name: eslint
+        update-types: [version-update:semver-major]
+      - dependency-name: "@eslint/js"
+        update-types: [version-update:semver-major]
     groups:
       web-minor-and-patch:
         update-types: [minor, patch]
