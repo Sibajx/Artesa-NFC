@@ -23,8 +23,10 @@
 | Pruebas de restauración | restore-check local en **cada** backup; simulacro fuera del host con la clave offline mensual los 3 primeros meses del piloto y trimestral después; prueba de K2 semestral |
 | Retención | Local: 7 backups cifrados. Remota (D10.2): daily 35 d / weekly 91 d / monthly 400 d por lifecycle del proveedor; el servidor no puede borrar |
 
-La base se respalda **completa**, incluidas las tablas legadas que aún se están
-investigando (issue #134). Finanzas queda fuera.
+La base se respalda **completa**. Las 7 tablas legadas del prototipo (issue #134)
+las retira la migración `c4d1a7e2f9b3`, solo si están vacías. Los backups anteriores
+a esa migración todavía las incluyen. Finanzas entra en el bundle cuando
+`FINANZAS_DB_PATH` está configurado (§17).
 
 ## 2. Qué se respalda y qué no
 
