@@ -1,0 +1,40 @@
+# Dependency updates (Brain: infraestructura punto 3, 2026-10-05).
+#
+# npm (admin/, web/) and GitHub Actions: grouped, monthly PRs into develop,
+# validated by the usual CI before anyone merges them.
+#
+# Python is NOT here on purpose: requirements.txt, requirements-prod.in and
+# the hashed requirements-prod.lock must stay in lockstep (a test enforces it,
+# and release-ci checks the lock is reproducible), which Dependabot cannot do.
+# Python is covered by .github/workflows/security-audit.yml (pip-audit) and
+# updated by hand.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /admin
+    target-branch: develop
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    groups:
+      admin-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /web
+    target-branch: develop
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    groups:
+      web-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
