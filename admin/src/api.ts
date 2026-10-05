@@ -70,7 +70,8 @@ export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
 export interface ArtisanAuthorization {
   id: string;
-  status: 'pending' | 'authorized';
+  // 'changes_requested' and 'declined' only come back as `last_answer`.
+  status: 'pending' | 'authorized' | 'changes_requested' | 'declined';
   medium: string;
   requested_by: string;
   created_at: string;
@@ -115,6 +116,9 @@ export interface ArtisanDetail {
   validation_whatsapp?: string | null;
   validation_contact_name?: string | null;
   authorization?: ArtisanAuthorization | null;
+  // The artisan's latest "Quiero cambios" / "No autorizo" (comment in `note`),
+  // until a new link replaces it.
+  last_answer?: ArtisanAuthorization | null;
   publication_status: PublicationStatus;
   created_at: string;
   updated_at: string;
@@ -322,6 +326,7 @@ export interface SummaryBucket {
 export interface Summary {
   published_artisans_without_authorization: SummaryBucket;
   authorizations_waiting: SummaryBucket;
+  authorizations_with_changes_requested?: SummaryBucket;
   sales_last_30_days: { count: number; total_cents: number };
   recent_answers: { at: string; text: string; link: string; positive: boolean }[];
   designs_in_review?: SummaryBucket;

@@ -137,17 +137,27 @@ export interface CertificateOriginal extends CertificateAuthentic {
   } | null;
 }
 
-// P-026 G3: the artisan's authorization link (/autorizacion/#token): what
-// will be published about them.
+// P-026 G3: the artisan's authorization link (/autorizacion/#token):
+// everything that is published about them. Links sent before 2026-10-05 may
+// lack the newer fields, so they are optional.
 export interface ArtisanAuthorizationOpen {
   readonly status: "open";
   readonly full_name: string;
   readonly artistic_name: string | null;
   readonly place: string;
   readonly biography: string;
+  readonly history?: string;
+  readonly techniques?: readonly string[];
+  readonly languages?: readonly string[];
+  readonly public_contact?: Readonly<Record<string, string>>;
   readonly portrait: string | null;
+  readonly pieces?: readonly { readonly name: string; readonly cover: string | null }[];
+  // An authorization given in person, now confirmed by WhatsApp.
+  readonly confirming?: boolean;
   readonly expires_at: string;
 }
+
+export type AuthorizationDecision = "authorize" | "changes" | "decline";
 
 // ADR-030 phase 5: the artisan's review link (/revision/#token).
 export interface DesignReviewOpen {

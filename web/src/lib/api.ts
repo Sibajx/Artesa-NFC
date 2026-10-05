@@ -22,6 +22,7 @@ import type {
   CertificateAuthentic,
   CertificateOriginal,
   ArtisanAuthorizationOpen,
+  AuthorizationDecision,
   DesignReviewOpen,
   ListEnvelope,
   Piece,
@@ -252,9 +253,9 @@ export function createApiClient(options: ApiClientOptions = {}) {
     resolveAuthorization: (token: string) => resolveAuthorizationImpl(token),
     async decideAuthorization(
       token: string,
-      decision: "authorize" | "decline",
+      decision: AuthorizationDecision,
       comment: string | null,
-    ): Promise<"recorded" | "unavailable" | "error"> {
+    ): Promise<"recorded" | "unavailable" | "comment_required" | "error"> {
       const response = await postJson("/artisan-authorizations/decision", {
         token,
         decision,
@@ -264,7 +265,9 @@ export function createApiClient(options: ApiClientOptions = {}) {
       const payload = await readJson(response);
       if (
         isRecord(payload) &&
-        (payload.status === "recorded" || payload.status === "unavailable")
+        (payload.status === "recorded" ||
+          payload.status === "unavailable" ||
+          payload.status === "comment_required")
       ) {
         return payload.status;
       }

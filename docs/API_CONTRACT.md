@@ -479,14 +479,17 @@ producto por adelantado.
 ### 7.5 Autorización del artesano y cuentas (P-026 G3/G4)
 
 - **Enlace de autorización:** la web lo abre en `/autorizacion/#<token>`, con el token en el fragmento.
-  - `POST /api/v1/artisan-authorizations/resolve` `{"token"}` → `{"status": "open", full_name, artistic_name, place, biography, portrait, expires_at}` o `{"status": "unavailable"}`.
-  - `POST /api/v1/artisan-authorizations/decision` `{"token", "decision": "authorize" | "decline", "comment"?}` → `{"status": "recorded" | "unavailable"}`.
+  - `POST /api/v1/artisan-authorizations/resolve` `{"token"}` → `{"status": "open", full_name, artistic_name, place, biography, history, techniques, languages, public_contact, portrait, pieces: [{name, cover}], confirming, expires_at}` o `{"status": "unavailable"}`. Muestra **todo** lo que el sitio publica del artesano: la biografía completa, sin recorte, y solo sus piezas publicadas. `confirming` es `true` cuando se confirma por WhatsApp una autorización dada en persona. Los enlaces enviados antes del 2026-10-05 solo traen los primeros cinco campos; los demás llegan vacíos.
+  - `POST /api/v1/artisan-authorizations/decision` `{"token", "decision": "authorize" | "changes" | "decline", "comment"?}` → `{"status": "recorded" | "unavailable" | "comment_required"}`:
+    - `changes` ("Quiero cambios") exige un comentario de al menos 3 letras (`comment_required` si falta) y **no despublica nada**;
+    - `decline` ("No autorizo") pasa a borrador, en la misma transacción, al artesano y a sus piezas publicadas. Lo audita el sistema (`artisan.unpublished`/`piece.unpublished` con `reason: authorization_declined`).
   - Las dos rutas tienen el límite de 1 KB y `no-store`.
 - **API de Gestión, autorización:**
-  - `POST /artisans/{id}/authorization/request` → `{url, whatsapp, contact_name, artisan_name}`. Es la única respuesta con el enlace; vale 14 días y reemplaza al pendiente;
+  - `POST /artisans/{id}/authorization/request` → `{url, whatsapp, contact_name, artisan_name}`. Es la única respuesta con el enlace; vale 14 días y reemplaza al pendiente. Con una autorización **en persona** también se puede pedir: es la confirmación por WhatsApp, y la autorización sigue valiendo mientras el enlace está abierto. Con una autorización por WhatsApp responde `409 already_authorized`;
   - `POST /artisans/{id}/authorization/record` `{note}`, cuando el artesano autorizó en persona;
   - `POST /artisans/{id}/authorization/revoke` `{note}`;
-  - el detalle del artesano trae `validation_whatsapp`, `validation_contact_name` y `authorization`;
+  - el detalle del artesano trae `validation_whatsapp`, `validation_contact_name`, `authorization` y `last_answer`. `last_answer` es la última respuesta "Quiero cambios" o "No autorizo", con el comentario en `note`, hasta que un enlace nuevo la reemplace;
+  - el Resumen agrega `authorizations_with_changes_requested`;
   - publicar sin autorización responde `409 authorization_missing`.
 - **API de Gestión, cuentas** (solo el dueño; los demás reciben 403):
   - `GET /accounts`;

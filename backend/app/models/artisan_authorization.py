@@ -1,7 +1,9 @@
 """P-026 G3: the artisan's authorization to publish their name, portrait and
 story. Asked through a WhatsApp link (or recorded in person by the team);
 what was shown is kept as a snapshot. Publishing an artisan requires an
-authorized row; revoking it does not unpublish by itself (the team decides).
+authorized row. The artisan can also ask for changes (nothing is unpublished)
+or decline (the artisan and their pieces go back to draft at once). Revoking
+from Gestión does not unpublish by itself (the team decides).
 """
 from __future__ import annotations
 
@@ -20,6 +22,7 @@ class AuthorizationStatus(str, enum.Enum):
     pending = "pending"
     authorized = "authorized"
     declined = "declined"
+    changes_requested = "changes_requested"
     revoked = "revoked"
 
 
