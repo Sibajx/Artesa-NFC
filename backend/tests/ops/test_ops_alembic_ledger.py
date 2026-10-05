@@ -23,7 +23,7 @@ LEDGER3 = {"a1": {"class": "baseline", "note": ""}, "b2": {"class": "additive", 
 def test_real_repo_has_one_head_and_a_complete_ledger():
     files = {f"alembic/versions/{p.name}": p.read_bytes() for p in (BACKEND / "alembic" / "versions").glob("*.py")}
     revisions = rc.parse_alembic_revisions(files)
-    assert rc.alembic_heads(revisions) == ["dcea9092a406"]
+    assert rc.alembic_heads(revisions) == ["c4d1a7e2f9b3"]
     ledger = rc.parse_ledger((BACKEND / "ops" / "migration-classes.json").read_bytes())
     rc.check_ledger_complete(revisions, ledger)
     assert {e["class"] for e in ledger.values()} <= set(rc.MIGRATION_CLASSES)

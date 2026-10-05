@@ -40,6 +40,10 @@
     "dcea9092a406": {
       "class": "additive",
       "note": "Creates admin_account and artisan_authorization (enum type, partial unique index) and adds nullable artisan.validation_whatsapp and artisan.validation_contact_name (P-026 G3/G4). Older code never reads or writes them."
+    },
+    "c4d1a7e2f9b3": {
+      "class": "additive",
+      "note": "Drops the seven empty legacy tables of the old prototype (#134) only if they exist and are empty; fails without dropping anything otherwise. No release reads or writes them, so older code keeps working (rollback-compatible); the deploy still takes a backup because it is a migration."
     }
   }
 }
