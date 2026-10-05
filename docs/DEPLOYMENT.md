@@ -573,6 +573,58 @@ reescribe `TOOL.json`. Si `bin/artesa-deploy` no arranca (herramienta rota), cua
 comando puede ejecutarse igual desde `releases/<id>/ops/artesa_deploy.py`, incluido
 `rollback`.
 
+### 11.8 Bajar el release de GitHub (`fetch`) y activar Gestión (`ui`)
+
+Desde TOOL 1.9.0, un commit de `main` que pasa Release CI se publica como
+**GitHub Release** `release-<release_id>`. El trabajo `publish` sube cuatro
+archivos: el artefacto del backend, `admin-ui-<commit12>.tgz` (construido del
+mismo commit) y el `.sha256` de cada uno. El repositorio es público, así que
+el servidor los lee sin credenciales. **Publicar no es desplegar.**
+
+```bash
+cd /home/energias/artesa-nfc
+bin/artesa-deploy fetch                 # el último publicado; o: fetch <release_id>
+bin/artesa-deploy prepare <id>          # fetch imprime las líneas exactas
+bin/artesa-deploy deploy --expect-commit <commit12> <id>     # + --allow-migration si prepare lo pide
+bin/artesa-deploy ui <commit12>         # Gestión: instala y cambia current
+bin/artesa-deploy ui                    # muestra la versión activa y las instaladas
+```
+
+**`fetch`:**
+
+- Consulta la API de releases y descarga por HTTPS verificado; las
+  redirecciones solo pueden ir a HTTPS.
+- Comprueba cada archivo contra su `.sha256` antes de guardarlo, con
+  escritura atómica en `incoming/`.
+- Nunca sobrescribe un archivo distinto que ya esté ahí.
+- **No** prepara ni despliega nada.
+
+La cadena de confianza es la misma que con `scp`. `prepare` vuelve a
+verificar el artefacto completo (MANIFEST, RELEASE.json), y
+`deploy --expect-commit` lo ata al commit que el operador espera.
+
+**`ui <commit12>`:**
+
+- Si `shared/admin-ui/<commit12>` no existe, verifica
+  `incoming/admin-ui-<commit12>.tgz` contra su `.sha256` y extrae solo
+  archivos y directorios con nombres seguros. Rechaza enlaces, `..`, rutas
+  absolutas y ocultos.
+- Exige `index.html`, renombra a su sitio y cambia `current` de forma
+  atómica.
+- Si el directorio ya existe, lo reutiliza. Así se hace el **rollback**
+  (`ui <commit anterior>`); la salida imprime ese comando.
+- No hace falta reiniciar ningún servicio.
+
+**Si GitHub no responde** (por ejemplo, el FortiGate intercepta el HTTPS,
+Brain B-027): `fetch` falla sin escribir nada. La ruta de siempre sigue
+funcionando:
+
+1. `scp` del artefacto y del `.tgz` a `incoming/`;
+2. después, `prepare`, `deploy` y `ui` igual que arriba.
+
+El primer uso necesita la herramienta 1.9.0 instalada (`install-tools`,
+§11.7) desde un release que la incluya.
+
 ## 12. Códigos de salida
 
 | Código | Significado |
