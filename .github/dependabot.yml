@@ -41,6 +41,12 @@ updates:
         update-types: [version-update:semver-major]
       - dependency-name: "@eslint/js"
         update-types: [version-update:semver-major]
+      # eslint-plugin-astro 3 needs eslint 10 (PR #227).
+      - dependency-name: eslint-plugin-astro
+        update-types: [version-update:semver-major]
+      # typescript-eslint 8 does not accept TypeScript 7 yet (PR #228).
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
     groups:
       web-minor-and-patch:
         update-types: [minor, patch]
