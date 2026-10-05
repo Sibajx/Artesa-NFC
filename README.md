@@ -1,84 +1,99 @@
 # ArtesaNFC
 
-Plataforma digital para presentar, documentar y autenticar piezas
-artesanales únicas de Oaxaca, conectando cada pieza física con su
-experiencia digital mediante tecnología NFC.
+Plataforma para documentar y autenticar piezas artesanales de Oaxaca mediante
+un catálogo público, Gestión y certificados vinculados a etiquetas NFC.
 
-**Dominio:** `artesanfc.com`
+## Estado actual
 
-**Fuente de verdad:** este README es solo una introducción rápida. La
-arquitectura, el modelo de datos, el contrato de API y las decisiones de
-seguridad viven en [`docs/`](docs/) — en particular
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md),
-[`docs/DATA_MODEL.md`](docs/DATA_MODEL.md),
-[`docs/API_CONTRACT.md`](docs/API_CONTRACT.md) y
-[`docs/SECURITY.md`](docs/SECURITY.md). Ante cualquier discrepancia entre
-este README y `docs/`, `docs/` es la referencia correcta.
+Este resumen refleja el código en `develop` al 2026-10-05. El estado operativo
+externo se toma de los runbooks fechados; el repositorio no permite comprobar
+por sí solo el contenido ni la configuración viva de producción.
 
-## Arquitectura actual
-
-El proyecto está en migración incremental (`docs/ARCHITECTURE.md` §15)
-desde un prototipo estático hacia un backend propio:
-
-| Capa | Tecnología | Estado |
+| Área | Implementación en el repositorio | Estado documentado |
 |---|---|---|
-| Frontend | Cloudflare Pages, sitio estático (`frontend/`) | Home + páginas públicas de artesano/pieza de Sprint 2, con contenido fixture/demo (`docs/SPRINT_2.md`) |
-| Backend | FastAPI + PostgreSQL (`backend/`) | API pública de Sprint 3 (`docs/SPRINT_3.md`) |
-| ORM / migraciones | SQLAlchemy + Alembic | Modelos `Artisan`, `Piece`, `MediaAsset` |
+| Sitio público | Astro estático en [`web/`](web/) y frontend anterior en [`frontend/`](frontend/) | `web/` sirve `artesanfc.com` desde el 2026-10-03 (última publicación: `main` `ab85ef2`, 2026-10-05) y `staging.artesanfc.com` desde `develop`. `frontend/` queda solo como rollback ([`web/README.md`](web/README.md)) |
+| API | FastAPI + PostgreSQL en [`backend/`](backend/) | API pública `/api/v1`, health checks y controles de producción documentados |
+| Gestión | React/Vite en [`admin/`](admin/) y API `/api/admin/v1` | Fases 1–4 (artesanos, piezas, auditoría, media), Certificación v2 (ADR-030: roles, certificación y grabado NFC, tarjeta del comprador, paleta y diseño del certificado), ventas y precio, autorización del artesano y cuentas (P-026). El acceso depende de Cloudflare Access y de configuración externa |
+| Certificados y NFC | Modelos, servicio, resolución privada y CLI de provisioning | Implementados. Los Custodios los operan desde Gestión con Web NFC (Chrome para Android, ADR-030); la CLI de provisioning sigue como alternativa |
+| Media | Originales privados, derivados públicos y `/media/` servido por la API cuando `MEDIA_ROOT` está configurado | Backend y Gestión implementados; la regla A permite `GET|HEAD /media/*` según la verificación externa del 2026-09-30. El soporte M3 para respaldar originales está en el código, sin registro versionado de activación |
+| Despliegue | Releases en GitHub y `artesa-deploy` (TOOL 1.9.0) | `fetch` → `prepare` → `deploy` → `ui` ([`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) §11.8); el primero así fue R26 (2026-10-05) |
+| Backups | D10 cifrado con `age`, copia fuera del host y restore drill | [`docs/BACKUP.md`](docs/BACKUP.md) registra D10.1–D10.3 y B2 activos/verificados para la base; esos registros son evidencia operativa fechada |
 
-El frontend de Sprint 2 **todavía no consume** esta API — sigue usando
-contenido fixture estático. Conectar el frontend a la API es un trabajo
-de seguimiento explícitamente diferido (`docs/SPRINT_3.md` §12), no
-parte de este cierre de sprint.
+PostgreSQL es la fuente de verdad para artesanos, piezas, certificados, NFC y
+metadatos de media; los archivos viven bajo `MEDIA_ROOT`. El contenido real se
+administra fuera del repositorio. Los archivos versionados no prueban qué
+registros o archivos existen hoy ni su estado de publicación.
 
-## API pública actual
+## Fuentes de verdad
 
-Definida en detalle en [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md):
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): topología vigente e historia
+  de migración.
+- [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md): contratos público y de
+  Gestión.
+- [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md): modelo persistente.
+- [`docs/SECURITY.md`](docs/SECURITY.md): requisitos y controles de seguridad.
+- [`docs/OPERATIONS.md`](docs/OPERATIONS.md): topología y controles operativos
+  verificados.
+- [`docs/MEDIA.md`](docs/MEDIA.md) y [`docs/BACKUP.md`](docs/BACKUP.md): media,
+  D10 y recuperación.
+- [`docs/DECISIONS.md`](docs/DECISIONS.md): decisiones arquitectónicas.
+
+## Superficies principales
 
 ```text
-GET /api/v1/artisans
-GET /api/v1/artisans/{slug}
-GET /api/v1/pieces
-GET /api/v1/pieces/{slug}
+artesanfc.com
+  web/ (Astro) en producción desde 2026-10-03
+  /c/<token>                 certificado privado (enlace del tag NFC)
+
+staging.artesanfc.com
+  web/ de develop (proyecto Pages artesanfc-staging, noindex)
+
+api.artesanfc.com
+  /api/v1/*                  API pública
+  /media/*                   derivados públicos (GET/HEAD)
+
+gestion.artesanfc.com
+  admin/                     interfaz de Gestión
+  /api/admin/v1/*            API administrativa protegida por Access
 ```
 
-Certificados, NFC y ownership (`POST /api/v1/certificates/resolve` y
-todo lo relacionado) son alcance de **Sprint 4** (`docs/WORKFLOW.md`
-§14) y no existen todavía en este repositorio.
+La API pública expone el catálogo y resuelve certificados mediante
+`POST /api/v1/certificates/resolve`. La emisión, rotación, revocación y
+programación NFC se hacen desde Gestión → Certificación (solo Custodios, Web NFC);
+la CLI descrita en [`docs/PROVISIONING.md`](docs/PROVISIONING.md) sigue
+disponible.
 
 ## Estructura del repositorio
 
 ```text
 artesa-nfc/
-├── frontend/       Sitio estático (Sprint 2), sin integración con la API todavía
-├── backend/        FastAPI + PostgreSQL (Sprint 3) — ver backend/README.md
-├── docs/           Fuente de verdad: producto, arquitectura, datos, API, seguridad
-├── qa/             QA reproducible de la ruta privada de certificados
-└── README.md
+├── web/             Frontend público Astro; producción y staging
+├── frontend/        Frontend anterior; solo rollback
+├── admin/           Gestión (React/Vite)
+├── backend/         FastAPI, PostgreSQL, migraciones y herramientas operativas
+├── docs/            Arquitectura, contratos, seguridad y runbooks
+├── qa/              QA reproducible y utilidades de inspección de solo lectura
+└── .github/         CI de backend, web, Gestión y releases
 ```
 
-El prototipo original en Cloudflare Worker/D1 (`public/`, `src/`, `db/`,
-`wrangler.toml`) fue **eliminado del repositorio** bajo el hallazgo F-07
-(`docs/ARCHITECTURE.md` §1, §15). Sigue recuperable en el historial de git.
-La arquitectura vigente es Cloudflare Pages (`frontend/`) + FastAPI/PostgreSQL
-(`backend/`).
+`qa/db/legacy-inventory.sql`, añadido por #134, inspecciona esquema,
+estadísticas y relaciones de tablas legacy dentro de una transacción
+`READ ONLY`; no prueba que la limpieza de esas tablas se haya ejecutado. La base
+auditada antes de crear esta rama fue `origin/develop@8368c51`, sincronizada y
+con un único cambio de contenido respecto de `origin/main@6e59508`: el
+inventario de QA incorporado por #168.
 
-## Empezar a trabajar en el backend
+## Desarrollo y validación
 
-Ver [`backend/README.md`](backend/README.md) para el flujo local de
-desarrollo (base de datos, migraciones, seed, servidor, pruebas).
+- Backend: [`backend/README.md`](backend/README.md)
+- Frontend Astro: [`web/README.md`](web/README.md)
+- Gestión: [`admin/README.md`](admin/README.md)
+- QA del certificado privado:
+  [`docs/QA_PRIVATE_ROUTE.md`](docs/QA_PRIVATE_ROUTE.md)
+- Despliegue y recuperación:
+  [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) y
+  [`docs/BACKUP.md`](docs/BACKUP.md)
 
-## QA de la ruta privada de certificados
-
-`./qa/validate-private-route.sh` levanta una base PostgreSQL desechable, la API
-y el frontend, y verifica con un navegador real `/c/{token}` (rutas, tokens
-válidos/inválidos/revocados, aislamiento público y privacidad del token). Ver
-[`docs/QA_PRIVATE_ROUTE.md`](docs/QA_PRIVATE_ROUTE.md).
-
-## Estado del proyecto
-
-Ver el cierre de cada sprint en `docs/`:
-[`SPRINT_0.md`](docs/SPRINT_0.md),
-[`SPRINT_1.md`](docs/SPRINT_1.md),
-[`SPRINT_2.md`](docs/SPRINT_2.md),
-[`SPRINT_3.md`](docs/SPRINT_3.md).
+Los cierres de Sprint 0–4 en `docs/SPRINT_*.md` conservan la historia del
+proyecto. Describen el estado de cada corte y no sustituyen este resumen ni los
+documentos vigentes anteriores.

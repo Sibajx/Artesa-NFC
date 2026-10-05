@@ -67,11 +67,12 @@ La ficha pública **no** revela si existe certificado o tag NFC
 ### Variables de entorno
 
 **Ninguna.** La base de la API se elige en tiempo de ejecución por hostname
-exacto en `src/lib/api-config.ts` (misma tabla que
-`frontend/assets/js/api-config.js`): `localhost`/`127.0.0.1` → API local,
-`artesanfc.com` → `https://api.artesanfc.com/api/v1`, cualquier otro → sin API.
-No hay override por build a propósito. Habilitar un staging o `www` = añadir
-el hostname ahí **y** en `CORS_ALLOWED_ORIGINS` del backend.
+exacto en `src/lib/api-config.ts`: `localhost`/`127.0.0.1` → API local;
+`artesanfc.com` y `staging.artesanfc.com` →
+`https://api.artesanfc.com/api/v1`; cualquier otro → sin API. El frontend
+anterior no incluye el hostname de staging. No hay override por build a
+propósito. Habilitar otro host, como `www`, exige añadirlo aquí y en
+`CORS_ALLOWED_ORIGINS` del backend.
 
 ## Comandos
 
@@ -98,12 +99,12 @@ LIVE_API=1 npx playwright test tests/e2e/live-api.spec.ts
 
 ## Despliegue (gate humano)
 
-Producción sigue sirviendo `frontend/`. `web/` solo está en staging.
+`web/` sirve producción desde el 2026-10-03. `frontend/` queda solo para rollback.
 
-| Proyecto de Pages                    | Dominio                 | Qué sirve                      | Cómo se publica                                   |
-| ------------------------------------ | ----------------------- | ------------------------------ | ------------------------------------------------- |
-| **`artesanfc-web`** = **PRODUCCIÓN** | `artesanfc.com`         | `frontend/` (`main` `b449f58`) | Subida directa (`wrangler pages deploy`), sin Git |
-| `artesanfc-staging`                  | `staging.artesanfc.com` | `web/` de `develop`            | `web/scripts/deploy-staging.sh`                   |
+| Proyecto de Pages                    | Dominio                 | Qué sirve           | Cómo se publica                                   |
+| ------------------------------------ | ----------------------- | ------------------- | ------------------------------------------------- |
+| **`artesanfc-web`** = **PRODUCCIÓN** | `artesanfc.com`         | `web/` de `main`    | Subida directa (`wrangler pages deploy`), sin Git |
+| `artesanfc-staging`                  | `staging.artesanfc.com` | `web/` de `develop` | `web/scripts/deploy-staging.sh`                   |
 
 1. **Staging:** ver "Staging paso a paso".
 2. **Aprobación visual** sobre staging y sustitución de los assets provisionales.
@@ -115,7 +116,8 @@ Producción sigue sirviendo `frontend/`. `web/` solo está en staging.
    - Guarda el id del deployment actual de producción en
      `web/.deploy-previous-production` y pide escribir `artesanfc.com` antes de
      subir.
-   - Estado al 2026-09-30: producción = deployment `6caa984a` (`frontend/`, `b449f58`).
+   - Estado al 2026-10-05: producción = `web/` `ab85ef2` (deployment `f0bbf61f`);
+     el anterior, `330d53f8`, es el destino de rollback.
 4. **Rollback:** en el dashboard de Pages, _Rollback to this deployment_ sobre
    el deployment anterior (un clic), o `web/scripts/deploy-production.sh
 --legacy-frontend`, que vuelve a subir `frontend/` desde `main`.
@@ -124,14 +126,13 @@ Producción sigue sirviendo `frontend/`. `web/` solo está en staging.
 
 ## Staging paso a paso
 
-Estado (2026-09-28): proyecto de Pages **`artesanfc-staging`** creado y con
-`develop` `4ccdc37` desplegado (`https://artesanfc-staging.pages.dev`,
-verificado en Cloudflare real: shells, 404, cabeceras de `/c/*`, `noindex`).
-Dominio `staging.artesanfc.com` agregado al proyecto; **falta su registro DNS**.
+Estado (2026-10-05): proyecto de Pages **`artesanfc-staging`** con `develop`
+desplegado; `staging.artesanfc.com` resuelve y responde 200. Los pasos 2 y 3 se
+conservan para reconstruirlo.
 
 > **Cuidado con los nombres:** el proyecto de Pages **`artesanfc-web` es
-> PRODUCCIÓN** (`artesanfc.com`, sirve `frontend/` por subida directa desde
-> `main`, sin conexión a Git). Nunca desplegar `web/` ahí sin el gate humano de
+> PRODUCCIÓN** (`artesanfc.com`, sirve `web/` por subida directa desde `main`,
+> sin conexión a Git). Nunca desplegar `web/` ahí sin el gate humano de
 > producción.
 
 1. **Desplegar staging:** en un checkout limpio de `origin/develop`,
@@ -161,15 +162,15 @@ Los archivos de `public/media/placeholders/` son texturas abstractas generadas
 por `scripts/generate-placeholders.mjs`; no representan ninguna pieza, persona
 ni lugar, y la página los etiqueta como provisionales.
 
-| Asset                            | Estado                                                | Necesario                                                                                                                                |
-| -------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Video hero                       | Provisional (textura, VP8/WebM, ~300 KB)              | Clip documental ~9 s, sin audio: horizontal 1920×1080 y vertical 1080×1920, MP4 H.264 + WebM, ≤4 MB c/u, con autorización de publicación |
-| Póster hero                      | Provisional                                           | Fotograma real del clip (AVIF/WebP/JPEG, horizontal y vertical)                                                                          |
-| Imagen de entrada a la colección | Provisional                                           | Fotografía real autorizada, 4:5                                                                                                          |
-| Fotos de piezas y artesanos      | La API devuelve `/media/...`, que **nadie sirve** hoy | Capa de media/CDN (PEND-033) + fotos autorizadas                                                                                         |
-| Modelo 3D máscara de Cuilápam    | No existe                                             | GLB 2–8 MB, texturas 1024–2048 px, servido con CORS desde el origen de media                                                             |
-| Canal de contacto                | No existe                                             | Correo o formulario para el bloque de cierre                                                                                             |
-| Logo                             | Texto provisional                                     | Logo final (DESIGN_SYSTEM §22)                                                                                                           |
+| Asset                            | Estado                                                                         | Necesario                                                                                                                                |
+| -------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Video hero                       | Provisional (textura, VP8/WebM, ~300 KB)                                       | Clip documental ~9 s, sin audio: horizontal 1920×1080 y vertical 1080×1920, MP4 H.264 + WebM, ≤4 MB c/u, con autorización de publicación |
+| Póster hero                      | Provisional                                                                    | Fotograma real del clip (AVIF/WebP/JPEG, horizontal y vertical)                                                                          |
+| Imagen de entrada a la colección | Provisional                                                                    | Fotografía real autorizada, 4:5                                                                                                          |
+| Fotos de piezas y artesanos      | `/media/` está implementado; el repo no prueba qué fotos reales están cargadas | Fotos autorizadas y registradas en Gestión                                                                                               |
+| Modelo 3D máscara de Cuilápam    | No existe                                                                      | GLB 2–8 MB, texturas 1024–2048 px, servido con CORS desde el origen de media                                                             |
+| Canal de contacto                | No existe                                                                      | Correo o formulario para el bloque de cierre                                                                                             |
+| Logo                             | Texto provisional                                                              | Logo final (DESIGN_SYSTEM §22)                                                                                                           |
 
 Las 158 fotos de `Fotos_Mask_1/` (fuera del repo) no se usan: su autorización de
 publicación no está documentada y su compresión (WhatsApp, 960×1280) es
