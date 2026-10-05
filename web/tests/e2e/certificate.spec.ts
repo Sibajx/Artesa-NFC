@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { piece } from "../fixtures/contract";
+import { certificate, piece } from "../fixtures/contract";
 import { mockApi, reply, TOKEN } from "./support";
 
 test.describe("/c/{token}", () => {
@@ -58,13 +58,32 @@ test.describe("/c/{token}", () => {
       },
     });
     await page.goto(`/c/${TOKEN}`);
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-      "Verificación no disponible por ahora.",
-    );
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Volvemos en un momento.");
+    await expect(page.locator("body")).toContainText("Tu pieza y su certificado están bien");
     await page.getByRole("button", { name: "Reintentar" }).click();
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(
       "No podemos confirmar este certificado.",
     );
+  });
+
+  test("while the server is down the page retries on its own", async ({ page }) => {
+    await page.clock.install();
+    let calls = 0;
+    await mockApi(page, {
+      "/certificates/resolve": (route) => {
+        calls += 1;
+        return calls <= 2 ? reply(502, {})(route) : reply(200, certificate)(route);
+      },
+    });
+    await page.goto(`/c/${TOKEN}`);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Volvemos en un momento.");
+    await expect(page.locator("[data-auto-retry]")).toContainText("cada 30 segundos");
+    await page.clock.runFor(31_000);
+    await expect.poll(() => calls).toBe(2);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Volvemos en un momento.");
+    await page.clock.runFor(31_000);
+    await expect(page.getByRole("heading", { level: 2, name: "Certificado válido" })).toBeVisible();
+    expect(calls).toBe(3);
   });
 
   test("malformed route makes no API call", async ({ page }) => {
