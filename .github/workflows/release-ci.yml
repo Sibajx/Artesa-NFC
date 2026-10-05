@@ -201,3 +201,62 @@ jobs:
           # the rehearsal's release uses this interpreter as its venv: give it the production lock
           python -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: --no-deps -r requirements-prod.lock
           python tests/ops/rehearsal/run_backup_rehearsal.py --pg-bindir /usr/lib/postgresql/18/bin
+
+  publish:
+    # docs/DEPLOYMENT.md §11.8: a validated main commit becomes a GitHub
+    # Release (backend artifact + Gestión UI, each with its .sha256) that the
+    # server can download with `artesa-deploy fetch`. Publishing is NOT
+    # deploying: prepare/deploy/ui stay manual operator steps on the server.
+    name: publish
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    needs: [release-validation, release-rehearsal]
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Download the validated artifact
+        uses: actions/download-artifact@v6
+        with:
+          name: artesa-nfc-release
+          path: dist
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: admin/.nvmrc
+          cache: npm
+          cache-dependency-path: admin/package-lock.json
+
+      - name: Build the Gestión UI from the same commit
+        working-directory: admin
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+          test -f dist/index.html
+
+      - name: Package and publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum -c *.tar.gz.sha256
+          ARTIFACT=$(ls artesa-nfc-*.tar.gz)
+          ID=${ARTIFACT#artesa-nfc-}; ID=${ID%.tar.gz}
+          C12=${ID##*-}
+          test "$C12" = "${GITHUB_SHA:0:12}"
+          tar -C ../admin/dist -czf "admin-ui-$C12.tgz" .
+          sha256sum "admin-ui-$C12.tgz" > "admin-ui-$C12.tgz.sha256"
+          if gh release view "release-$ID" >/dev/null 2>&1; then
+            echo "release-$ID already published"; exit 0
+          fi
+          gh release create "release-$ID" --target "$GITHUB_SHA" --title "$ID" --latest \
+            --notes "Validated \`main\` ${GITHUB_SHA:0:12}. Deploy on the server: \`bin/artesa-deploy fetch $ID\`, then prepare / deploy --expect-commit $C12 / ui $C12 (docs/DEPLOYMENT.md §11.8). Publishing is not deploying." \
+            "$ARTIFACT" "$ARTIFACT.sha256" "admin-ui-$C12.tgz" "admin-ui-$C12.tgz.sha256"

@@ -23,7 +23,7 @@ import type { CertificateAuthentic } from "@/lib/types";
 import { MediaImage } from "./MediaImage";
 import { OriginalCertificate } from "./OriginalCertificate";
 import { PassportPanel } from "./PassportPanel";
-import { LoadingView } from "./StatusView";
+import { AutoRetry, LoadingView, retryable } from "./StatusView";
 
 type View =
   | { kind: "loading" }
@@ -71,6 +71,10 @@ export default function CertificateView() {
   }
 
   if (view.kind === "error") {
+    const retry = () => {
+      setView({ kind: "loading" });
+      setAttempt((n) => n + 1);
+    };
     return (
       <div
         className="status-view certificate-state"
@@ -78,24 +82,28 @@ export default function CertificateView() {
         data-reason={view.reason}
       >
         <p className="eyebrow">Certificado de autenticidad</p>
-        <h1 className="heading-1">Verificación no disponible por ahora.</h1>
-        <p className="lead muted">
-          {view.reason === "rate_limited"
-            ? "Recibimos demasiados intentos seguidos. Espera unos segundos y vuelve a intentarlo."
-            : "El servicio de verificación no respondió. Esto no indica nada sobre la pieza: vuelve a intentarlo en unos minutos."}
-        </p>
+        {view.reason === "rate_limited" ? (
+          <>
+            <h1 className="heading-1">Verificación no disponible por ahora.</h1>
+            <p className="lead muted">
+              Recibimos demasiados intentos seguidos. Espera unos segundos y vuelve a intentarlo.
+            </p>
+          </>
+        ) : (
+          <>
+            <h1 className="heading-1">Volvemos en un momento.</h1>
+            <p className="lead muted">
+              El servicio de verificación está en pausa por mantenimiento o por una falla de
+              conexión. Tu pieza y su certificado están bien: esto no dice nada sobre ellos.
+            </p>
+          </>
+        )}
         {view.reason !== "unconfigured" && (
-          <button
-            type="button"
-            className="button"
-            onClick={() => {
-              setView({ kind: "loading" });
-              setAttempt((n) => n + 1);
-            }}
-          >
+          <button type="button" className="button" onClick={retry}>
             Reintentar
           </button>
         )}
+        {retryable(view.reason) && <AutoRetry onRetry={retry} />}
       </div>
     );
   }

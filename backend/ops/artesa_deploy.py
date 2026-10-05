@@ -45,6 +45,7 @@ import deploy_layout as dl  # noqa: E402
 import release_artifact as ra  # noqa: E402
 import release_common as rc  # noqa: E402
 import release_probe as rp  # noqa: E402
+import release_fetch as rf  # noqa: E402
 
 MIN_FREE_BYTES = 300 * 1024 * 1024
 HEALTH_TIMEOUT = 45.0
@@ -369,6 +370,7 @@ class Context:
     sleep: Callable[[float], None] = time.sleep
     out: Callable[[str], None] = print
     fetch: Callable[..., rp.HttpResult] = rp.http_request
+    download: Callable[[str, int], bytes] = rf.https_download   # GitHub releases (fetch, §11.8)
     port_state: Callable[..., rp.PortState] = rp.port_owner_state
     candidate: Callable[..., rp.CandidateReport] = rp.run_candidate
     public_check: Callable[[str], tuple[bool, str]] | None = _default_public_check
@@ -611,6 +613,8 @@ class Tool:
                              f"installer matched target: {matches}")
                 for warning in tooling["problems"]:
                     self.ctx.say(f"TOOLING WARNING: {warning} -- re-run install-tools (see docs/DEPLOYMENT.md §11.7)")
+            if (self.layout.shared / "admin-ui").is_dir():
+                self.ctx.say(rf.describe_ui(self.layout.shared / "admin-ui"))
             for problem in problems:
                 self.ctx.say(f"PROBLEM: {problem}")
         return 0 if not problems else int(rc.Exit.PREFLIGHT)
@@ -1853,6 +1857,48 @@ class Tool:
         self.ctx.say(f"installed: {', '.join(f'bin/{n}' for n in sorted(launchers))} -> ops-{release_id} in {self.layout.bin} (TOOL.json schema {TOOL_JSON_SCHEMA})")
         return 0
 
+    # -- fetch and Gestión UI (docs/DEPLOYMENT.md §11.8) -------------------------------------------------------------------
+
+    def cmd_fetch(self, release_id: str | None) -> int:
+        """Download a published release (default: the latest) and its Gestión
+        UI into incoming/, each checked against its sidecar. Changes nothing
+        else: prepare and deploy stay explicit operator steps."""
+        self.check_root()
+        dl.ensure_layout(self.layout)
+        self.ctx.say(f"fetch {release_id or 'latest'} from github.com/{rf.REPOSITORY} (releases)")
+        got = rf.fetch(self.layout.incoming, release_id, self.ctx.download)
+        self.ctx.say(f"  {got.artifact.name}: SHA-256 matches its sidecar" + (" (already in incoming/)" if got.reused else ""))
+        self.ctx.say(f"  Gestión UI: {got.ui.name if got.ui else 'not published with this release'}")
+        self.log().event("fetch", command="fetch", target_release=got.release_id, git_sha=got.commit12, exit_code=0,
+                         detail=("ui" if got.ui else "no-ui") + (" reused" if got.reused else ""))
+        self.ctx.say("next (the class -- CODE_ONLY or MIGRATION -- is printed by prepare):")
+        self.ctx.say(f"  bin/artesa-deploy prepare {got.release_id}")
+        self.ctx.say(f"  bin/artesa-deploy deploy --expect-commit {got.commit12} {got.release_id}")
+        if got.ui:
+            self.ctx.say(f"  bin/artesa-deploy ui {got.commit12}")
+        return 0
+
+    def cmd_ui(self, commit12: str | None) -> int:
+        """Switch shared/admin-ui/current to <commit12> (from incoming/ or an
+        installed directory, which is also the rollback). Without an
+        argument: show the current and installed versions."""
+        ui_root = self.layout.shared / "admin-ui"
+        if commit12 is None:
+            self.ctx.say(rf.describe_ui(ui_root))
+            return 0
+        self.require_tty(False)
+        self.check_root()
+        with dl.deploy_lock(self.layout):
+            previous, new, extracted = rf.activate_ui(ui_root, self.layout.incoming, commit12)
+        how = f"installed from incoming/ ({extracted} files)" if extracted is not None else "already installed (reused)"
+        self.ctx.say(f"Gestión UI ACTIVE {new} ({how}); previous {previous or 'none'}")
+        if previous and previous != new:
+            self.ctx.say(f"  rollback: bin/artesa-deploy ui {previous}")
+        self.ctx.say("  reload gestion.artesanfc.com in the browser; no service restart is needed")
+        self.log().event("ui_activate", command="ui", target_release=new, exit_code=0,
+                         detail=f"previous={previous or 'none'} " + ("extracted" if extracted is not None else "reused"))
+        return 0
+
     # -- prune ---------------------------------------------------------------------------------------------------------------
 
     def cmd_prune(self, keep: int, delete: bool) -> int:
@@ -1910,6 +1956,10 @@ def build_parser() -> argparse.ArgumentParser:
             p.add_argument("--keep-releases", type=int, default=5)
             p.add_argument("--restart-mode", choices=("sudo", "manual"), default="sudo")
     sub.add_parser("backup")
+    p = sub.add_parser("fetch", help="download a published release (default: latest) and its Gestión UI into incoming/")
+    p.add_argument("release_id", nargs="?", default=None)
+    p = sub.add_parser("ui", help="switch the Gestión UI to <commit12> (no argument: show versions)")
+    p.add_argument("commit12", nargs="?", default=None)
     p = sub.add_parser("rollback")
     p.add_argument("--to", default=None)
     p.add_argument("--dry-run", action="store_true")
@@ -1955,6 +2005,10 @@ def main(argv: list[str] | None = None, ctx: Context | None = None) -> int:
             return tool.cmd_candidate(args.release_id, port)
         if args.command == "backup":
             return tool.cmd_backup()
+        if args.command == "fetch":
+            return tool.cmd_fetch(args.release_id)
+        if args.command == "ui":
+            return tool.cmd_ui(args.commit12)
         if args.command == "deploy":
             return tool.cmd_deploy(args.release_id, args.dry_run, args.allow_migration, not args.no_auto_rollback, args.skip_public_check,
                                    args.expect_commit, args.keep_releases)

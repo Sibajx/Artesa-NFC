@@ -1,0 +1,57 @@
+name: Security audit
+
+# Weekly check of known vulnerabilities in what runs in production
+# (Brain: infraestructura punto 3). Read-only: no secrets, no deployment.
+# A failure here means "a dependency has a published vulnerability":
+# update it by hand in develop (Python: requirements.txt + .in + lock).
+on:
+  schedule:
+    - cron: "17 13 * * 1"   # Mondays 07:17 CST
+  workflow_dispatch:
+  pull_request:
+    branches: [develop, main]
+    paths:
+      - "backend/requirements*"
+      - "admin/package-lock.json"
+      - "web/package-lock.json"
+      - ".github/workflows/security-audit.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: pip-audit (production lock)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - name: Audit requirements-prod.lock
+        working-directory: backend
+        run: |
+          python -m pip install --disable-pip-version-check "pip-audit>=2.7,<3"
+          pip-audit --requirement requirements-prod.lock --require-hashes --disable-pip --progress-spinner off
+
+  npm:
+    name: npm audit (${{ matrix.project }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [admin, web]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: ${{ matrix.project }}/.nvmrc
+      - name: Audit runtime dependencies (high and critical)
+        working-directory: ${{ matrix.project }}
+        run: npm audit --omit=dev --audit-level=high
