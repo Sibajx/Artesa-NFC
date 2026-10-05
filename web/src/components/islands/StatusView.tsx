@@ -58,6 +58,36 @@ const REASON_COPY: Record<UnavailableReason, string> = {
   malformed: "El servicio respondió con datos inesperados.",
 };
 
+// When the server is down (a power or internet cut at the office), a visitor
+// who leaves the page open sees it come back on its own: one retry every
+// 30 s, only while the tab is visible, at most AUTO_RETRY_LIMIT per page load.
+export const AUTO_RETRY_MS = 30_000;
+const AUTO_RETRY_LIMIT = 20;
+let autoRetries = 0;
+
+export function retryable(reason: UnavailableReason): boolean {
+  return reason !== "unconfigured" && reason !== "rate_limited";
+}
+
+export function AutoRetry({ onRetry }: { onRetry: () => void }) {
+  useEffect(() => {
+    if (autoRetries >= AUTO_RETRY_LIMIT) return;
+    const id = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      window.clearInterval(id);
+      autoRetries += 1;
+      onRetry();
+    }, AUTO_RETRY_MS);
+    return () => window.clearInterval(id);
+  }, [onRetry]);
+  if (autoRetries >= AUTO_RETRY_LIMIT) return null;
+  return (
+    <p className="muted status-view__hint" data-auto-retry="">
+      Lo intentaremos de nuevo automáticamente cada 30 segundos mientras tengas esta página abierta.
+    </p>
+  );
+}
+
 export function UnavailableView({ what, reason, onRetry, level = 1 }: UnavailableProps) {
   const heading = useFocusOnMount<HTMLHeadingElement>();
   const Heading = level === 1 ? "h1" : "h2";
@@ -73,6 +103,7 @@ export function UnavailableView({ what, reason, onRetry, level = 1 }: Unavailabl
           Reintentar
         </button>
       )}
+      {retryable(reason) && <AutoRetry onRetry={onRetry} />}
     </div>
   );
 }

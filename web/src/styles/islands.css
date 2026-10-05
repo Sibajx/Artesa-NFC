@@ -26,6 +26,11 @@
 }
 
 .page-top > .status-view,
+.status-view__hint {
+  font-size: 0.875rem;
+  margin-top: 0.75rem;
+}
+
 .certificate-page > .status-view {
   padding-inline: var(--gutter);
   margin-inline: auto;

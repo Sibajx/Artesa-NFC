@@ -240,6 +240,39 @@ antes de que llegue al origen, donde Uvicorn registraría la query.
   las trata como estado temporal de servicio (aceptado, igual que en
   `SECURITY.md` §5.5).
 
+## 8.1 Monitor externo y cortes del servidor (2026-10-05)
+
+El servidor está detrás de un FortiGate que intercepta su HTTPS hacia
+`*.artesanfc.com`, así que `PUBLIC EDGE CHECK` no sirve desde el host
+(Brain B-027). La disponibilidad pública la vigila un **monitor externo**
+(UptimeRobot, plan gratuito, cada 5 minutos, aviso por correo al dueño):
+
+| Monitor | URL | Tipo | Alerta si… | Qué cubre |
+|---|---|---|---|---|
+| Sitio | `https://artesanfc.com/` | HTTP | no es 2xx | Cloudflare Pages |
+| API y base | `https://api.artesanfc.com/api/v1/artisans` | Palabra clave `"data"` | no aparece | túnel → Uvicorn → PostgreSQL (los certificados `/c/` dependen de esto) |
+| Gestión protegida | `https://gestion.artesanfc.com/` | Palabra clave `cloudflareaccess` (sin seguir redirecciones si el plan lo permite) | no aparece | que Access siga exigiendo sesión |
+
+**Reglas:**
+
+- No sondear `/health`: la regla A lo bloquea desde Internet y abre una
+  conexión a la base en cada llamada (§6).
+- Cada 5 minutos queda muy por debajo de la regla C (10 solicitudes por 10 s
+  por IP).
+- Los respaldos tienen su propio dead-man en healthchecks.io
+  (docs/BACKUP.md §14).
+
+**Si se va la luz o el internet del servidor:**
+
+- El sitio sigue arriba, porque es estático en Cloudflare.
+- Los certificados y las fichas que leen la API muestran **"Volvemos en un
+  momento"** y se reintentan solos cada 30 s mientras la página esté
+  visible, con un máximo de 20 veces por visita. Cuando el servidor vuelve,
+  aparecen sin que la persona haga nada.
+- El mensaje dice que la pieza y su certificado están bien. Nunca se
+  presenta un corte como "certificado no válido".
+- **Hardware recomendado:** un no break (UPS) para el servidor y el módem.
+
 ## 9. Política de rate limiting
 
 - La capa **primaria** es Cloudflare (regla C): ve la IP real del visitante,
