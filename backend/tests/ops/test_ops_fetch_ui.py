@@ -99,8 +99,10 @@ def test_fetch_latest_puts_verified_files_in_incoming_and_prints_the_next_steps(
     assert github.calls[0] == f"{rf.API}/latest"
     event = [e for e in s.log_events() if e["event"] == "fetch"][-1]
     assert event["target_release"] == rid and event["git_sha"] == commit12
-    # prepare accepts what fetch downloaded
-    assert run(s, ["prepare", rid, "--dry-run"]) == 0, s.sink.text
+    # prepare's artifact gate accepts what fetch downloaded (the interpreter gate
+    # depends on the runner's Python, not on fetch, so it is not asserted here)
+    run(s, ["prepare", rid, "--dry-run"])
+    assert "[PASS] artifact + sidecar + manifest + RELEASE.json" in s.sink.text, s.sink.text
 
 
 def test_fetch_a_named_release_and_running_it_again_is_harmless(s, tmp_path):
