@@ -224,6 +224,13 @@ Acepta `:`, `-`, espacios o sin separador, en cualquier caso. Al ser único, el 
 de un tag `retired`/`replaced` sigue ocupado (las filas nunca se borran). Sigue
 sin ser un secreto ni un factor de autenticación (ADR-008).
 
+**Liberar un chip dado de baja (2026-10-05):** si un tag `retired`/`replaced`
+**nunca se bloqueó** (`locked_at IS NULL`), Gestión puede liberar su UID para volver
+a registrar el mismo chip físico, por ejemplo uno de prueba marcado como dañado
+por error. La fila no se borra ni cambia de estado: `physical_uid` pasa a `NULL` y el
+UID queda en `notes` (`release-uid`) y en la auditoría (`custody.uid_released`). Un
+chip bloqueado alguna vez no se libera: el bloqueo del NTAG213 es permanente.
+
 El historial de NFC se preserva (aprobado): una pieza puede tener varios
 registros históricos de `NFC_TAG` (por ejemplo, tags marcados como
 `replaced` o `retired` tras daño o pérdida), pero **como máximo un tag
