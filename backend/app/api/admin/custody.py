@@ -187,6 +187,14 @@ class CustodyTag(BaseModel):
     locked_at: str | None
 
 
+class ReleasableTag(BaseModel):
+    """An out-of-service chip that was never locked: it can be freed and
+    written again (POST .../tags/{id}/release)."""
+    id: uuid.UUID
+    status: str
+    uid: str
+
+
 class CustodyCard(BaseModel):
     status: str
     issued_at: str
@@ -217,6 +225,7 @@ class CustodyState(BaseModel):
     rotate_blockers: list[str]
     lock_blockers: list[str]
     revocation_reasons: list[str]
+    releasable_tags: list[ReleasableTag] = []
     # ADR-030 phase 3: the buyer's card, the claim and the stolen report.
     card: CustodyCard | None = None
     claim: CustodyClaim | None = None
@@ -316,6 +325,8 @@ def custody_state(piece_id: uuid.UUID, db: Session = Depends(get_db)) -> Custody
         rotate_blockers=prov.rotate_blockers(state),
         lock_blockers=prov.lock_blockers(state),
         revocation_reasons=list(prov.REVOCATION_REASONS),
+        releasable_tags=[ReleasableTag(id=t.id, status=t.status.value, uid=t.physical_uid)
+                         for t in prov.releasable_tags(db, state.piece_id)],
         **_ownership_state(db, piece_id),
     )
 
@@ -389,6 +400,18 @@ def custody_lock(piece_id: uuid.UUID, body: UidBody, who: Actor = Depends(actor)
         raise _conflict("uid_mismatch")
     result = _run(db, lambda: prov.execute_lock(db, code, operator=_operator(who)))
     _audit_custody(db, who, piece_id, "locked", {"tag_id": str(result.tag_id), "uid": result.physical_uid})
+    db.commit()
+    return custody_state(piece_id, db)
+
+
+@writes_router.post("/pieces/{piece_id}/tags/{tag_id}/release", response_model=CustodyState)
+def custody_release_uid(piece_id: uuid.UUID, tag_id: uuid.UUID, who: Actor = Depends(actor),
+                        db: Session = Depends(get_db)) -> CustodyState:
+    """A chip taken out of service by mistake (never locked) can be used
+    again: its UID is freed; the old row stays as history."""
+    code = _public_code(db, piece_id)
+    uid = _run(db, lambda: prov.execute_release_uid(db, code, tag_id, operator=_operator(who)))
+    _audit_custody(db, who, piece_id, "uid_released", {"tag_id": str(tag_id), "uid": uid})
     db.commit()
     return custody_state(piece_id, db)
 

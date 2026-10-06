@@ -883,6 +883,7 @@ El texto anterior de esta sección se conserva como historia. Desde ADR-029:
 | `POST …/custody/pieces/{id}/program` `{"tag_id", "uid"}` | Tras grabar **y leer de vuelta**: el `uid` leído debe ser el registrado (`409 uid_mismatch`) |
 | `POST …/custody/pieces/{id}/lock` `{"uid"}` | Tras el bloqueo físico confirmado por el navegador |
 | `POST …/custody/pieces/{id}/revoke` `{"reason"}` | Revoca y retira los chips |
+| `POST …/custody/pieces/{id}/tags/{tag_id}/release` `{}` | Libera el UID de un chip de la pieza dado de baja (`replaced`/`retired`) que **nunca se bloqueó**, para volver a registrarlo. La fila queda como historial con `physical_uid = NULL`; el UID pasa a sus `notes` (`release-uid`) y a la auditoría (`custody.uid_released`). `409 tag_not_retired` / `tag_was_locked` / `uid_already_released` / `tag_not_available`. El estado (`GET …/state`) lista los liberables en `releasable_tags` |
 | `POST …/custody/pieces/{id}/card/issue` `{}` | ADR-030 fase 3. Genera la tarjeta del comprador (requiere certificado activo; `409 card_exists` si ya hay una). **Única respuesta con la clave**: `{"key": "XXXX-XXXX-XX", "public_code"}`, `no-store`, una sola vez |
 | `POST …/card/replace` · `…/transfer` `{"note"}` | Tarjeta perdida / pieza vendida: la tarjeta anterior queda `replaced` y se devuelve una clave nueva. `transfer` además libera el reclamo |
 | `POST …/card/block` · `…/card/unblock` · `…/claim/release` · `…/stolen` · `…/stolen/clear` `{"note"}` | Devuelven el estado. `note` (5–500) es obligatoria: la prueba que revisó el Custodio; queda en `audit_event` |

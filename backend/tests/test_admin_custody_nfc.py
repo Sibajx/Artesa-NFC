@@ -126,3 +126,63 @@ def test_compatible_ntag213_clone_is_accepted_from_web_nfc(client, db_session):
         assert exc.reason == "not_nxp"
     else:
         raise AssertionError("the CLI path must still require 04")
+
+
+def test_a_chip_retired_by_mistake_can_be_released_and_used_again(client, db_session):
+    """A test chip marked "damaged" while replacing it: never locked, so its
+    UID can be freed and the same chip written again (2026-10-05)."""
+    piece = published_piece(client)
+    first = post(client, piece, "issue", {"uid": UID}).json()
+    post(client, piece, "program", {"tag_id": first["tag_id"], "uid": UID})
+    rotated = post(client, piece, "rotate", {"reason": "damaged", "uid": OTHER_UID})
+    assert rotated.status_code == 200, rotated.text
+    # The old chip is out of service and its UID is taken.
+    s = state(client, piece)
+    assert [t["uid"] for t in s["releasable_tags"]] == [UID]
+    assert post(client, piece, "revoke", {"reason": "not-deployed"}).status_code == 200
+    blocked = post(client, piece, "issue", {"uid": UID})
+    assert blocked.status_code == 409 and blocked.json()["error"]["code"] == "uid_already_registered"
+
+    released = post(client, piece, f"tags/{first['tag_id']}/release", {})
+    assert released.status_code == 200, released.text
+    body = released.json()
+    # Only the replacement chip (retired by the revoke, never locked) is left.
+    assert [t["uid"] for t in body["releasable_tags"]] == [OTHER_UID.replace("-", ":")]
+    again = post(client, piece, "issue", {"uid": UID})
+    assert again.status_code == 200, again.text
+    assert again.json()["uid"] == UID
+    assert post(client, piece, "program", {"tag_id": again.json()["tag_id"], "uid": UID}).status_code == 200
+
+    event = db_session.execute(select(AuditEvent).where(AuditEvent.action == "custody.uid_released")).scalar_one()
+    assert event.actor_email == CUSTODIAN_EMAIL and event.event_metadata == {"tag_id": first["tag_id"], "uid": UID}
+    from app.models.nfc_tag import NfcTag
+    old = db_session.get(NfcTag, first["tag_id"])
+    assert old.physical_uid is None and old.status.value in ("replaced", "retired")
+    assert f"release-uid piece={piece['public_code']} tag={first['tag_id']} uid={UID}" in old.notes
+    # Twice: nothing left to release.
+    twice = post(client, piece, f"tags/{first['tag_id']}/release", {})
+    assert twice.status_code == 409 and twice.json()["error"]["code"] == "uid_already_released"
+
+
+def test_release_refuses_locked_active_and_foreign_chips(client):
+    piece = published_piece(client)
+    issued = post(client, piece, "issue", {"uid": UID}).json()
+    # Still in service.
+    active = post(client, piece, f"tags/{issued['tag_id']}/release", {})
+    assert active.status_code == 409 and active.json()["error"]["code"] == "tag_not_retired"
+    post(client, piece, "program", {"tag_id": issued["tag_id"], "uid": UID})
+    post(client, piece, "lock", {"uid": UID})
+    post(client, piece, "revoke", {"reason": "damaged"})
+    # Locked once: NTAG213 locking is permanent.
+    assert state(client, piece)["releasable_tags"] == []
+    locked = post(client, piece, f"tags/{issued['tag_id']}/release", {})
+    assert locked.status_code == 409 and locked.json()["error"]["code"] == "tag_was_locked"
+    # Another piece's chip, through this piece's URL.
+    artisan = new_artisan(client, name="Otra Artesana")
+    other = act(client, "pieces", new_piece(client, artisan["id"], name="Otra"), "publish").json()
+    act(client, "artisans", artisan, "publish")
+    foreign = post(client, other, f"tags/{issued['tag_id']}/release", {})
+    assert foreign.status_code == 409 and foreign.json()["error"]["code"] == "tag_not_available"
+    # Editors cannot.
+    from tests.test_admin_writes import H as editor_headers
+    assert post(client, piece, f"tags/{issued['tag_id']}/release", {}, headers=editor_headers()).status_code == 403

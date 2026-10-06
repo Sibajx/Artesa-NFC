@@ -257,6 +257,9 @@ TAG_ALREADY_LOCKED = "tag_already_locked"
 NO_PROGRAMMED_TAG = "no_programmed_tag"
 TAG_NOT_AVAILABLE = "tag_not_available"
 INVALID_REASON = "invalid_reason"
+TAG_NOT_RETIRED = "tag_not_retired"
+TAG_WAS_LOCKED = "tag_was_locked"
+UID_ALREADY_RELEASED = "uid_already_released"
 
 
 def _publication_blockers(state: PieceState) -> list[str]:
@@ -527,6 +530,39 @@ def execute_rotate(
         record=record,
         raw_token=rotation.raw_token,
     )
+
+
+def releasable_tags(db: Session, piece_id: uuid.UUID) -> list[NfcTag]:
+    """The piece's out-of-service tags (replaced/retired) that were never
+    locked and still hold their UID: the chip can be written again."""
+    return list(db.execute(select(NfcTag).where(
+        NfcTag.piece_id == piece_id, NfcTag.status.in_((NfcTagStatus.replaced, NfcTagStatus.retired)),
+        NfcTag.locked_at.is_(None), NfcTag.physical_uid.is_not(None)).order_by(NfcTag.created_at, NfcTag.id)).scalars())
+
+
+def execute_release_uid(db: Session, public_code: str, tag_id: uuid.UUID, *, operator: str) -> str:
+    """Free the UID of an out-of-service tag that was never locked, so the
+    same physical chip can be registered again (e.g. a test chip marked
+    "damaged" by mistake). The row stays as history with its status; the UID
+    moves to its notes and to the caller's audit event. A chip that was ever
+    locked is refused: NTAG213 locking is permanent, it cannot be rewritten.
+    Returns the released UID. The caller owns the commit."""
+    state = _locked_state(db, public_code)
+    tag = db.execute(select(NfcTag).where(NfcTag.id == tag_id).with_for_update()).scalar_one_or_none()
+    if tag is None or tag.piece_id != state.piece_id:
+        raise PreconditionFailed([TAG_NOT_AVAILABLE])
+    if tag.status not in (NfcTagStatus.replaced, NfcTagStatus.retired):
+        raise PreconditionFailed([TAG_NOT_RETIRED])
+    if tag.locked_at is not None:
+        raise PreconditionFailed([TAG_WAS_LOCKED])
+    if tag.physical_uid is None:
+        raise PreconditionFailed([UID_ALREADY_RELEASED])
+    uid = tag.physical_uid
+    tag.physical_uid = None
+    _append_note(tag, operation_record("release-uid", state.public_code, operator=operator, tag_id=tag.id,
+                                       physical_uid=uid))
+    db.flush()
+    return uid
 
 
 def execute_revoke(db: Session, public_code: str, *, reason: str, operator: str) -> RevokeResult:
