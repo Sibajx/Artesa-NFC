@@ -175,6 +175,8 @@ export interface CustodyState {
   rotate_blockers: string[];
   lock_blockers: string[];
   revocation_reasons: string[];
+  // Out-of-service chips that were never locked: they can be freed and written again.
+  releasable_tags?: { id: string; status: 'replaced' | 'retired'; uid: string }[];
   // ADR-030 phase 3.
   card: { status: 'active' | 'blocked'; issued_at: string; failed_attempts: number; locked_until: string | null } | null;
   claim: { owner_email: string; claimed_at: string } | null;
@@ -494,6 +496,8 @@ export const adminApi = {
     request<CustodyState>('POST', `/custody/pieces/${encodeURIComponent(id)}/program`, { body: { tag_id: tagId, uid } }),
   custodyLock: (id: string, uid: string) => request<CustodyState>('POST', `/custody/pieces/${encodeURIComponent(id)}/lock`, { body: { uid } }),
   custodyRevoke: (id: string, reason: string) => request<CustodyState>('POST', `/custody/pieces/${encodeURIComponent(id)}/revoke`, { body: { reason } }),
+  custodyReleaseTag: (id: string, tagId: string) =>
+    request<CustodyState>('POST', `/custody/pieces/${encodeURIComponent(id)}/tags/${encodeURIComponent(tagId)}/release`, { body: {} }),
   cardIssue: (id: string) => request<CardKey>('POST', `/custody/pieces/${encodeURIComponent(id)}/card/issue`, { body: {} }),
   cardKeyAction: (id: string, action: 'card/replace' | 'transfer', note: string) =>
     request<CardKey>('POST', `/custody/pieces/${encodeURIComponent(id)}/${action}`, { body: { note } }),

@@ -36,7 +36,7 @@ const BLOCKERS: Record<string, string> = {
   tag_already_locked: 'El chip ya está bloqueado.',
   no_programmed_tag: 'No hay un chip grabado que bloquear.',
   uid_mismatch: 'El chip leído no es el registrado. ¿Acercaste otro chip? Si se grabó otro chip, retíralo o reemplaza el certificado.',
-  uid_already_registered: 'Ese chip ya está registrado en otra pieza.',
+  uid_already_registered: 'Ese chip ya está registrado. Si se dio de baja por error y nunca se bloqueó, libéralo desde la Certificación de su pieza ("Chips dados de baja").',
   uid_not_nxp: 'Ese chip no es NTAG (su número no empieza con 04).',
   uid_wrong_length: 'El número del chip no tiene el largo esperado.',
   self_check_failed: 'El certificado no se pudo verificar. Vuelve a emitirlo.',
@@ -44,6 +44,9 @@ const BLOCKERS: Record<string, string> = {
   tag_not_found: 'Ese chip no pertenece a esta pieza. Recarga la página.',
   stale: 'Alguien más cambió esta pieza. Recarga la página.',
   invalid_transition: 'Ese paso ya no aplica al estado actual. Recarga la página.',
+  tag_not_retired: 'Ese chip sigue en uso; solo se liberan chips dados de baja.',
+  tag_was_locked: 'Ese chip se bloqueó alguna vez: el bloqueo es permanente y no se puede volver a grabar.',
+  uid_already_released: 'Ese chip ya se había liberado. Recarga la página.',
 };
 
 type Phase =
@@ -205,7 +208,24 @@ function Wizard({ state, reload, error, setError }: WizardProps) {
     }
   }
 
+  async function release(tagId: string, uid: string) {
+    const answer = await confirm({
+      title: '¿Liberar este chip para volver a usarlo?',
+      body: `El chip ${uid} se dio de baja pero nunca se bloqueó, así que se puede volver a grabar. Queda en el historial de esta pieza y su número se libera. Úsalo solo si el chip está bien (por ejemplo, se marcó como dañado en una prueba).`,
+      confirmLabel: 'Liberar chip',
+    });
+    if (answer === null) return;
+    try {
+      await adminApi.custodyReleaseTag(state.piece_id, tagId);
+      toast('Chip liberado: ya puedes volver a usarlo');
+      reload();
+    } catch (e) {
+      setError(message(e));
+    }
+  }
+
   const blockers = state.certificate_active ? [] : state.issue_blockers;
+  const releasable = state.releasable_tags ?? [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -307,6 +327,25 @@ function Wizard({ state, reload, error, setError }: WizardProps) {
           </>
         )}
       </section>
+
+      {releasable.length > 0 && phase.step === 'idle' && (
+        <section aria-labelledby="released-heading" className="card-elevated p-5 sm:p-6 flex flex-col gap-3 text-sm">
+          <h2 id="released-heading" className="text-lg font-serif text-botanica-negro">Chips dados de baja que se pueden volver a usar</h2>
+          <p className="text-botanica-grafito">
+            Nunca se bloquearon, así que se pueden volver a grabar. Libéralos solo si el chip está bien; el registro queda en el historial.
+          </p>
+          <ul className="flex flex-col gap-2">
+            {releasable.map((t) => (
+              <li key={t.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-botanica-gris/20 p-3">
+                <span className="font-mono">{t.uid}</span>
+                <button type="button" className="btn-secondary !py-1.5 !px-3 text-xs" onClick={() => void release(t.id, t.uid)}>
+                  Liberar para volver a usarlo
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {(state.certificate_active || state.card) && phase.step === 'idle' && (
         <TarjetaComprador state={state} reload={reload} setError={setError} />
