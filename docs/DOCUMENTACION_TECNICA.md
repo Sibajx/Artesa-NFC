@@ -1040,7 +1040,7 @@ Además, healthchecks.io avisa si el respaldo diario no llega en 26 horas.
 | Gestión | `current` = `4180818e1df1` |
 | `shared/.env` | Existe, archivo regular, permisos 0600 |
 | Candado de despliegue | Libre, sin activaciones a medias |
-| Sitio `artesanfc.com` | **Todavía `ab85ef2`**: falta publicar el sitio de R28 (página de autorización nueva), bloqueado por el FortiGate en la oficina [runbook] |
+| Sitio `artesanfc.com` | `4180818` (incluye el `web/` de R28: la página de autorización con "Quiero cambios"). Publicado el 2026-10-07 (despliegue de Pages `62e054ab…`); antes estaba en `ab85ef2`. Para volver al sitio anterior: despliegue `f0bbf61f…` |
 
 ### 14.7 Respaldo al momento de la revisión [verificado 2026-10-07]
 
@@ -1188,6 +1188,7 @@ mano, porque `requirements.txt`, el `.in` y el lock deben cambiar juntos.
 | 2026-10-03 | `web/` (Astro) sirve `artesanfc.com` |
 | 2026-10-05 | R26 (`fetch`/`ui`), R27 (tablas legadas fuera), D10 cerrado (12/12), UptimeRobot; primer artesano real publicado (2 máscaras) |
 | 2026-10-06 | R28 (el artesano puede pedir cambios) y R29 (liberar chip) |
+| 2026-10-07 | Sitio de R28 publicado; revisión y limpieza del servidor; documentación técnica completa |
 
 ---
 
@@ -1207,7 +1208,8 @@ mano, porque `requirements.txt`, el `.in` y el lock deben cambiar juntos.
 
 **Operativas** (detalle en `Artesa_Brain/16_Pendientes/`):
 
-1. Publicar el sitio de R28 desde una red sin FortiGate.
+1. ~~Publicar el sitio de R28 desde una red sin FortiGate.~~ Hecho el
+   2026-10-07.
 2. Autorización por WhatsApp: el flujo ya se probó de punta a punta con un
    artesano de prueba. Falta pedírsela al primer artesano real (PEND-080).
 3. Certificación v2: ya se probó físicamente (grabar, leer de vuelta, escanear,
@@ -1240,13 +1242,13 @@ API pública y certificados          [██████████████
 Seguridad del software              [████████████████████████████████░░░░]  90%
 Gestión (panel del equipo)          [████████████████████████████████░░░░]  90%
 Certificación v2 (software)         [██████████████████████████████████░░]  95%
-Sitio público (web/)                [███████████████████████████████░░░░░]  85%
+Sitio público (web/)                [████████████████████████████████░░░░]  90%
 Visor 3D / 360                      [████████████████████░░░░░░░░░░░░░░░░]  55%
 Pruebas automatizadas               [███████████████████████████████░░░░░]  85%
 Documentación                       [████████████████████████████████░░░░]  90%
 ```
 
-Qué falta: publicar el sitio de R28 y el hero real (sitio); pruebas de
+Qué falta: el hero real (sitio); pruebas de
 interfaz en Gestión; NTAG 424 DNA (seguridad); modelos 3D/360 reales de las
 piezas (el visor existe; faltan modelos capturados).
 
@@ -1285,7 +1287,7 @@ no hay resultados que medir.
 
 ```text
                                      0%                              100%
-Plataforma (software + infra)       [███████████████████████████████░░░░░]  87%
+Plataforma (software + infra)       [████████████████████████████████░░░░]  88%
 Piloto y negocio                    [█████████░░░░░░░░░░░░░░░░░░░░░░░░░░░]  24%
 PROYECTO COMPLETO (para el piloto)  [██████████████████████░░░░░░░░░░░░░░]  62%
 ```
@@ -1295,4 +1297,4 @@ Lo que falta ya no es sobre todo código: es **llevarla al mundo físico** (chip
 en piezas reales, tarjetas en manos de compradores, artesanos autorizando) y
 medir si cambia la decisión de compra.
 
-*Plataforma = promedio de las 14 áreas de 20.1 y 20.2 (87 %). Piloto y negocio = promedio de 20.3 (24 %). Global = 60 % plataforma + 40 % piloto y negocio (62 %).*
+*Plataforma = promedio de las 14 áreas de 20.1 y 20.2 (88 %). Piloto y negocio = promedio de 20.3 (24 %). Global = 60 % plataforma + 40 % piloto y negocio (62 %).*
