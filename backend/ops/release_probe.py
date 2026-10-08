@@ -47,7 +47,10 @@ ALLOWED_ENV_KEYS = ("APP_ENV", "DATABASE_URL", "DEBUG", "CORS_ALLOWED_ORIGINS",
                     "CUSTODIAN_EMAILS", "DESIGNER_EMAILS", "CUSTODY_ACCESS_AUD",
                     # P-026: the owner and the optional Cloudflare group sync.
                     "OWNER_EMAILS", "ACCESS_SYNC_API_TOKEN", "ACCESS_SYNC_ACCOUNT_ID",
-                    "ACCESS_SYNC_GROUP_ID")
+                    "ACCESS_SYNC_GROUP_ID",
+                    # Transactional email (Brevo SMTP relay): all four or none.
+                    "SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD", "MAIL_FROM")
+_MAIL_ENV_KEYS = ("SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD", "MAIL_FROM")
 _ADMIN_ENV_KEYS = ("ADMIN_ACCESS_TEAM_DOMAIN", "ADMIN_ACCESS_AUD", "ADMIN_EMAILS")
 _SECRET_NAME_HINTS = ("SECRET", "PASSWORD", "PASSWD", "TOKEN", "KEY", "DATABASE_URL", "CREDENTIAL")
 _PASSTHROUGH_ENV = ("PATH", "HOME", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "TMPDIR")
@@ -224,6 +227,9 @@ def validate_production_env(values: Mapping[str, str]) -> None:
     admin = [bool(values.get(key, "").strip()) for key in _ADMIN_ENV_KEYS]
     if any(admin) and not all(admin):
         raise rc.OpsError(rc.Exit.CONFIG, "admin configuration is partial: set all of " + ", ".join(_ADMIN_ENV_KEYS) + " or none")
+    mail = [bool(values.get(key, "").strip()) for key in _MAIL_ENV_KEYS]
+    if any(mail) and not all(mail):
+        raise rc.OpsError(rc.Exit.CONFIG, "mail configuration is partial: set all of " + ", ".join(_MAIL_ENV_KEYS) + " or none")
     media_root = values.get("MEDIA_ROOT", "").strip()
     if media_root:
         root = Path(media_root)
