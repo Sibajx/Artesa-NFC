@@ -18,7 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
-from app.core.access import CUSTODIAN, FORBIDDEN_ERROR, AdminIdentity, require_admin
+from app.core.access import CUSTODIAN, FORBIDDEN_ERROR, OWNER, AdminIdentity, require_admin
 from app.models.artisan import Artisan
 from app.models.audit_event import AuditActorType, AuditEvent, AuditResult
 from app.models.certificate import Certificate, CertificateStatus
@@ -207,6 +207,9 @@ class CustodyClaim(BaseModel):
     # when asking for a new card, a PIN reset or a transfer.
     owner_email: str
     claimed_at: str
+    # Until when the owner's email code (confirmed by the custodian) lets one
+    # lost-card or PIN action go ahead; None when not confirmed.
+    verified_until: str | None = None
 
 
 class CustodyState(BaseModel):
@@ -446,13 +449,27 @@ def _ownership_state(db: Session, piece_id: uuid.UUID) -> dict:
         "card": CustodyCard(status=card.status.value, issued_at=_iso(card.issued_at),
                             failed_attempts=card.failed_attempts, locked_until=_iso(card.locked_until))
         if card else None,
-        "claim": CustodyClaim(owner_email=claim.owner_email, claimed_at=_iso(claim.claimed_at)) if claim else None,
+        "claim": CustodyClaim(owner_email=claim.owner_email, claimed_at=_iso(claim.claimed_at),
+                              verified_until=_iso(own.owner_verified_until(db, claim))) if claim else None,
         "reported_stolen_at": _iso(piece.reported_stolen_at) if piece else None,
     }
 
 
 class NoteBody(BaseModel):
     note: str = Field(min_length=5, max_length=500)
+
+
+class OwnerCheckNoteBody(NoteBody):
+    """Replace card / release claim. ``override_owner_check`` skips the email
+    code when the owner lost access to their email: only the project owner may,
+    and the note (at least 20 letters) must say what proof was checked."""
+    override_owner_check: bool = False
+
+
+def _override(who: Actor, body: OwnerCheckNoteBody) -> bool:
+    if body.override_owner_check and not who.identity.has(OWNER):
+        raise HTTPException(status_code=403, detail=FORBIDDEN_ERROR)
+    return body.override_owner_check
 
 
 class CardKey(BaseModel):
@@ -481,10 +498,12 @@ def card_issue(piece_id: uuid.UUID, who: Actor = Depends(actor), db: Session = D
 
 
 @writes_router.post("/pieces/{piece_id}/card/replace", response_model=CardKey)
-def card_replace(piece_id: uuid.UUID, body: NoteBody, who: Actor = Depends(actor),
+def card_replace(piece_id: uuid.UUID, body: OwnerCheckNoteBody, who: Actor = Depends(actor),
                  db: Session = Depends(get_db)) -> CardKey:
     _public_code(db, piece_id)
-    key = _own(db, lambda: own.replace_card(db, piece_id, body.note, who.identity.email, who.ip_address))
+    override = _override(who, body)
+    key = _own(db, lambda: own.replace_card(db, piece_id, body.note, who.identity.email, who.ip_address,
+                                            override=override))
     return _key(db, piece_id, key)
 
 
@@ -517,10 +536,35 @@ def card_unblock(piece_id: uuid.UUID, body: NoteBody, who: Actor = Depends(actor
 
 
 @writes_router.post("/pieces/{piece_id}/claim/release", response_model=CustodyState)
-def claim_release(piece_id: uuid.UUID, body: NoteBody, who: Actor = Depends(actor),
+def claim_release(piece_id: uuid.UUID, body: OwnerCheckNoteBody, who: Actor = Depends(actor),
                   db: Session = Depends(get_db)) -> CustodyState:
+    override = _override(who, body)
     return _state_after(db, piece_id, lambda: own.release_claim(db, piece_id, body.note, who.identity.email,
-                                                                 who.ip_address))
+                                                                 who.ip_address, override=override))
+
+
+class OwnerCodeSent(BaseModel):
+    sent_to: str
+
+
+class OwnerCodeBody(BaseModel):
+    code: str = Field(min_length=6, max_length=6, pattern=r"^[0-9]{6}$")
+
+
+@writes_router.post("/pieces/{piece_id}/owner-code/send", response_model=OwnerCodeSent)
+def owner_code_send(piece_id: uuid.UUID, who: Actor = Depends(actor), db: Session = Depends(get_db)) -> OwnerCodeSent:
+    """Emails a code to the owner registered in the claim. Lost card or
+    forgotten PIN: the owner reads it out and the custodian confirms it."""
+    _public_code(db, piece_id)
+    email = _own(db, lambda: own.send_owner_code(db, piece_id, who.identity.email, who.ip_address))
+    return OwnerCodeSent(sent_to=email)
+
+
+@writes_router.post("/pieces/{piece_id}/owner-code/verify", response_model=CustodyState)
+def owner_code_verify(piece_id: uuid.UUID, body: OwnerCodeBody, who: Actor = Depends(actor),
+                      db: Session = Depends(get_db)) -> CustodyState:
+    return _state_after(db, piece_id, lambda: own.verify_owner_code(db, piece_id, body.code, who.identity.email,
+                                                                    who.ip_address))
 
 
 @writes_router.post("/pieces/{piece_id}/stolen", response_model=CustodyState)

@@ -48,6 +48,10 @@
     "b7e2c5a9d41f": {
       "class": "additive",
       "note": "Adds the 'changes_requested' value of artisan_authorization_status (P-026 G3, \"Quiero cambios\"). Only the new code writes it. After a rollback, older code would fail to read a row with that value, so before rolling back run the migration's downgrade (it maps such rows to 'declined')."
+    },
+    "d3f8a1c6e5b2": {
+      "class": "additive",
+      "note": "Adds the owner_verification table (emailed one-time codes that confirm the owner for PIN resets and lost cards). Nothing existing changes; older code ignores the table, so a rollback is compatible."
     }
   }
 }

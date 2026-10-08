@@ -29,6 +29,9 @@ _CERTIFICATE_POST_PATHS = frozenset({
     _RESOLVE_PATH,
     "/api/v1/certificates/unlock",
     "/api/v1/certificates/claim",
+    # Owner verification: the card key, the emailed code and the new PIN.
+    "/api/v1/certificates/pin-reset/request",
+    "/api/v1/certificates/pin-reset/confirm",
     # ADR-030 phase 5: the artisan's review link carries its token in the body.
     "/api/v1/design-reviews/resolve",
     "/api/v1/design-reviews/decision",

@@ -91,3 +91,35 @@ class PieceClaim(Base):
     )
     claimed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class OwnerVerificationPurpose(str, enum.Enum):
+    pin_reset = "pin_reset"  # the owner forgot the PIN (public page)
+    custody = "custody"  # the custodian confirms who asks (lost card, PIN reset)
+
+
+class OwnerVerification(Base):
+    """A one-time 6-digit code emailed to the owner registered in the claim.
+    Only its scrypt hash is stored. It expires, allows a few tries and works
+    once. ``verified_at`` is set when the custodian confirms the code in
+    Gestión; ``consumed_at`` when it is used (or replaced by a newer code)."""
+
+    __tablename__ = "owner_verification"
+    __table_args__ = (CheckConstraint("attempts >= 0", name="ck_owner_verification_attempts"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    piece_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("piece.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    claim_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("piece_claim.id", ondelete="RESTRICT"), nullable=False
+    )
+    purpose: Mapped[OwnerVerificationPurpose] = mapped_column(
+        Enum(OwnerVerificationPurpose, name="owner_verification_purpose"), nullable=False
+    )
+    code_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

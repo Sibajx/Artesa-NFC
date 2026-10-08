@@ -26,9 +26,13 @@ from app.schemas.certificate import (
     CertificateUnlockRequest,
     OriginalDesignPublic,
     OwnershipPublic,
+    PinResetConfirm,
+    PinResetRequest,
+    PinResetResult,
 )
 from app.schemas.piece import piece_to_public
 from app.services import designs, ownership
+from app.services import mailer
 from app.services.certificates import hash_certificate_token, is_syntactically_plausible_token
 
 router = APIRouter(prefix="/certificates", tags=["certificates"])
@@ -192,6 +196,47 @@ def claim_piece(
     certificate = _active_public_certificate(db, body.token)
     try:
         outcome = ownership.unlock(db, certificate, body.key, body.pin, _client_ip(request), claim_email=email)
+    except ownership.TooManyAttempts as exc:
+        raise _too_many(exc) from None
+    if outcome.result != "unlocked":
+        return CertificateUnlockRefused(result=outcome.result)
+    return _original(db, outcome)
+
+
+@router.post("/pin-reset/request", response_model=PinResetResult)
+def request_pin_reset(body: PinResetRequest, request: Request, db: Session = Depends(get_db)) -> PinResetResult:
+    """The owner forgot the PIN: card key -> a code to the email registered in
+    the claim. The answer is ``sent`` whatever the key, so it is no oracle."""
+    certificate = _active_public_certificate(db, body.token)
+    try:
+        result = ownership.request_pin_reset(db, certificate, body.key, _client_ip(request))
+    except ownership.TooManyAttempts as exc:
+        raise _too_many(exc) from None
+    except ownership.CodeRateLimited as exc:
+        raise HTTPException(status_code=429, detail={
+            "code": "too_many_attempts", "message": "Too many requests. Try again later.",
+            "retry_after": exc.retry_after,
+        }) from None
+    except mailer.MailUnavailable:
+        raise HTTPException(status_code=503, detail={"code": "mail_unavailable",
+                                                      "message": "The email service is not available."}) from None
+    return PinResetResult(result=result)
+
+
+@router.post("/pin-reset/confirm", response_model=CertificateOriginal | CertificateUnlockRefused)
+def confirm_pin_reset(
+    body: PinResetConfirm, request: Request, db: Session = Depends(get_db)
+) -> CertificateOriginal | CertificateUnlockRefused:
+    """Card key + the emailed code + a new PIN: replaces the PIN and opens the
+    original. Every refusal is the same ``invalid``."""
+    if not ownership.PIN_RE.fullmatch(body.pin):
+        raise HTTPException(status_code=422, detail={"code": "invalid_pin", "message": "The PIN has 6 digits."})
+    if ownership.is_weak_pin(body.pin):
+        raise HTTPException(status_code=422, detail={"code": "weak_pin", "message": "Choose a less obvious PIN."})
+    certificate = _active_public_certificate(db, body.token)
+    try:
+        outcome = ownership.confirm_pin_reset(db, certificate, body.key, body.code.strip(), body.pin,
+                                              _client_ip(request))
     except ownership.TooManyAttempts as exc:
         raise _too_many(exc) from None
     if outcome.result != "unlocked":

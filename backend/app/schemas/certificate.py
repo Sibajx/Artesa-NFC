@@ -74,6 +74,24 @@ class CertificateClaimRequest(BaseModel):
     pin: str = Field(max_length=16)
 
 
+class PinResetRequest(BaseModel):
+    token: str = Field(max_length=256)
+    key: str = Field(max_length=32)
+
+
+class PinResetConfirm(BaseModel):
+    token: str = Field(max_length=256)
+    key: str = Field(max_length=32)
+    code: str = Field(max_length=16)
+    pin: str = Field(max_length=16)
+
+
+class PinResetResult(BaseModel):
+    """``sent`` is the answer to every request, valid key or not."""
+
+    result: Literal["sent", "not_claimed", "reported_stolen"]
+
+
 class CertificateUnlockRefused(BaseModel):
     """Every refusal has this one shape. ``invalid`` never says why."""
 
