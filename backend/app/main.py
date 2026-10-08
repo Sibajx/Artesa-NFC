@@ -9,6 +9,7 @@ from app.api.admin.accounts import writes as admin_accounts_writes
 from app.api.admin.custody import router as admin_custody_router
 from app.api.admin.designs import reads as admin_designs_reads
 from app.api.admin.designs import writes as admin_designs_writes
+from app.api.admin.exports import router as admin_exports_router
 from app.api.admin.custody import writes_router as admin_custody_writes_router
 from app.api.admin.media import router as admin_media_router
 from app.api.admin.media import upload_router as admin_upload_router
@@ -193,6 +194,7 @@ app.include_router(api_v1_router)
 app.include_router(admin_router)
 app.include_router(admin_custody_router)
 app.include_router(admin_custody_writes_router)
+app.include_router(admin_exports_router)
 # ADR-030 phase 5. Before the content writes: POST /pieces/{id}/designs would
 # otherwise match their /pieces/{id}/{action} transition route.
 app.include_router(admin_accounts_reads)

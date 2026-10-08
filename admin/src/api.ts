@@ -585,4 +585,7 @@ export const adminApi = {
 };
 
 // Cloudflare Access ends the session at this path on the protected hostname.
+// P-026 G11: a plain link downloads it; Cloudflare Access covers the request.
+export const PIECES_CSV_URL = `${BASE}/exports/pieces.csv`;
+
 export const LOGOUT_URL = '/cdn-cgi/access/logout';

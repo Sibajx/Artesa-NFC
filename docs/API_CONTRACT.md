@@ -500,6 +500,19 @@ producto por adelantado.
 
   Todas responden `{data, cloudflare, sync_configured}`, donde `cloudflare` es `synced`, `not_configured`, `unchanged` o el texto del error. Las cuentas de `ADMIN_EMAILS` aparecen como fijas (`409 fixed_account`).
 
+### 7.6 Exportar a CSV (P-026 G11)
+
+- `GET /api/admin/v1/exports/pieces.csv` → `text/csv; charset=utf-8` con BOM, `Content-Disposition: attachment; filename="artesanfc-piezas-AAAA-MM-DD.csv"` y `no-store`, como toda la API de Gestión.
+- Una fila por pieza fuera de la papelera, ordenadas por artesano y código. No aplica los filtros de la lista.
+- **Columnas para cualquier cuenta de Gestión:** código, pieza, artesano, publicación, disponibilidad, precio y moneda, técnica, materiales, año, fecha, precio y canal de la venta activa, creada y actualizada.
+  - Los estados van en español.
+  - Las fechas van en hora de México (UTC−6).
+  - El dinero va con dos decimales.
+- **Columnas extra para custodios** (ADR-030): certificado y versión, chip y modelo, tarjeta, con dueño, diseño del certificado y reportada como robada.
+- **Datos que no salen:** el nombre y el contacto del comprador.
+- **Celdas de texto:** si empiezan con `=`, `+`, `-`, `@`, tabulador o retorno de carro, se les antepone un apóstrofo para que la hoja de cálculo no las evalúe como fórmula.
+- **Auditoría:** `export.pieces` con `{rows, custody_columns}`.
+
 ## 8. Listados, filtrado y paginación
 
 El fixture determinista del repositorio tiene 2 artesanos y 4 piezas

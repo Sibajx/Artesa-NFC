@@ -62,6 +62,7 @@ const LABELS: Record<string, string> = {
   'account.added': 'Dio acceso a Gestión',
   'account.role_changed': 'Cambió el rol de una cuenta',
   'account.removed': 'Quitó el acceso a Gestión',
+  'export.pieces': 'Exportó el inventario a CSV',
 };
 
 export const actionLabel = (action: string): string => LABELS[action] ?? action;
@@ -75,6 +76,7 @@ export const AUDIT_CATEGORIES: { value: string; label: string }[] = [
   { value: 'ownership.', label: 'Certificado original (público)' },
   { value: 'design.', label: 'Diseños de certificado' },
   { value: 'account.', label: 'Usuarios' },
+  { value: 'export.', label: 'Exportaciones' },
 ];
 
 /** Who did it: an email, or the public link (no account) for system events. */
