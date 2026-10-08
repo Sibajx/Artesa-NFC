@@ -155,3 +155,48 @@ describe("resolveCertificate", () => {
     }
   });
 });
+
+describe("forgotten PIN", () => {
+  it("posts the card key in the body only and reads the answer", async () => {
+    const calls: { url: string; body: unknown }[] = [];
+    const api = client((url, init) => {
+      calls.push({ url, body: JSON.parse(String(init?.body)) });
+      return json(200, { result: "sent" });
+    });
+    await expect(api.requestPinReset("tok", "AAAA-BBBB-CC")).resolves.toEqual({ kind: "sent" });
+    expect(calls).toEqual([
+      {
+        url: "http://127.0.0.1:8000/api/v1/certificates/pin-reset/request",
+        body: { token: "tok", key: "AAAA-BBBB-CC" },
+      },
+    ]);
+  });
+
+  it.each([
+    [200, { result: "not_claimed" }, { kind: "not_claimed" }],
+    [200, { result: "reported_stolen" }, { kind: "reported_stolen" }],
+    [
+      429,
+      { error: { code: "too_many_attempts", retry_after: 30 } },
+      { kind: "locked", retryAfter: 30 },
+    ],
+    [503, { error: { code: "mail_unavailable" } }, { kind: "mail_unavailable" }],
+  ])("maps HTTP %i", async (status, body, expected) => {
+    const api = client(() => json(status, body));
+    await expect(api.requestPinReset("tok", "key")).resolves.toEqual(expected);
+  });
+
+  it("sends the code and the new PIN to confirm", async () => {
+    const calls: string[] = [];
+    const api = client((url, init) => {
+      calls.push(`${url} ${String(init?.body)}`);
+      return json(200, { result: "invalid" });
+    });
+    await expect(api.confirmPinReset("tok", "key", "123456", "739204")).resolves.toEqual({
+      kind: "refused",
+      result: "invalid",
+    });
+    expect(calls[0]).toContain("/certificates/pin-reset/confirm");
+    expect(calls[0]).toContain('"code":"123456"');
+  });
+});

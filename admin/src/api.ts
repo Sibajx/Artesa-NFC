@@ -179,7 +179,7 @@ export interface CustodyState {
   releasable_tags?: { id: string; status: 'replaced' | 'retired'; uid: string }[];
   // ADR-030 phase 3.
   card: { status: 'active' | 'blocked'; issued_at: string; failed_attempts: number; locked_until: string | null } | null;
-  claim: { owner_email: string; claimed_at: string } | null;
+  claim: { owner_email: string; claimed_at: string; verified_until: string | null } | null;
   reported_stolen_at: string | null;
 }
 
@@ -499,10 +499,19 @@ export const adminApi = {
   custodyReleaseTag: (id: string, tagId: string) =>
     request<CustodyState>('POST', `/custody/pieces/${encodeURIComponent(id)}/tags/${encodeURIComponent(tagId)}/release`, { body: {} }),
   cardIssue: (id: string) => request<CardKey>('POST', `/custody/pieces/${encodeURIComponent(id)}/card/issue`, { body: {} }),
-  cardKeyAction: (id: string, action: 'card/replace' | 'transfer', note: string) =>
-    request<CardKey>('POST', `/custody/pieces/${encodeURIComponent(id)}/${action}`, { body: { note } }),
-  ownershipAction: (id: string, action: 'card/block' | 'card/unblock' | 'claim/release' | 'stolen' | 'stolen/clear', note: string) =>
-    request<CustodyState>('POST', `/custody/pieces/${encodeURIComponent(id)}/${action}`, { body: { note } }),
+  // override: only the project owner, when the buyer lost access to their email.
+  cardKeyAction: (id: string, action: 'card/replace' | 'transfer', note: string, override = false) =>
+    request<CardKey>('POST', `/custody/pieces/${encodeURIComponent(id)}/${action}`,
+      { body: override ? { note, override_owner_check: true } : { note } }),
+  ownershipAction: (id: string, action: 'card/block' | 'card/unblock' | 'claim/release' | 'stolen' | 'stolen/clear', note: string, override = false) =>
+    request<CustodyState>('POST', `/custody/pieces/${encodeURIComponent(id)}/${action}`,
+      { body: override ? { note, override_owner_check: true } : { note } }),
+  // The owner's email code: sent to the claim's address, read out by the owner,
+  // confirmed here. It lets one card replacement or claim release go ahead.
+  ownerCodeSend: (id: string) =>
+    request<{ sent_to: string }>('POST', `/custody/pieces/${encodeURIComponent(id)}/owner-code/send`, { body: {} }),
+  ownerCodeVerify: (id: string, code: string) =>
+    request<CustodyState>('POST', `/custody/pieces/${encodeURIComponent(id)}/owner-code/verify`, { body: { code } }),
   artisans: (params: { publication_status?: string; q?: string; trashed?: string }, signal?: AbortSignal) =>
     get<ListEnvelope<ArtisanSummary>>('/artisans', params, signal),
   artisan: (id: string, signal?: AbortSignal) => get<ArtisanDetail>(`/artisans/${encodeURIComponent(id)}`, undefined, signal),

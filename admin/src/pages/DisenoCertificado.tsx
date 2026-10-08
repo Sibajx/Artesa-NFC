@@ -146,7 +146,7 @@ function EditorForm({ design, onChanged, setError, piecePalette, contact }: {
 }) {
   const editable = design.status === 'draft' || design.status === 'in_review';
   const [params, setParams] = useState<DesignParams>(design.params);
-  const [svg, setSvg] = useState(design.svg ?? '');
+  const [preview, setPreview] = useState('');
   const [reviewUrl, setReviewUrl] = useState<string | null>(null);
   const [approving, setApproving] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -155,13 +155,18 @@ function EditorForm({ design, onChanged, setError, piecePalette, contact }: {
   const dirty = JSON.stringify(params) !== JSON.stringify(design.params);
 
   // Live preview of unsaved changes, debounced; the saved design keeps its own SVG.
+  // Unsaved edits are previewed (debounced); with no edits the saved SVG is
+  // shown, so going back to the saved design restores its picture. A late
+  // answer for an older edit is dropped.
   useEffect(() => {
     if (!dirty) return;
+    let current = true;
     const timer = window.setTimeout(() => {
-      adminApi.previewDesign(params, design.version).then((r) => setSvg(r.svg), () => undefined);
+      adminApi.previewDesign(params, design.version).then((r) => { if (current) setPreview(r.svg); }, () => undefined);
     }, 300);
-    return () => window.clearTimeout(timer);
+    return () => { current = false; window.clearTimeout(timer); };
   }, [params, dirty, design.version]);
+  const svg = dirty ? preview || design.svg || '' : design.svg ?? '';
 
   const set = <K extends keyof DesignParams>(key: K, value: DesignParams[K]) => setParams((p) => ({ ...p, [key]: value }));
 
@@ -299,7 +304,7 @@ function EditorForm({ design, onChanged, setError, piecePalette, contact }: {
             <div className="flex flex-wrap gap-2 border-t border-botanica-gris/15 pt-4">
               <button type="button" className="btn-primary" disabled={!dirty || busy}
                 onClick={() => void run(() => adminApi.updateDesign(design.id, params, design.updated_at), 'Diseño guardado')}>Guardar</button>
-              {dirty && <button type="button" className="btn-secondary" disabled={busy} onClick={() => { setParams(design.params); setSvg(design.svg ?? ''); }}>Deshacer cambios</button>}
+              {dirty && <button type="button" className="btn-secondary" disabled={busy} onClick={() => setParams(design.params)}>Deshacer cambios</button>}
               <button type="button" className="btn-secondary" disabled={busy || dirty} onClick={() => void submit()}>
                 {design.status === 'in_review' ? 'Generar otro enlace de revisión' : 'Enviar al artesano'}
               </button>

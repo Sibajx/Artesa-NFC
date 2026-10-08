@@ -61,6 +61,16 @@ export type UnlockResult =
   | { readonly kind: "rejected"; readonly code: string }
   | { readonly kind: "error"; readonly reason: UnavailableReason };
 
+// The owner forgot the PIN: a code goes to the email registered in the claim.
+// "sent" is the answer to every request with a card key, valid or not.
+export type PinResetRequestResult =
+  | { readonly kind: "sent" }
+  | { readonly kind: "not_claimed" }
+  | { readonly kind: "reported_stolen" }
+  | { readonly kind: "locked"; readonly retryAfter: number | null }
+  | { readonly kind: "mail_unavailable" }
+  | { readonly kind: "error"; readonly reason: UnavailableReason };
+
 export type AuthorizationResult =
   | { readonly kind: "open"; readonly data: ArtisanAuthorizationOpen }
   | { readonly kind: "unavailable" }
@@ -237,6 +247,31 @@ export function createApiClient(options: ApiClientOptions = {}) {
       postUnlock("/certificates/unlock", { token, key, pin }),
     claimPiece: (token: string, key: string, email: string, pin: string) =>
       postUnlock("/certificates/claim", { token, key, email, pin }),
+
+    // Forgotten PIN: card key -> a code by email; key + code + new PIN -> the
+    // original. Same rule: nothing stored, logged or put in a URL.
+    async requestPinReset(token: string, key: string): Promise<PinResetRequestResult> {
+      const response = await postJson("/certificates/pin-reset/request", { token, key });
+      if (typeof response === "string") return { kind: "error", reason: response };
+      const payload = await readJson(response);
+      const error = isRecord(payload) && isRecord(payload.error) ? payload.error : null;
+      if (response.status === 429) {
+        const retry = error && typeof error.retry_after === "number" ? error.retry_after : null;
+        return { kind: "locked", retryAfter: retry };
+      }
+      if (response.status === 503) return { kind: "mail_unavailable" };
+      if (!response.ok) return { kind: "error", reason: reasonForStatus(response.status) };
+      if (
+        isRecord(payload) &&
+        (payload.result === "sent" ||
+          payload.result === "not_claimed" ||
+          payload.result === "reported_stolen")
+      )
+        return { kind: payload.result };
+      return { kind: "error", reason: "malformed" };
+    },
+    confirmPinReset: (token: string, key: string, code: string, pin: string) =>
+      postUnlock("/certificates/pin-reset/confirm", { token, key, code, pin }),
 
     // ADR-030 phase 5: the artisan's review link. Token in the body only.
     async resolveReview(token: string): Promise<ReviewResult> {

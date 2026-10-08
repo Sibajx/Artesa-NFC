@@ -3,6 +3,7 @@ import { ApiError, adminApi } from './api';
 import type { CardKey, CustodyState } from './api';
 import { formatDateTime, writeErrorMessage } from './format';
 import { useConfirm, useToast } from './feedback-context';
+import { useRoles } from './roles-context';
 import { Badge } from './ui';
 
 // ADR-030 phase 3: the buyer's scratch card, the claim and the stolen report.
@@ -17,6 +18,12 @@ const CONFLICTS: Record<string, string> = {
   card_already_blocked: 'La tarjeta ya está bloqueada.',
   card_not_blocked: 'La tarjeta no está bloqueada.',
   not_claimed: 'Nadie ha reclamado esta pieza.',
+  owner_not_verified: 'Primero confirma al dueño: envíale el código a su correo y escríbelo aquí.',
+  code_invalid: 'Código incorrecto, vencido o con demasiados intentos. Envía uno nuevo.',
+  code_rate_limited: 'Ya se envió un código hace poco. Espera un minuto (máximo 5 por hora).',
+  mail_unavailable: 'El correo no está configurado en el servidor.',
+  override_note_required: 'Sin el correo del dueño, la nota debe decir qué prueba revisaste (al menos 20 letras).',
+  mail_failed: 'No se pudo enviar el correo. Inténtalo de nuevo en un momento.',
   already_reported_stolen: 'La pieza ya está reportada como robada.',
   not_reported_stolen: 'La pieza no está reportada como robada.',
 };
@@ -26,7 +33,7 @@ type NoteAction = 'card/replace' | 'transfer' | 'card/block' | 'card/unblock' | 
 const ACTIONS: Record<NoteAction, { title: string; body: string; confirm: string; danger?: boolean; done: string }> = {
   'card/replace': {
     title: 'Reponer tarjeta',
-    body: 'Para tarjeta perdida o clave vista por otra persona. La clave actual deja de servir y se genera una nueva para imprimir. El reclamo y el PIN del dueño se conservan.',
+    body: 'Para tarjeta perdida o clave vista por otra persona. Si la pieza ya tiene dueño, primero confírmalo con el código a su correo. La clave actual deja de servir y se genera una nueva para imprimir. El reclamo y el PIN del dueño se conservan.',
     confirm: 'Generar tarjeta nueva',
     done: 'Tarjeta repuesta',
   },
@@ -52,7 +59,7 @@ const ACTIONS: Record<NoteAction, { title: string; body: string; confirm: string
   },
   'claim/release': {
     title: 'Liberar el reclamo',
-    body: 'Para un dueño que olvidó su PIN. Verifica que quien lo pide es el correo registrado. Después podrá reclamar de nuevo con su tarjeta y elegir otro PIN.',
+    body: 'Para un dueño que olvidó su PIN y no puede usar "¿Olvidaste tu PIN?" en la web. Primero confírmalo con el código a su correo. Después podrá reclamar de nuevo con su tarjeta y elegir otro PIN.',
     confirm: 'Liberar',
     danger: true,
     done: 'Reclamo liberado',
@@ -83,9 +90,14 @@ export default function TarjetaComprador({ state, reload, setError }: {
   setError: (message: string | null) => void;
 }) {
   const [printable, setPrintable] = useState<CardKey | null>(null);
+  const [code, setCode] = useState('');
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const isOwner = useRoles().includes('owner');
   const confirm = useConfirm();
   const toast = useToast();
   const { card, claim } = state;
+  const verified = !!claim?.verified_until && new Date(claim.verified_until) > new Date();
   const lockedUntil = card?.locked_until && new Date(card.locked_until) > new Date() ? card.locked_until : null;
 
   async function issue() {
@@ -98,7 +110,35 @@ export default function TarjetaComprador({ state, reload, setError }: {
     }
   }
 
-  async function run(action: NoteAction) {
+  async function sendCode() {
+    setError(null);
+    setBusy(true);
+    try {
+      setSentTo((await adminApi.ownerCodeSend(state.piece_id)).sent_to);
+      setCode('');
+      toast('Código enviado al correo del dueño');
+    } catch (e) {
+      setError(message(e));
+    }
+    setBusy(false);
+  }
+
+  async function verifyCode() {
+    setError(null);
+    setBusy(true);
+    try {
+      await adminApi.ownerCodeVerify(state.piece_id, code.trim());
+      setCode('');
+      setSentTo(null);
+      toast('Dueño confirmado');
+      reload();
+    } catch (e) {
+      setError(message(e));
+    }
+    setBusy(false);
+  }
+
+  async function run(action: NoteAction, override = false) {
     const spec = ACTIONS[action];
     const note = await confirm({
       title: spec.title,
@@ -108,16 +148,18 @@ export default function TarjetaComprador({ state, reload, setError }: {
       reason: { label: 'Nota (qué revisaste como prueba)', placeholder: 'Ej. ticket de compra, correo del dueño' },
     });
     if (note === null) return;
-    if (note.trim().length < 5) {
-      setError('Escribe una nota de al menos 5 letras: queda en la auditoría como prueba.');
+    if (note.trim().length < (override ? 20 : 5)) {
+      setError(override
+        ? 'Sin el correo del dueño, escribe qué prueba revisaste (al menos 20 letras): queda en la auditoría.'
+        : 'Escribe una nota de al menos 5 letras: queda en la auditoría como prueba.');
       return;
     }
     setError(null);
     try {
       if (action === 'card/replace' || action === 'transfer') {
-        setPrintable(await adminApi.cardKeyAction(state.piece_id, action, note.trim()));
+        setPrintable(await adminApi.cardKeyAction(state.piece_id, action, note.trim(), override));
       } else {
-        await adminApi.ownershipAction(state.piece_id, action, note.trim());
+        await adminApi.ownershipAction(state.piece_id, action, note.trim(), override);
       }
       toast(spec.done);
       reload();
@@ -171,6 +213,41 @@ export default function TarjetaComprador({ state, reload, setError }: {
           {claim && <dd className="text-botanica-grafito">Desde {formatDateTime(claim.claimed_at)}</dd>}
         </div>
       </dl>
+
+      {claim && card && (
+        <div className="rounded-xl border border-botanica-gris/25 p-4 flex flex-col gap-3 text-sm" aria-label="Confirmar al dueño">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="font-medium text-botanica-negro">Confirmar al dueño por correo</h3>
+            {verified
+              ? <Badge tone="jade">Confirmado hasta {formatDateTime(claim.verified_until as string)}</Badge>
+              : <Badge tone="neutral">Sin confirmar</Badge>}
+          </div>
+          <p className="text-botanica-grafito">
+            Para reponer la tarjeta o liberar el reclamo, manda un código al correo registrado ({claim.owner_email}).
+            El dueño te lo dice y lo escribes aquí. Vale 10 minutos y sirve para una sola acción.
+          </p>
+          <div className="flex flex-wrap items-end gap-2">
+            <button type="button" className="btn-secondary" disabled={busy} onClick={() => void sendCode()}>
+              {sentTo ? 'Enviar otro código' : 'Enviar código al dueño'}
+            </button>
+            <label className="flex flex-col gap-1 text-xs text-botanica-grafito">
+              Código de 6 dígitos
+              <input value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                inputMode="numeric" autoComplete="one-time-code" maxLength={6}
+                className="w-36 rounded-md border border-botanica-gris/30 px-3 py-2 font-mono text-base tracking-widest" />
+            </label>
+            <button type="button" className="btn-primary" disabled={busy || code.length !== 6} onClick={() => void verifyCode()}>Confirmar código</button>
+          </div>
+          {sentTo && <p className="text-xs text-botanica-gris">Enviado a {sentTo}.</p>}
+          {isOwner && (
+            <div className="flex flex-wrap items-center gap-2 border-t border-botanica-gris/15 pt-3 text-xs text-botanica-grafito">
+              <span>¿El dueño perdió también su correo? Solo tú, como dueño del proyecto, puedes seguir sin el código, con una nota de la prueba que revisaste:</span>
+              <button type="button" className="btn-secondary" onClick={() => void run('card/replace', true)}>Reponer tarjeta sin correo</button>
+              <button type="button" className="btn-secondary" onClick={() => void run('claim/release', true)}>Liberar reclamo sin correo</button>
+            </div>
+          )}
+        </div>
+      )}
 
       {!card ? (
         <div className="flex flex-col gap-2">
