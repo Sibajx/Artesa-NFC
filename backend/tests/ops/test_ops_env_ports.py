@@ -25,7 +25,8 @@ def test_only_the_variables_the_app_reads_are_loaded_and_the_rest_are_names_only
                                         "ADMIN_ACCESS_TEAM_DOMAIN", "ADMIN_ACCESS_AUD", "ADMIN_EMAILS", "MEDIA_ROOT",
                                         "CUSTODIAN_EMAILS", "DESIGNER_EMAILS", "CUSTODY_ACCESS_AUD",
                                         "OWNER_EMAILS", "ACCESS_SYNC_API_TOKEN", "ACCESS_SYNC_ACCOUNT_ID",
-                                        "ACCESS_SYNC_GROUP_ID"}
+                                        "ACCESS_SYNC_GROUP_ID", "SMTP_HOST", "SMTP_PORT", "SMTP_USER",
+                                        "SMTP_PASSWORD", "MAIL_FROM"}
     assert env.ignored_keys == ["CLOUDFLARE_API_TOKEN", "SECRET_KEY"]
     for secret in (DATABASE_URL, CANARY_PASSWORD, CANARY_OTHER, "another-secret-value-123"):
         assert secret in env.guard._values  # guarded even though the app never receives them
@@ -224,3 +225,20 @@ def test_media_root_is_optional_but_must_be_absolute_with_both_folders(tmp_path)
     (tmp_path / "originales").mkdir()
     (tmp_path / "publico").mkdir()
     rp.validate_production_env({**base, "MEDIA_ROOT": str(tmp_path)})
+
+
+_MAIL = {"SMTP_HOST": "smtp-relay.brevo.com", "SMTP_USER": "u@smtp-brevo.com", "SMTP_PASSWORD": "s3cret",
+         "MAIL_FROM": "ArtesaNFC <no-reply@artesanfc.com>"}
+
+
+@pytest.mark.parametrize("missing", sorted(_MAIL))
+def test_validate_production_env_refuses_a_partial_mail_configuration(missing):
+    values = {**_PROD, **{k: v for k, v in _MAIL.items() if k != missing}}
+    with pytest.raises(rc.OpsError) as err:
+        rp.validate_production_env(values)
+    assert err.value.code == rc.Exit.CONFIG and "mail configuration is partial" in err.value.message
+    assert "s3cret" not in err.value.message
+
+
+def test_validate_production_env_accepts_mail_all_or_none():
+    rp.validate_production_env({**_PROD, **_MAIL, "SMTP_PORT": "587"})
