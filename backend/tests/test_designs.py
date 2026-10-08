@@ -189,7 +189,7 @@ def new_design_conflict(client, piece) -> str:
     return client.post(f"/api/admin/v1/pieces/{piece['id']}/designs", json={}, headers=CH()).json()["error"]["code"]
 
 
-def test_the_approval_date_is_mexico_local_time(client):
+def test_the_approval_date_is_mexico_local_time(client, db_session):
     from datetime import datetime, timezone
     piece = published_piece(client)
     d = new_design(client, piece)
@@ -198,4 +198,4 @@ def test_the_approval_date_is_mexico_local_time(client):
                                        approved_at=datetime(2026, 10, 5, 3, 0, tzinfo=timezone.utc),
                                        approved_by_name="Rigoberto")
     # 03:00 UTC on the 5th is still the 4th in Oaxaca (UTC-6).
-    assert "04/10/2026" in designs.svg(design)
+    assert "04/10/2026" in designs.svg(db_session, design)

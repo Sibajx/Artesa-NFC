@@ -60,6 +60,10 @@
     "57cc7fb123cb": {
       "class": "additive",
       "note": "Creates piece_location (check on the location category, index on piece_id, ON DELETE CASCADE from piece) for P-026 G12. Nothing existing changes and older code never reads or writes it, so a code rollback is safe without a downgrade."
+    },
+    "be517598c1d4": {
+      "class": "additive",
+      "note": "Creates certificate_art (content-addressed artwork for original certificates, ADR-030 phase 5b). Older code never reads it; a design that references art renders without it under older code. Prefer a code-only rollback: the downgrade drops the table and with it the art of frozen designs."
     }
   }
 }

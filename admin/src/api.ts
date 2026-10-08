@@ -297,6 +297,16 @@ export interface DesignParams {
   quote: string;
   palette: string[];
   seed: number;
+  // ADR-030 phase 5b: the team's artwork (null removes it).
+  art?: DesignArt | null;
+}
+
+export type ArtPlacement = 'sello' | 'encabezado' | 'fondo';
+
+export interface DesignArt {
+  id: string;
+  placement: ArtPlacement;
+  opacity: number;
 }
 
 export interface Design {
@@ -598,6 +608,10 @@ export const adminApi = {
     get<{ data: Design[] }>(`/pieces/${encodeURIComponent(pieceId)}/designs`, undefined, signal),
   design: (id: string, signal?: AbortSignal) => get<Design>(`/designs/${encodeURIComponent(id)}`, undefined, signal),
   createDesign: (pieceId: string) => request<Design>('POST', `/pieces/${encodeURIComponent(pieceId)}/designs`, { body: {} }),
+  uploadArt: (file: Blob, contentType: string) =>
+    request<{ id: string; mime_type: string; width: number; height: number }>('POST', '/certificate-art', {
+      file: { data: file, contentType },
+    }),
   previewDesign: (params: DesignParams, version: number) =>
     request<{ svg: string }>('POST', '/designs/preview', { body: { params, version } }),
   updateDesign: (id: string, params: Partial<DesignParams>, version: string) =>

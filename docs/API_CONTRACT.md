@@ -464,6 +464,13 @@ producto por adelantado.
 
 - Todas las escrituras usan `If-Match` y quedan auditadas como `design.*`.
 - `params`: `template` (`clasico` \| `greca` \| `constelacion`), `variant` (`claro` \| `oscuro`), `title`, `piece_name`, `artisan_name`, `public_code`, `quote` (hasta 240 caracteres), `palette` (de 3 a 5 colores) y `seed`.
+- **Arte propio (fase 5b):**
+  - `POST /certificate-art`, solo con rol de diseño. El cuerpo es la imagen misma: PNG, JPEG o WebP, hasta 8 MB, con su `Content-Type` y `X-Artesa-Admin: 1`. Responde `201 {id, mime_type, width, height}`.
+  - El servidor la decodifica y la vuelve a codificar: no conserva metadatos ni datos extra, el lado mayor queda en 1000 px, es PNG si tiene transparencia y JPEG si no.
+  - El `id` es el SHA-256 del resultado. La imagen no cambia ni se borra, así que una versión congelada se dibuja igual para siempre.
+  - Errores: `415 unsupported_media_type`, `413 too_large`, `422 unsupported_type` / `image_too_large` / `empty_file`.
+  - El diseño la usa con `params.art = {id, placement: "sello" | "encabezado" | "fondo", opacity: 0.05–0.6}`. Un `id` que no existe da `409 invalid_design`, y `art: null` quita el arte.
+  - El SVG la incrusta como `data:` URI, armada en el servidor; los `params` solo llevan el hash.
 
 ### 7.4 Ventas y precio (P-026)
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ApiError, adminApi } from '../api';
-import type { Design, DesignParams } from '../api';
+import type { ArtPlacement, Design, DesignParams } from '../api';
 import { formatDateTime, writeErrorMessage } from '../format';
 import { useConfirm, useToast } from '../feedback-context';
 import { useLoad } from '../hooks';
@@ -26,6 +26,14 @@ const TEMPLATES: { value: DesignParams['template']; label: string; hint: string 
   { value: 'constelacion', label: 'Constelación', hint: 'Fondo oscuro con patrón generativo' },
 ];
 
+const PLACEMENTS: { value: ArtPlacement; label: string; hint: string }[] = [
+  { value: 'sello', label: 'En el sello', hint: 'Dentro del círculo, en lugar del sello generado' },
+  { value: 'encabezado', label: 'Arriba', hint: 'Sobre el título, como un logotipo' },
+  { value: 'fondo', label: 'De fondo', hint: 'Toda la hoja, tenue' },
+];
+
+const ART_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
+
 const MEDIA = [
   { value: 'en persona', label: 'En persona' },
   { value: 'whatsapp', label: 'WhatsApp' },
@@ -36,7 +44,12 @@ const MEDIA = [
 const CONFLICTS: Record<string, string> = {
   open_design_exists: 'Ya hay un diseño en curso para esta pieza.',
   design_frozen: 'Un diseño aprobado o publicado ya no cambia. Crea una versión nueva.',
-  invalid_design: 'Revisa los textos y los colores (de 3 a 5).',
+  invalid_design: 'Revisa los textos, los colores (de 3 a 5) y el arte.',
+  unsupported_type: 'El arte tiene que ser una imagen PNG, JPEG o WebP.',
+  unsupported_media_type: 'El arte tiene que ser una imagen PNG, JPEG o WebP.',
+  image_too_large: 'La imagen es demasiado grande (más de 50 megapíxeles).',
+  too_large: 'La imagen pesa más de 8 MB.',
+  empty_file: 'El archivo está vacío.',
   invalid_approval: 'Indica quién aprobó, cómo, y qué revisaste (al menos 5 letras).',
   not_approved: 'Solo se publica un diseño aprobado.',
   invalid_transition: 'Ese paso ya no aplica. Recarga la página.',
@@ -170,6 +183,24 @@ function EditorForm({ design, onChanged, setError, piecePalette, contact }: {
 
   const set = <K extends keyof DesignParams>(key: K, value: DesignParams[K]) => setParams((p) => ({ ...p, [key]: value }));
 
+  async function uploadArt(file: File | undefined) {
+    if (!file) return;
+    if (!ART_TYPES.includes(file.type)) {
+      setError(CONFLICTS.unsupported_type);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const art = await adminApi.uploadArt(file, file.type);
+      setParams((p) => ({ ...p, art: { id: art.id, placement: p.art?.placement ?? 'sello', opacity: p.art?.opacity ?? 0.15 } }));
+      toast('Arte cargado. Guarda el diseño para conservarlo.');
+    } catch (e) {
+      setError(message(e));
+    }
+    setBusy(false);
+  }
+
   async function run(call: () => Promise<unknown>, done: string) {
     setBusy(true);
     setError(null);
@@ -296,6 +327,39 @@ function EditorForm({ design, onChanged, setError, piecePalette, contact }: {
                     className="h-11 w-11 cursor-pointer rounded-lg border border-botanica-gris/30 bg-transparent p-0.5" />
                 ))}
               </div>
+            </fieldset>
+            <fieldset className="flex flex-col gap-3">
+              <legend className="text-xs font-medium text-botanica-grafito mb-1">Arte propio</legend>
+              <p className="text-xs text-botanica-gris">Un logotipo o dibujo exportado de Figma, Illustrator o Canva (PNG con fondo transparente queda mejor). Máximo 8 MB.</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className={`btn-secondary cursor-pointer ${busy ? 'opacity-60 pointer-events-none' : ''}`}>
+                  {params.art ? 'Cambiar imagen' : 'Subir imagen'}
+                  <input type="file" accept={ART_TYPES.join(',')} className="sr-only"
+                    onChange={(e) => { void uploadArt(e.target.files?.[0]); e.target.value = ''; }} />
+                </label>
+                {params.art && <button type="button" className="btn-secondary" disabled={busy} onClick={() => set('art', null)}>Quitar arte</button>}
+              </div>
+              {params.art && (
+                <>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {PLACEMENTS.map((pl) => (
+                      <label key={pl.value} className={`cursor-pointer rounded-xl border p-3 text-sm ${params.art?.placement === pl.value ? 'border-botanica-jade bg-botanica-jade/5' : 'border-botanica-gris/25'}`}>
+                        <input type="radio" name="art-placement" className="sr-only" checked={params.art?.placement === pl.value}
+                          onChange={() => setParams((p) => (p.art ? { ...p, art: { ...p.art, placement: pl.value } } : p))} />
+                        <span className="block font-medium text-botanica-negro">{pl.label}</span>
+                        <span className="block text-xs text-botanica-gris">{pl.hint}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {params.art.placement === 'fondo' && (
+                    <label className="flex items-center gap-3 text-sm text-botanica-grafito">Intensidad
+                      <input type="range" min={0.05} max={0.6} step={0.05} value={params.art.opacity} className="accent-botanica-jade"
+                        onChange={(e) => { const opacity = Number(e.target.value); setParams((p) => (p.art ? { ...p, art: { ...p.art, opacity } } : p)); }} />
+                      <span className="tabular-nums">{Math.round(params.art.opacity * 100)}%</span>
+                    </label>
+                  )}
+                </>
+              )}
             </fieldset>
             <div className="flex flex-wrap items-center gap-3">
               <button type="button" className="btn-secondary" onClick={() => set('seed', Math.floor(Math.random() * 2 ** 31))}>Otro patrón</button>
