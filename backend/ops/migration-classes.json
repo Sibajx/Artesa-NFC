@@ -56,6 +56,10 @@
     "e7a4c9b1d6f3": {
       "class": "additive",
       "note": "Adds the hero_campaign table (P-028, hero by season) and seeds three rows (Hero normal, Día de Muertos, Navidad). Nothing existing changes; older code ignores the table, so a rollback is compatible."
+    },
+    "57cc7fb123cb": {
+      "class": "additive",
+      "note": "Creates piece_location (check on the location category, index on piece_id, ON DELETE CASCADE from piece) for P-026 G12. Nothing existing changes and older code never reads or writes it, so a code rollback is safe without a downgrade."
     }
   }
 }

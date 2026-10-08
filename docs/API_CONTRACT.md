@@ -504,7 +504,7 @@ producto por adelantado.
 
 - `GET /api/admin/v1/exports/pieces.csv` → `text/csv; charset=utf-8` con BOM, `Content-Disposition: attachment; filename="artesanfc-piezas-AAAA-MM-DD.csv"` y `no-store`, como toda la API de Gestión.
 - Una fila por pieza fuera de la papelera, ordenadas por artesano y código. No aplica los filtros de la lista.
-- **Columnas para cualquier cuenta de Gestión:** código, pieza, artesano, publicación, disponibilidad, precio y moneda, técnica, materiales, año, fecha, precio y canal de la venta activa, creada y actualizada.
+- **Columnas para cualquier cuenta de Gestión:** código, pieza, artesano, publicación, disponibilidad, precio y moneda, ubicación y lugar actuales (§7.7), técnica, materiales, año, fecha, precio y canal de la venta activa, creada y actualizada.
   - Los estados van en español.
   - Las fechas van en hora de México (UTC−6).
   - El dinero va con dos decimales.
@@ -512,6 +512,19 @@ producto por adelantado.
 - **Datos que no salen:** el nombre y el contacto del comprador.
 - **Celdas de texto:** si empiezan con `=`, `+`, `-`, `@`, tabulador o retorno de carro, se les antepone un apóstrofo para que la hoja de cálculo no las evalúe como fórmula.
 - **Auditoría:** `export.pieces` con `{rows, custody_columns}`.
+
+### 7.7 Ubicación física de la pieza (P-026 G12)
+
+- **Solo Gestión:** la API pública no expone la ubicación.
+- `POST /api/admin/v1/pieces/{id}/location` `{location, place?, moved_on, note?}` con `If-Match` registra un movimiento y responde el detalle de la pieza:
+  - `location` es `taller`, `bodega`, `tienda`, `exhibicion`, `transito`, `entregada` u `otro`;
+  - `place` (hasta 120 caracteres) dice cuál tienda, feria o museo;
+  - `moved_on` no puede ser futura (`409 invalid_location`);
+  - una pieza en la papelera responde `409 trashed`.
+- **Historial:** los movimientos no se editan; una corrección es un movimiento nuevo. El detalle de la pieza trae `locations` del más reciente al más antiguo, y el primero es la ubicación actual.
+- **Purga:** los movimientos se borran junto con la pieza solo cuando se purga de la papelera un borrador que nunca fue público.
+- **Auditoría:** `piece.moved` con `{location_id, from, to, place, moved_on}`.
+- **Tabla:** `piece_location`, creada por la migración `57cc7fb123cb` (additive).
 
 ## 8. Listados, filtrado y paginación
 

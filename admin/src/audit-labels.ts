@@ -27,6 +27,7 @@ const LABELS: Record<string, string> = {
   'piece.availability_changed': 'Cambió la disponibilidad',
   'piece.palette_set': 'Cambió los colores del certificado',
   'piece.sold': 'Registró una venta',
+  'piece.moved': 'Cambió la ubicación de la pieza',
   'piece.sale_cancelled': 'Canceló una venta',
   'hero.created': 'Creó una temporada del hero',
   'hero.updated': 'Editó una temporada del hero',

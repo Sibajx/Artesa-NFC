@@ -6,6 +6,7 @@ import { useLoad } from '../hooks';
 import { MediaSection } from '../MediaSection';
 import { PaletteSection } from '../PaletteSection';
 import { VentaSection } from '../VentaSection';
+import { UbicacionSection } from '../UbicacionSection';
 import { useRoles } from '../roles-context';
 import { PublishChecklist } from '../PublishChecklist';
 import { RecordActions } from '../RecordActions';
@@ -136,6 +137,8 @@ export default function PiezaDetalle() {
               ownerArchived={p.publication_status === 'archived'} onChanged={() => setRevision((r) => r + 1)} />
 
             <VentaSection key={`sale:${p.updated_at}`} piece={p} onChanged={() => setRevision((r) => r + 1)} />
+
+            <UbicacionSection key={`location:${p.updated_at}`} piece={p} onChanged={() => setRevision((r) => r + 1)} />
 
             <PaletteSection key={p.updated_at} piece={p} onChanged={() => setRevision((r) => r + 1)} />
 

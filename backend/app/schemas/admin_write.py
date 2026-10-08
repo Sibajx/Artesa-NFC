@@ -165,3 +165,15 @@ class SaleBody(_Body):
 
 class SaleCancelBody(_Body):
     reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=5, max_length=500)]
+
+
+# --- P-026 G12: where the piece is ----------------------------------------------------
+
+
+class LocationBody(_Body):
+    location: Literal["taller", "bodega", "tienda", "exhibicion", "transito", "entregada", "otro"]
+    place: Annotated[str, StringConstraints(strip_whitespace=True, max_length=120)] | None = None
+    moved_on: date
+    note: Annotated[str, StringConstraints(strip_whitespace=True, max_length=500)] | None = None
+
+    _blank = field_validator("place", "note", mode="before")(_blank_to_none)
