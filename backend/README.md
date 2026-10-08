@@ -174,10 +174,13 @@ connection is opened.
 from the working directory. It is optional; exported environment variables
 take priority over it.
 
-**Not covered here:** `alembic upgrade` runs against whatever
-`DATABASE_URL` is explicitly configured (it is not seed/test guarded), and an extra
-localhost origin next to `https://artesanfc.com` in production CORS is not
-rejected.
+**Production CORS (N-01):** with `APP_ENV=production` the API refuses to start
+unless `CORS_ALLOWED_ORIGINS` includes `https://artesanfc.com` and lists nothing
+but it and, optionally, `https://www.artesanfc.com`.
+
+**Migrations (PEND-011):** `alembic` refuses a target that does not match
+`APP_ENV`: a production-grade URL for `production`/`staging`, a test-marked
+database for `test`, a local host for `local` (`assert_safe_for_migrations`).
 
 ## Production edge and operational surfaces
 

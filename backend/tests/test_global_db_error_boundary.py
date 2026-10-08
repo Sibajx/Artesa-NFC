@@ -270,7 +270,7 @@ def test_database_500_is_byte_identical_to_the_generic_500(client):
     assert db_response.headers["content-type"] == "application/json"
 
 
-def test_resolve_database_500_keeps_no_store_and_cors_headers(caplog):
+def test_resolve_database_unavailable_is_503_with_no_store_and_cors_headers(caplog):
     # The DB handler runs inside CORSMiddleware and ResolveNoStoreMiddleware
     # (unlike the catch-all 500), so /resolve now carries both.
     origin = get_settings().cors_allowed_origins_list[0]
@@ -290,8 +290,10 @@ def test_resolve_database_500_keeps_no_store_and_cors_headers(caplog):
     finally:
         real_app.dependency_overrides.pop(get_db, None)
 
-    assert response.status_code == 500
-    assert response.json() == GENERIC_500
+    # N-02: a connection-level failure (no SQLSTATE) is a 503, not a 500.
+    assert response.status_code == 503
+    assert response.json() == db_errors.UNAVAILABLE_503
+    assert response.headers["retry-after"] == "30"
     assert response.headers["cache-control"] == "no-store"
     assert response.headers["access-control-allow-origin"] == origin
     [record] = _db_error_records(caplog)
@@ -652,3 +654,40 @@ def test_db_errors_module_never_logs_or_echoes_an_exception():
                 assert isinstance(arg, ast.Call) and isinstance(arg.func, ast.Name)
                 assert arg.func.id in _SANITIZED_ARG_HELPERS
     assert logger_calls == 1
+
+
+def test_only_connection_level_failures_are_unavailable():
+    """N-02: no SQLSTATE or an unavailable class -> 503; a failing query -> 500."""
+    import psycopg.errors as pe
+
+    assert db_errors.is_unavailable(OperationalError("SELECT 1", None, Exception("could not connect")))  # no SQLSTATE
+    for exc in (pe.QueryCanceled(), pe.LockNotAvailable(), pe.UniqueViolation()):
+        assert not db_errors.is_unavailable(OperationalError("SELECT 1", None, exc)), type(exc).__name__
+    for exc in (pe.AdminShutdown(), pe.TooManyConnections(), pe.InvalidPassword()):
+        assert db_errors.is_unavailable(OperationalError("SELECT 1", None, exc)), type(exc).__name__
+    assert not db_errors.is_unavailable(_dbapi(IntegrityError))
+    assert not db_errors.is_unavailable(RuntimeError("x"))
+
+
+def test_non_database_500_on_resolve_keeps_no_store_and_cors_and_still_reraises():
+    """N-02: the catch-all 500 used to come from ServerErrorMiddleware, outside
+    CORS and no-store. Now the same body is sent from inside both layers, and
+    the exception still reaches the server (its traceback log is unchanged)."""
+    origin = get_settings().cors_allowed_origins_list[0]
+
+    def broken():
+        raise RuntimeError("non-database failure")
+        yield  # pragma: no cover
+
+    real_app.dependency_overrides[get_db] = broken
+    try:
+        response = TestClient(real_app, raise_server_exceptions=False).post(
+            "/api/v1/certificates/resolve", json={"token": "T" * 43}, headers={"Origin": origin})
+        with pytest.raises(RuntimeError, match="non-database failure"):
+            TestClient(real_app, raise_server_exceptions=True).get("/api/v1/artisans")
+    finally:
+        real_app.dependency_overrides.pop(get_db, None)
+
+    assert response.status_code == 500 and response.json() == GENERIC_500
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["access-control-allow-origin"] == origin

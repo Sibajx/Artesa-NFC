@@ -623,7 +623,8 @@ Reglas adicionales:
 | `413 Payload Too Large` | Solo `POST /api/v1/certificates/resolve`: cuerpo de más de 1024 bytes (`Content-Length` mayor, o cuerpo sin `Content-Length`/chunked que lo supera al llegar). Se rechaza sin leer el resto. Código `payload_too_large`; lleva `Cache-Control: no-store` y CORS del origen permitido (`SECURITY.md` §5.6). |
 | `422 Unprocessable Entity` | Errores de validación de entrada de la solicitud — body, parámetros de query y parámetros de path — incluyendo tipo incorrecto, campo faltante, o valor fuera del rango/enum esperado (ej. `token` ausente en `certificates/resolve`, o `availability_status=xyz` en un filtro de query). Corresponde al comportamiento estándar de validación de FastAPI/Pydantic; no se requiere convertir estos casos a `400`. |
 | `429 Too Many Requests` | Rate limiting activado (mecanismo definido en `SECURITY.md`; el código y la forma de respuesta sí son parte de este contrato). |
-| `500 Internal Server Error` | Error no controlado del servidor. |
+| `500 Internal Server Error` | Error no controlado del servidor. En `certificates/resolve` y en `/api/admin` lleva `Cache-Control: no-store`, y lleva CORS si el origen está permitido (N-02). |
+| `503 Service Unavailable` | La base de datos no está disponible: no hay conexión, o el servidor de base de datos se está apagando o rechaza conexiones. Código `service_unavailable`, con `Retry-After: 30`. Un error de una consulta, como un timeout de bloqueo o un constraint, sigue siendo `500` (N-02). |
 
 **Nota sobre `certificates/resolve`:** este endpoint responde `200 OK`
 tanto para `authentic` como para `unavailable`, porque la resolución en
@@ -636,7 +637,7 @@ solicitud en sí (ej. `token` ausente o de tipo incorrecto), nunca para
 distinguir por qué un token no produjo un certificado válido — ese
 resultado siempre es `200 OK` con `status: unavailable`.
 
-### Forma de error (para `400`, `404`, `405`, `413`, `422`, `429`, `500`)
+### Forma de error (para `400`, `404`, `405`, `413`, `422`, `429`, `500`, `503`)
 
 ```json
 {

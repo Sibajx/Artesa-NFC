@@ -151,9 +151,11 @@ Un único endpoint, `GET` y `HEAD /health` (no forma parte del contrato público
 - Uso previsto: verificación local tras un despliegue
   (`curl -si http://127.0.0.1:8000/health`). Un monitor externo debe sondear
   `GET /api/v1/artisans` (pasa por la base de datos y sí está en la allowlist).
-- **Fuera de alcance de este cambio:** las rutas de datos (`/api/v1/*`) ante una
-  base de datos caída siguen respondiendo `500` con el envelope genérico; un
-  `503` general es trabajo posterior (N-02).
+- **Rutas de datos con la base de datos caída (N-02, 2026-10-08):** las rutas de
+  datos (`/api/v1/*` y `/api/admin/*`) responden `503 service_unavailable` con
+  `Retry-After: 30` cuando la base no está disponible. Un monitor puede
+  distinguir así una caída de la base de un error de programación, que sigue
+  siendo `500`.
 
 ## 7. Política de tamaño de cuerpo
 
@@ -354,10 +356,18 @@ la regla A (la más amplia).
 
 ## 12. Fuera del alcance de este cambio
 
-No se corrigen aquí (siguen abiertos): la validación de CORS de producción que
-acepta orígenes extra (N-01); el `500` no controlado sin `no-store`/CORS y el
-`503` general en rutas de datos (N-02); los constraints de base de datos
-(F-12); CSP y HSTS; el volumen de logs y su retención (`SECURITY.md` §12.3).
+No se corrigen aquí (siguen abiertos): los constraints de base de datos
+(F-12) y el volumen de logs y su retención (`SECURITY.md` §12.3).
+
+Cerrados el 2026-10-08:
+
+- **N-01:** en producción `CORS_ALLOWED_ORIGINS` solo puede listar
+  `https://artesanfc.com` y, opcionalmente, `https://www.artesanfc.com`.
+  - La API no arranca si hay otro origen.
+  - Desde TOOL 1.10.0, `artesa-deploy` lo rechaza **antes** de reiniciar.
+- **N-02:** el `500` no controlado lleva `no-store` y CORS, y una base de datos caída da `503`.
+- **PEND-011:** `alembic` se niega a correr contra una base que no corresponde a
+  `APP_ENV`; las reglas son las mismas que las del aprovisionamiento.
 
 ## 13. Provisioning de certificados y tags NFC
 

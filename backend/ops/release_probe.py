@@ -221,6 +221,10 @@ def validate_production_env(values: Mapping[str, str]) -> None:
         raise rc.OpsError(rc.Exit.CONFIG, f"CORS_ALLOWED_ORIGINS must include {rc.PRODUCTION_FRONTEND_ORIGIN}")
     if "*" in origins:
         raise rc.OpsError(rc.Exit.CONFIG, "CORS_ALLOWED_ORIGINS must not contain '*'")
+    extra = sorted(set(origins) - rc.PRODUCTION_ALLOWED_ORIGINS)
+    if extra:
+        raise rc.OpsError(rc.Exit.CONFIG, "CORS_ALLOWED_ORIGINS may only list "
+                          + ", ".join(sorted(rc.PRODUCTION_ALLOWED_ORIGINS)) + "; remove " + ", ".join(extra))
     admin = [bool(values.get(key, "").strip()) for key in _ADMIN_ENV_KEYS]
     if any(admin) and not all(admin):
         raise rc.OpsError(rc.Exit.CONFIG, "admin configuration is partial: set all of " + ", ".join(_ADMIN_ENV_KEYS) + " or none")

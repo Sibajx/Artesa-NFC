@@ -16,7 +16,7 @@ from app.api.admin.router import router as admin_router
 from app.api.admin.writes import router as admin_writes_router
 from app.api.v1.router import router as api_v1_router
 from app.core.config import get_settings
-from app.core.errors import error_response, register_exception_handlers
+from app.core.errors import UnhandledErrorMiddleware, error_response, register_exception_handlers
 from app.core.media_files import MediaFilesMiddleware
 from app.db.session import check_database_connection
 
@@ -168,6 +168,8 @@ app.add_middleware(ResolveBodySizeLimitMiddleware)
 # Added before CORSMiddleware so it sits inside it: CORS headers are still
 # applied by the outer layer, and this only touches the resolve responses
 # produced by the app itself.
+# N-02: inside the no-store and CORS layers, so an unexpected 500 gets both.
+app.add_middleware(UnhandledErrorMiddleware)
 app.add_middleware(ResolveNoStoreMiddleware)
 app.add_middleware(AdminNoStoreMiddleware)
 # Explicit allowlist only (docs/SECURITY.md section 10) - no "*", no origin

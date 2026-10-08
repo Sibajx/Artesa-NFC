@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import json
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.core.db_errors import DATABASE_EXCEPTION_TYPES, database_exception_handler, install_server_log_filter
 
@@ -80,11 +83,48 @@ async def validation_exception_handler(
     return JSONResponse(status_code=422, content=body)
 
 
+_GENERIC_500 = {"error": {"code": "internal_error", "message": "An unexpected error occurred."}}
+
+
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    return JSONResponse(
-        status_code=500,
-        content={"error": {"code": "internal_error", "message": "An unexpected error occurred."}},
-    )
+    return JSONResponse(status_code=500, content=_GENERIC_500)
+
+
+class UnhandledErrorMiddleware:
+    """N-02: the generic 500 for a non-database error, answered *inside* the
+    CORS and no-store layers.
+
+    Without it the 500 comes from Starlette's ServerErrorMiddleware, the
+    outermost layer, so /resolve and /api/admin answered it without
+    ``Cache-Control: no-store`` and without CORS. This sends the same body,
+    then re-raises: ServerErrorMiddleware sees a started response and only
+    passes the exception on, so Uvicorn still logs the traceback exactly as
+    before. Database errors never get here (their handlers consume them)."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        started = False
+
+        async def tracking_send(message: Message) -> None:
+            nonlocal started
+            if message["type"] == "http.response.start":
+                started = True
+            await send(message)
+
+        try:
+            await self.app(scope, receive, tracking_send)
+        except Exception:
+            if not started:
+                body = json.dumps(_GENERIC_500, separators=(",", ":")).encode()
+                await send({"type": "http.response.start", "status": 500, "headers": [
+                    (b"content-type", b"application/json"), (b"content-length", str(len(body)).encode())]})
+                await send({"type": "http.response.body", "body": body})
+            raise
 
 
 def register_exception_handlers(app: FastAPI) -> None:
