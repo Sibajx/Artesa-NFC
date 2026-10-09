@@ -101,6 +101,15 @@ class Settings(BaseSettings):
     # are accepted, the custodian role is still checked here.
     custody_access_aud: str = ""
 
+    # Transactional email (Brevo SMTP relay): the codes that confirm the owner
+    # of a piece (PIN reset, lost card). All four or none: with none, nothing
+    # is sent and the endpoints that need mail answer "mail_unavailable".
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = Field(default="", repr=False)
+    mail_from: str = ""
+
     # Gestión phase 4 (docs/MEDIA.md): absolute path of the media directory,
     # which holds originales/ (private, never served) and publico/ (the only
     # thing /media/ serves). Unset: /media/ answers 404 and uploads 503.
@@ -136,6 +145,7 @@ class Settings(BaseSettings):
 
         self._validate_admin_access()
         self._validate_media_root()
+        self._validate_smtp()
 
         if self.app_env == ENV_PRODUCTION:
             if PRODUCTION_FRONTEND_ORIGIN not in self.cors_allowed_origins_list:
@@ -184,6 +194,21 @@ class Settings(BaseSettings):
         self.custody_access_aud = self.custody_access_aud.strip().lower()
         if self.custody_access_aud and not _ACCESS_AUD_RE.fullmatch(self.custody_access_aud):
             raise UnsafeConfigurationError("CUSTODY_ACCESS_AUD must be the 64-hex-character AUD tag.")
+
+    def _validate_smtp(self) -> None:
+        self.smtp_host = self.smtp_host.strip()
+        self.smtp_user = self.smtp_user.strip()
+        self.mail_from = self.mail_from.strip()
+        parts = [bool(self.smtp_host), bool(self.smtp_user), bool(self.smtp_password), bool(self.mail_from)]
+        if any(parts) and not all(parts):
+            raise UnsafeConfigurationError(
+                "Refusing to start with a partial mail configuration: set all of SMTP_HOST, SMTP_USER, "
+                "SMTP_PASSWORD and MAIL_FROM, or none."
+            )
+
+    @property
+    def mail_configured(self) -> bool:
+        return bool(self.smtp_host)
 
     def _validate_media_root(self) -> None:
         self.media_root = self.media_root.strip()

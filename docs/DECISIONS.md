@@ -346,7 +346,7 @@ solo por CLI) y amplía ADR-029 (Gestión). Se implementa por fases.
 **Decisión:**
 
 1. **Dos factores.**
-   - **Tag NFC:** sigue llevando `/c/{token}`. Token aleatorio de 128 bits,
+   - **Tag NFC:** sigue llevando `/c/{token}`. Token aleatorio de 256 bits,
      generado por el servidor y guardado solo como `token_hash` (SECURITY.md
      §2–§3, sin cambios). Escanear muestra el **certificado genérico**:
      `authentic` con los datos públicos de la pieza y su paleta. La
@@ -498,3 +498,8 @@ fácil equivocarse al editar `shared/.env`. Un correo en `CUSTODIAN_EMAILS` que
 no esté en `ADMIN_EMAILS` impide que la app arranque (pasó en producción el
 2026-10-03 por un correo sin `.com`).
 
+**Corrección (2026-10-07):** el punto 1 decía "token aleatorio de 128 bits".
+El token siempre fue de **256 bits** (32 bytes del CSPRNG, Base64url sin
+padding, 43 caracteres): es el estándar de SECURITY.md §2.1, que este ADR cita
+"sin cambios", y es lo que hace `backend/app/services/certificates.py`
+(`_TOKEN_BYTES = 32`). Se corrigió la cifra; la decisión no cambia.
