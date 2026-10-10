@@ -7,7 +7,7 @@ import { MediaSection } from '../MediaSection';
 import { AutorizacionSection } from '../AutorizacionSection';
 import { PublishChecklist } from '../PublishChecklist';
 import { RecordActions } from '../RecordActions';
-import { ErrorState, Field, Loading, PublicationBadge } from '../ui';
+import { Can, ErrorState, Field, Gate, Loading, PublicationBadge } from '../ui';
 
 export default function ArtesanoDetalle() {
   const { id = '' } = useParams<{ id: string }>();
@@ -29,8 +29,12 @@ export default function ArtesanoDetalle() {
         return (
           <div className="flex flex-col gap-8">
             <RecordActions kind="artisans" id={a.id} version={a.updated_at} status={a.publication_status} trashedAt={a.trashed_at} purgeBlocker={a.purge_blocker} name={a.full_name} draftPieces={a.pieces.filter((x) => x.publication_status === 'draft' && !x.trashed_at).map((x) => ({ kind: 'pieces' as const, id: x.id, version: x.updated_at, name: x.name }))} onChanged={() => setRevision((r) => r + 1)} />
-            <PublishChecklist kind="artisans" record={a} onChanged={() => setRevision((r) => r + 1)} />
-            <AutorizacionSection key={a.id} artisan={a} onChanged={() => setRevision((r) => r + 1)} />
+            <Gate permission="publish">
+              <PublishChecklist kind="artisans" record={a} onChanged={() => setRevision((r) => r + 1)} />
+            </Gate>
+            <Gate permission="authorization">
+              <AutorizacionSection key={a.id} artisan={a} onChanged={() => setRevision((r) => r + 1)} />
+            </Gate>
             <article className="bg-white rounded-xl border border-botanica-gris/15 overflow-hidden shadow-sm">
               <header className="bg-[#FCFBF9] border-b border-botanica-gris/15 p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
@@ -58,7 +62,7 @@ export default function ArtesanoDetalle() {
             <section>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-2xl font-serif text-botanica-negro">Piezas ({a.pieces.length})</h2>
-                {a.publication_status !== 'archived' && <Link to={`/piezas/nueva?artesano=${a.id}`} className="btn-secondary">Agregar pieza</Link>}
+                {a.publication_status !== 'archived' && <Can permission="edit"><Link to={`/piezas/nueva?artesano=${a.id}`} className="btn-secondary">Agregar pieza</Link></Can>}
               </div>
               <div className="bg-white border border-botanica-gris/15 rounded-xl overflow-hidden shadow-sm">
                 {a.pieces.length === 0 ? (
@@ -80,8 +84,10 @@ export default function ArtesanoDetalle() {
               </div>
             </section>
 
-            <MediaSection kind="artisans" ownerId={a.id} media={a.media}
-              ownerArchived={a.publication_status === 'archived'} onChanged={() => setRevision((r) => r + 1)} />
+            <Gate permission="edit">
+              <MediaSection kind="artisans" ownerId={a.id} media={a.media}
+                ownerArchived={a.publication_status === 'archived'} onChanged={() => setRevision((r) => r + 1)} />
+            </Gate>
           </div>
         );
       })()}

@@ -5,7 +5,7 @@ import type { ArtisanSummary, PieceSummary } from '../api';
 import { formatDate, formatDateTime, writeErrorMessage } from '../format';
 import { FormError } from '../forms';
 import { useLoad } from '../hooks';
-import { ErrorState, Loading, PageHeader, PublicationBadge } from '../ui';
+import { ErrorState, Loading, PageHeader, PublicationBadge, Can } from '../ui';
 
 // Two "apartados" of the sidebar sharing one layout:
 // - Archivados: records archived (publication state), restorable to draft
@@ -114,7 +114,7 @@ function Row({ mode, kind, record, title, detail, onChanged }: {
         <PublicationBadge status={record.publication_status} />
         {mode === 'papelera' ? (
           <>
-            <button type="button" className="btn-secondary" disabled={busy} onClick={() => void restore()}>Restaurar</button>
+            <Can permission="edit"><button type="button" className="btn-secondary" disabled={busy} onClick={() => void restore()}>Restaurar</button></Can>
             <Link to={path} className="btn-secondary">Abrir</Link>
           </>
         ) : (
