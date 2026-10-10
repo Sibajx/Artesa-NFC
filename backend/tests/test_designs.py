@@ -199,3 +199,30 @@ def test_the_approval_date_is_mexico_local_time(client, db_session):
                                        approved_by_name="Rigoberto")
     # 03:00 UTC on the 5th is still the 4th in Oaxaca (UTC-6).
     assert "04/10/2026" in designs.svg(db_session, design)
+
+
+def test_motion_is_scoped_to_allowed_motion_and_static_at_rest():
+    svg = renderer.render(designs.clean_params({**PARAMS, "template": "greca"}), version=1)
+    assert "<style>@media (prefers-reduced-motion:no-preference){" in svg
+    # Outside the media query nothing animates: the resting sheet is complete.
+    assert svg.count("@keyframes") == 3 and svg.count("animation:") == 3
+    assert svg.index("@media") < svg.index("animation:") and "<animate" not in svg and "<script" not in svg
+    # Waves and shine are invisible at rest; the greca is fully stroked at rest.
+    assert svg.count('class="m-wave') == 3 and 'class="m-greca" pathLength="1"' in svg
+
+
+def test_edition_label_and_validation():
+    one = renderer.render(designs.clean_params(PARAMS), version=1)
+    assert "PIEZA ÚNICA" in one and "PIEZA 3 DE" not in one
+    numbered = renderer.render(designs.clean_params({**PARAMS, "edition": {"number": 3, "total": 10}}), version=1)
+    assert "PIEZA 3 DE 10" in numbered and "PIEZA ÚNICA" not in numbered
+    assert designs.clean_params({**PARAMS, "edition": {"number": 3, "total": 10}})["edition"] == {"number": 3, "total": 10}
+    assert "edition" not in designs.clean_params({**PARAMS, "edition": None})
+    for bad in ({"number": 0, "total": 5}, {"number": 6, "total": 5}, {"number": 1, "total": 10000},
+                {"number": "1", "total": 5}, {"number": True, "total": 5}, {"number": 1}, "3 de 10"):
+        try:
+            designs.clean_params({**PARAMS, "edition": bad})
+        except designs.ContentConflict as exc:
+            assert exc.code == "invalid_design"
+        else:
+            raise AssertionError(bad)

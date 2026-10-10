@@ -87,6 +87,14 @@ def clean_params(raw: dict[str, Any], db: Session | None = None) -> dict[str, An
     params["palette"] = [c.lower() for c in palette]
     seed = raw.get("seed")
     params["seed"] = seed if isinstance(seed, int) and 0 <= seed < 2**31 else 1
+    edition = raw.get("edition")
+    if edition:
+        number = edition.get("number") if isinstance(edition, dict) else None
+        total = edition.get("total") if isinstance(edition, dict) else None
+        if not all(isinstance(n, int) and not isinstance(n, bool) for n in (number, total)) \
+                or not 1 <= number <= total <= 9999:
+            raise ContentConflict("invalid_design", "The edition is a number from 1 to the total (at most 9999).", "edition")
+        params["edition"] = {"number": number, "total": total}
     art = raw.get("art")
     if art:
         if not isinstance(art, dict) or not isinstance(art.get("id"), str) or not _SHA_RE.fullmatch(art["id"]):

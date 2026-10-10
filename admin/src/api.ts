@@ -322,6 +322,8 @@ export interface DesignParams {
   seed: number;
   // ADR-030 phase 5b: the team's artwork (null removes it).
   art?: DesignArt | null;
+  // "Pieza X de N" in the footer; absent or null prints "Pieza única".
+  edition?: { number: number; total: number } | null;
 }
 
 export type ArtPlacement = 'sello' | 'encabezado' | 'fondo';
