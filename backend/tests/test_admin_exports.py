@@ -28,7 +28,10 @@ def test_inventory_columns_for_every_admin(client, db_session):
     piece = published(client)
     priced = client.patch(f"/api/admin/v1/pieces/{piece['id']}", json={"price_cents": 420050},
                           headers=H(**{"If-Match": piece["updated_at"]})).json()
-    assert piece_post(client, priced, "sale", SALE).status_code == 200
+    moved = client.post(f"/api/admin/v1/pieces/{piece['id']}/location",
+                        json={"location": "tienda", "place": "Andador Turístico", "moved_on": SALE["sold_on"]},
+                        headers=H(**{"If-Match": priced["updated_at"]})).json()
+    assert piece_post(client, moved, "sale", SALE).status_code == 200
 
     r = export(client)
     assert r.status_code == 200
@@ -41,6 +44,7 @@ def test_inventory_columns_for_every_admin(client, db_session):
     assert row["Precio"] == "4200.50" and row["Moneda"] == "MXN"
     assert row["Fecha de venta"] == SALE["sold_on"] and row["Precio de venta"] == "3500.00"
     assert row["Canal de venta"] == "taller"
+    assert row["Ubicación"] == "Tienda" and row["Lugar"] == "Andador Turístico"
     # The buyer's personal data never leaves the sale row.
     assert "Ana López" not in r.text and "ana@example.com" not in r.text
     # Certification belongs to custodians (ADR-030).

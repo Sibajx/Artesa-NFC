@@ -267,6 +267,8 @@ export interface PieceDetail {
   price_cents?: number | null;
   price_currency?: string;
   sales?: Sale[];
+  // P-026 G12: where the piece is, newest move first.
+  locations?: PieceLocation[];
   // ADR-030 phase 4: { palette: string[], palette_source: 'auto' | 'manual' } and any other keys.
   visual_theme: Record<string, unknown> | null;
   availability_status: string;
@@ -347,6 +349,26 @@ export interface SaleInput {
   sold_by: string;
   buyer_name: string | null;
   buyer_contact: string | null;
+  note: string | null;
+}
+
+// P-026 G12: one move of a piece; the newest is where it is now.
+export type LocationKind = 'taller' | 'bodega' | 'tienda' | 'exhibicion' | 'transito' | 'entregada' | 'otro';
+
+export interface PieceLocation {
+  id: string;
+  location: LocationKind;
+  place: string | null;
+  moved_on: string;
+  note: string | null;
+  recorded_by: string;
+  created_at: string;
+}
+
+export interface LocationInput {
+  location: LocationKind;
+  place: string | null;
+  moved_on: string;
   note: string | null;
 }
 
@@ -602,6 +624,8 @@ export const adminApi = {
     request<ArtisanDetail>('POST', `/artisans/${encodeURIComponent(id)}/authorization/record`, { body: { note } }),
   revokeAuthorization: (id: string, note: string) =>
     request<ArtisanDetail>('POST', `/artisans/${encodeURIComponent(id)}/authorization/revoke`, { body: { note } }),
+  movePiece: (id: string, body: LocationInput, version: string) =>
+    request<PieceDetail>('POST', `/pieces/${encodeURIComponent(id)}/location`, { body, version }),
   registerSale: (id: string, body: SaleInput, version: string) =>
     request<PieceDetail>('POST', `/pieces/${encodeURIComponent(id)}/sale`, { body, version }),
   cancelSale: (id: string, reason: string, version: string) =>

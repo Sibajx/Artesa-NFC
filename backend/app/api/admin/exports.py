@@ -29,6 +29,7 @@ from app.models.artisan import Artisan
 from app.models.audit_event import AuditActorType, AuditEvent, AuditResult
 from app.models.piece import Piece
 from app.models.sale import Sale, SaleStatus
+from app.services import locations as locations_service
 from app.services.content import Actor
 
 # Mexico (Oaxaca): UTC-6, no daylight saving time since 2022.
@@ -43,11 +44,14 @@ _AVAILABILITY = {"available": "Disponible", "reserved": "Reservada", "exhibited"
 _CERTIFICATE = {"draft": "Borrador", "active": "Activo", "revoked": "Revocado"}
 _TAG = {"available": "Disponible", "programmed": "Programado", "locked": "Bloqueado"}
 _CARD = {"active": "Activa", "blocked": "Bloqueada"}
+_LOCATION = {"taller": "Taller del artesano", "bodega": "Bodega", "tienda": "Tienda",
+             "exhibicion": "Exhibición o feria", "transito": "En tránsito",
+             "entregada": "Entregada al comprador", "otro": "Otro"}
 _DESIGN = {"draft": "Borrador", "in_review": "Con el artesano", "approved": "Aprobado",
            "published": "Publicado", "superseded": "Anterior"}
 
 _INVENTORY = ["Código", "Pieza", "Artesano", "Publicación", "Disponibilidad", "Precio", "Moneda",
-              "Técnica", "Materiales", "Año", "Fecha de venta", "Precio de venta", "Canal de venta",
+              "Ubicación", "Lugar", "Técnica", "Materiales", "Año", "Fecha de venta", "Precio de venta", "Canal de venta",
               "Creada", "Actualizada"]
 _CUSTODY = ["Certificado", "Versión del certificado", "Chip", "Modelo del chip", "Tarjeta",
             "Con dueño", "Diseño del certificado", "Reportada como robada"]
@@ -89,6 +93,7 @@ def export_pieces(db: Session = Depends(get_db), who: Actor = Depends(actor)) ->
     if ids:
         sales = {s.piece_id: s for s in db.execute(
             select(Sale).where(Sale.piece_id.in_(ids), Sale.status == SaleStatus.active)).scalars()}
+    where = locations_service.current_by_piece(db, ids)
     with_custody = who.identity.has(CUSTODIAN)
     custody = {c.id: c for c in custody_pieces(db).data} if with_custody else {}
 
@@ -97,11 +102,13 @@ def export_pieces(db: Session = Depends(get_db), who: Actor = Depends(actor)) ->
     writer.writerow(_INVENTORY + (_CUSTODY if with_custody else []))
     for piece, artisan_name in rows:
         sale = sales.get(piece.id)
+        at = where.get(piece.id)
         line = [
             piece.public_code, piece.name, artisan_name,
             _label(_PUBLICATION, piece.publication_status.value),
             _label(_AVAILABILITY, piece.availability_status.value),
             _money(piece.price_cents), piece.price_currency if piece.price_cents is not None else None,
+            _label(_LOCATION, at.location) if at else None, at.place if at else None,
             piece.technique, ", ".join(str(m) for m in piece.materials or []), piece.creation_year,
             sale.sold_on.isoformat() if sale else None,
             _money(sale.price_cents) if sale else None,

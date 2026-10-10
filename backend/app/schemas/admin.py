@@ -172,6 +172,17 @@ class AdminSale(BaseModel):
     cancelled_by: str | None
 
 
+class AdminPieceLocation(BaseModel):
+    """P-026 G12. One move; the newest is where the piece is now."""
+    id: uuid.UUID
+    location: str
+    place: str | None
+    moved_on: date
+    note: str | None
+    recorded_by: str
+    created_at: datetime
+
+
 class AdminPieceDetail(BaseModel):
     id: uuid.UUID
     slug: str
@@ -211,6 +222,7 @@ class AdminPieceDetail(BaseModel):
     custody_visible: bool = False
     # P-026 G1: every sale of the piece, newest first; at most one active.
     sales: list[AdminSale] = []
+    locations: list[AdminPieceLocation] = []
 
 
 class AdminAuditEvent(BaseModel):

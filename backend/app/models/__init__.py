@@ -10,6 +10,7 @@ from app.models.media_asset import MediaAsset
 from app.models.nfc_tag import NfcTag
 from app.models.ownership import OwnerVerification, OwnershipCard, PieceClaim
 from app.models.piece import Piece
+from app.models.piece_location import PieceLocation
 from app.models.sale import Sale
 
-__all__ = ["Base", "Artisan", "Piece", "MediaAsset", "Certificate", "NfcTag", "AuditEvent", "OwnershipCard", "PieceClaim", "OwnerVerification", "CertificateDesign", "Sale", "AdminAccount", "ArtisanAuthorization", "HeroCampaign"]
+__all__ = ["Base", "Artisan", "Piece", "MediaAsset", "Certificate", "NfcTag", "AuditEvent", "OwnershipCard", "PieceClaim", "OwnerVerification", "CertificateDesign", "Sale", "AdminAccount", "ArtisanAuthorization", "HeroCampaign", "PieceLocation"]
