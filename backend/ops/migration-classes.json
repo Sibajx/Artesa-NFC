@@ -68,6 +68,10 @@
     "c8f1d2a7b9e4": {
       "class": "additive",
       "note": "Adds the site_image table (images of the public site that Gestión can replace, P-029). Nothing existing changes and no row is seeded; older code ignores the table, so a rollback is compatible."
+    },
+    "f4a8c2e6d1b3": {
+      "class": "additive",
+      "note": "Adds the nullable column admin_account.permissions (permission checkboxes per account). NULL means derive from the role, so nobody's access changes. Older code never reads it, so a code-only rollback is compatible; the downgrade drops the column and with it any explicit permissions already set."
     }
   }
 }

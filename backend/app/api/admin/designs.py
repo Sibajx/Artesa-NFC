@@ -16,7 +16,8 @@ from sqlalchemy.orm import Session
 
 from app.api.admin.writes import _fail, actor, expected_version, require_write_guard
 from app.api.deps import get_db
-from app.core.access import DESIGNER, FORBIDDEN_ERROR, AdminIdentity, require_admin
+from app.core import permissions as perms
+from app.core.access import FORBIDDEN_ERROR, AdminIdentity, require_admin
 from app.core.config import get_settings
 from app.models.certificate_design import CertificateDesign
 from app.services import designs
@@ -24,7 +25,7 @@ from app.services.content import Actor, ContentError
 
 
 def require_designer(identity: AdminIdentity = Depends(require_admin)) -> AdminIdentity:
-    if not identity.has(DESIGNER):
+    if not identity.can(perms.DESIGN):
         raise HTTPException(status_code=403, detail=FORBIDDEN_ERROR)
     return identity
 

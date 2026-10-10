@@ -18,7 +18,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
-from app.core.access import CUSTODIAN, FORBIDDEN_ERROR, OWNER, AdminIdentity, require_admin
+from app.core import permissions as perms
+from app.core.access import FORBIDDEN_ERROR, OWNER, AdminIdentity, require_admin
 from app.models.artisan import Artisan
 from app.models.audit_event import AuditActorType, AuditEvent, AuditResult
 from app.models.certificate import Certificate, CertificateStatus
@@ -43,7 +44,9 @@ def require_custodian(
     identity: AdminIdentity = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> AdminIdentity:
-    if identity.has(CUSTODIAN):
+    # The custody area is open to whoever holds either custody permission; each
+    # action then asks for its own (_needs below).
+    if identity.can(perms.NFC) or identity.can(perms.REVOCATIONS):
         return identity
     db.add(AuditEvent(
         occurred_at=func.clock_timestamp(),
@@ -61,6 +64,28 @@ def require_custodian(
     raise HTTPException(status_code=403, detail=FORBIDDEN_ERROR)
 
 
+def _needs(permission: str):
+    """A per-action gate inside the custody area (403 with the same audit trail)."""
+    def dependency(request: Request, identity: AdminIdentity = Depends(require_admin),
+                   db: Session = Depends(get_db)) -> AdminIdentity:
+        if identity.can(permission):
+            return identity
+        db.add(AuditEvent(
+            occurred_at=func.clock_timestamp(),
+            actor_type=AuditActorType.admin_user,
+            actor_email=identity.email,
+            entity_type="custody",
+            entity_id=uuid.uuid5(_ACCESS_NAMESPACE, identity.email),
+            action="custody.denied",
+            result=AuditResult.failure,
+            ip_address=_ip(request),
+            event_metadata={"path": request.url.path, "permission": permission},
+        ))
+        db.commit()
+        raise HTTPException(status_code=403, detail=FORBIDDEN_ERROR)
+    return dependency
+
+
 router = APIRouter(
     prefix="/api/admin/v1/custody",
     tags=["admin", "custody"],
@@ -70,7 +95,7 @@ router = APIRouter(
 _LIVE_TAGS = (NfcTagStatus.available, NfcTagStatus.programmed, NfcTagStatus.locked)
 
 
-@router.get("/pieces", response_model=ListEnvelope[CustodyPiece])
+@router.get("/pieces", response_model=ListEnvelope[CustodyPiece], dependencies=[Depends(_needs(perms.NFC))])
 def custody_pieces(db: Session = Depends(get_db)) -> ListEnvelope[CustodyPiece]:
     """Every piece (outside the trash) with its certification state."""
     pieces = db.execute(
@@ -308,7 +333,7 @@ def _run(db: Session, call):
         raise _conflict("invalid_transition") from None
 
 
-@router.get("/pieces/{piece_id}/state", response_model=CustodyState)
+@router.get("/pieces/{piece_id}/state", response_model=CustodyState, dependencies=[Depends(_needs(perms.NFC))])
 def custody_state(piece_id: uuid.UUID, db: Session = Depends(get_db)) -> CustodyState:
     state = prov.load_piece_state(db, _public_code(db, piece_id))
     return CustodyState(
@@ -343,7 +368,7 @@ def _issued(db: Session, code: str, raw_token: str, *, certificate_id, tag_id, u
                          certificate_id=certificate_id, tag_id=tag_id, uid=uid, needs_program=needs_program)
 
 
-@writes_router.post("/pieces/{piece_id}/issue", response_model=CustodyIssued)
+@writes_router.post("/pieces/{piece_id}/issue", response_model=CustodyIssued, dependencies=[Depends(_needs(perms.NFC))])
 def custody_issue(piece_id: uuid.UUID, body: UidBody, who: Actor = Depends(actor),
                   db: Session = Depends(get_db)) -> CustodyIssued:
     code = _public_code(db, piece_id)
@@ -357,7 +382,7 @@ def custody_issue(piece_id: uuid.UUID, body: UidBody, who: Actor = Depends(actor
                    uid=result.physical_uid, needs_program=True)
 
 
-@writes_router.post("/pieces/{piece_id}/rotate", response_model=CustodyIssued)
+@writes_router.post("/pieces/{piece_id}/rotate", response_model=CustodyIssued, dependencies=[Depends(_needs(perms.NFC))])
 def custody_rotate(piece_id: uuid.UUID, body: RotateBody, who: Actor = Depends(actor),
                    db: Session = Depends(get_db)) -> CustodyIssued:
     code = _public_code(db, piece_id)
@@ -372,7 +397,7 @@ def custody_rotate(piece_id: uuid.UUID, body: RotateBody, who: Actor = Depends(a
                    uid=result.physical_uid, needs_program=result.needs_program)
 
 
-@writes_router.post("/pieces/{piece_id}/program", response_model=CustodyState)
+@writes_router.post("/pieces/{piece_id}/program", response_model=CustodyState, dependencies=[Depends(_needs(perms.NFC))])
 def custody_program(piece_id: uuid.UUID, body: ProgramBody, who: Actor = Depends(actor),
                     db: Session = Depends(get_db)) -> CustodyState:
     """After the browser wrote the URL and read the tag back: the UID it read
@@ -393,7 +418,7 @@ def custody_program(piece_id: uuid.UUID, body: ProgramBody, who: Actor = Depends
     return custody_state(piece_id, db)
 
 
-@writes_router.post("/pieces/{piece_id}/lock", response_model=CustodyState)
+@writes_router.post("/pieces/{piece_id}/lock", response_model=CustodyState, dependencies=[Depends(_needs(perms.NFC))])
 def custody_lock(piece_id: uuid.UUID, body: UidBody, who: Actor = Depends(actor),
                  db: Session = Depends(get_db)) -> CustodyState:
     code = _public_code(db, piece_id)
@@ -407,7 +432,7 @@ def custody_lock(piece_id: uuid.UUID, body: UidBody, who: Actor = Depends(actor)
     return custody_state(piece_id, db)
 
 
-@writes_router.post("/pieces/{piece_id}/tags/{tag_id}/release", response_model=CustodyState)
+@writes_router.post("/pieces/{piece_id}/tags/{tag_id}/release", response_model=CustodyState, dependencies=[Depends(_needs(perms.NFC))])
 def custody_release_uid(piece_id: uuid.UUID, tag_id: uuid.UUID, who: Actor = Depends(actor),
                         db: Session = Depends(get_db)) -> CustodyState:
     """A chip taken out of service by mistake (never locked) can be used
@@ -419,7 +444,7 @@ def custody_release_uid(piece_id: uuid.UUID, tag_id: uuid.UUID, who: Actor = Dep
     return custody_state(piece_id, db)
 
 
-@writes_router.post("/pieces/{piece_id}/revoke", response_model=CustodyState)
+@writes_router.post("/pieces/{piece_id}/revoke", response_model=CustodyState, dependencies=[Depends(_needs(perms.REVOCATIONS))])
 def custody_revoke(piece_id: uuid.UUID, body: RevokeBody, who: Actor = Depends(actor),
                    db: Session = Depends(get_db)) -> CustodyState:
     code = _public_code(db, piece_id)
@@ -490,14 +515,14 @@ def _key(db: Session, piece_id: uuid.UUID, key: str) -> CardKey:
     return CardKey(key=own.format_card_key(key), public_code=_public_code(db, piece_id))
 
 
-@writes_router.post("/pieces/{piece_id}/card/issue", response_model=CardKey)
+@writes_router.post("/pieces/{piece_id}/card/issue", response_model=CardKey, dependencies=[Depends(_needs(perms.NFC))])
 def card_issue(piece_id: uuid.UUID, who: Actor = Depends(actor), db: Session = Depends(get_db)) -> CardKey:
     _public_code(db, piece_id)
     key = _own(db, lambda: own.issue_card(db, piece_id, who.identity.email, who.ip_address))
     return _key(db, piece_id, key)
 
 
-@writes_router.post("/pieces/{piece_id}/card/replace", response_model=CardKey)
+@writes_router.post("/pieces/{piece_id}/card/replace", response_model=CardKey, dependencies=[Depends(_needs(perms.NFC))])
 def card_replace(piece_id: uuid.UUID, body: OwnerCheckNoteBody, who: Actor = Depends(actor),
                  db: Session = Depends(get_db)) -> CardKey:
     _public_code(db, piece_id)
@@ -507,7 +532,7 @@ def card_replace(piece_id: uuid.UUID, body: OwnerCheckNoteBody, who: Actor = Dep
     return _key(db, piece_id, key)
 
 
-@writes_router.post("/pieces/{piece_id}/transfer", response_model=CardKey)
+@writes_router.post("/pieces/{piece_id}/transfer", response_model=CardKey, dependencies=[Depends(_needs(perms.NFC))])
 def piece_transfer(piece_id: uuid.UUID, body: NoteBody, who: Actor = Depends(actor),
                    db: Session = Depends(get_db)) -> CardKey:
     _public_code(db, piece_id)
@@ -521,21 +546,21 @@ def _state_after(db: Session, piece_id: uuid.UUID, call) -> CustodyState:
     return custody_state(piece_id, db)
 
 
-@writes_router.post("/pieces/{piece_id}/card/block", response_model=CustodyState)
+@writes_router.post("/pieces/{piece_id}/card/block", response_model=CustodyState, dependencies=[Depends(_needs(perms.REVOCATIONS))])
 def card_block(piece_id: uuid.UUID, body: NoteBody, who: Actor = Depends(actor),
                db: Session = Depends(get_db)) -> CustodyState:
     return _state_after(db, piece_id, lambda: own.block_card(db, piece_id, body.note, who.identity.email,
                                                               who.ip_address))
 
 
-@writes_router.post("/pieces/{piece_id}/card/unblock", response_model=CustodyState)
+@writes_router.post("/pieces/{piece_id}/card/unblock", response_model=CustodyState, dependencies=[Depends(_needs(perms.REVOCATIONS))])
 def card_unblock(piece_id: uuid.UUID, body: NoteBody, who: Actor = Depends(actor),
                  db: Session = Depends(get_db)) -> CustodyState:
     return _state_after(db, piece_id, lambda: own.unblock_card(db, piece_id, body.note, who.identity.email,
                                                                 who.ip_address))
 
 
-@writes_router.post("/pieces/{piece_id}/claim/release", response_model=CustodyState)
+@writes_router.post("/pieces/{piece_id}/claim/release", response_model=CustodyState, dependencies=[Depends(_needs(perms.NFC))])
 def claim_release(piece_id: uuid.UUID, body: OwnerCheckNoteBody, who: Actor = Depends(actor),
                   db: Session = Depends(get_db)) -> CustodyState:
     override = _override(who, body)
@@ -551,7 +576,7 @@ class OwnerCodeBody(BaseModel):
     code: str = Field(min_length=6, max_length=6, pattern=r"^[0-9]{6}$")
 
 
-@writes_router.post("/pieces/{piece_id}/owner-code/send", response_model=OwnerCodeSent)
+@writes_router.post("/pieces/{piece_id}/owner-code/send", response_model=OwnerCodeSent, dependencies=[Depends(_needs(perms.NFC))])
 def owner_code_send(piece_id: uuid.UUID, who: Actor = Depends(actor), db: Session = Depends(get_db)) -> OwnerCodeSent:
     """Emails a code to the owner registered in the claim. Lost card or
     forgotten PIN: the owner reads it out and the custodian confirms it."""
@@ -560,21 +585,21 @@ def owner_code_send(piece_id: uuid.UUID, who: Actor = Depends(actor), db: Sessio
     return OwnerCodeSent(sent_to=email)
 
 
-@writes_router.post("/pieces/{piece_id}/owner-code/verify", response_model=CustodyState)
+@writes_router.post("/pieces/{piece_id}/owner-code/verify", response_model=CustodyState, dependencies=[Depends(_needs(perms.NFC))])
 def owner_code_verify(piece_id: uuid.UUID, body: OwnerCodeBody, who: Actor = Depends(actor),
                       db: Session = Depends(get_db)) -> CustodyState:
     return _state_after(db, piece_id, lambda: own.verify_owner_code(db, piece_id, body.code, who.identity.email,
                                                                     who.ip_address))
 
 
-@writes_router.post("/pieces/{piece_id}/stolen", response_model=CustodyState)
+@writes_router.post("/pieces/{piece_id}/stolen", response_model=CustodyState, dependencies=[Depends(_needs(perms.REVOCATIONS))])
 def stolen_report(piece_id: uuid.UUID, body: NoteBody, who: Actor = Depends(actor),
                   db: Session = Depends(get_db)) -> CustodyState:
     return _state_after(db, piece_id, lambda: own.set_stolen(db, piece_id, True, body.note, who.identity.email,
                                                               who.ip_address))
 
 
-@writes_router.post("/pieces/{piece_id}/stolen/clear", response_model=CustodyState)
+@writes_router.post("/pieces/{piece_id}/stolen/clear", response_model=CustodyState, dependencies=[Depends(_needs(perms.REVOCATIONS))])
 def stolen_clear(piece_id: uuid.UUID, body: NoteBody, who: Actor = Depends(actor),
                  db: Session = Depends(get_db)) -> CustodyState:
     return _state_after(db, piece_id, lambda: own.set_stolen(db, piece_id, False, body.note, who.identity.email,

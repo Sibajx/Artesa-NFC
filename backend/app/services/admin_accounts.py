@@ -16,6 +16,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.access import ASSIGNABLE_ROLES, CUSTODIAN, DESIGNER, DESIGNER_HERO, EDITOR, HERO
+from app.core import permissions
 from app.core.config import get_settings
 from app.models.admin_account import AdminAccount
 from app.models.audit_event import AuditActorType, AuditEvent, AuditResult
@@ -33,6 +34,14 @@ def roles_for(db: Session, email: str) -> frozenset[str] | None:
     """The roles of an active managed account, or None."""
     account = db.get(AdminAccount, email)
     return _ROLE_SETS.get(account.role) if account is not None and account.active else None
+
+
+def permissions_for(db: Session, email: str) -> frozenset[str] | None:
+    """The explicit permissions of an active managed account, or None to derive them from its role."""
+    account = db.get(AdminAccount, email)
+    if account is None or not account.active or account.permissions is None:
+        return None
+    return permissions.clean(account.permissions)
 
 
 @dataclass(frozen=True)

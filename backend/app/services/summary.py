@@ -14,7 +14,8 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import and_, exists, func, select
 from sqlalchemy.orm import Session, aliased
 
-from app.core.access import CUSTODIAN, DESIGNER, AdminIdentity
+from app.core import permissions as perms
+from app.core.access import AdminIdentity
 from app.models.artisan import Artisan
 from app.models.artisan_authorization import ArtisanAuthorization, AuthorizationStatus
 from app.models.audit_event import AuditEvent
@@ -97,7 +98,7 @@ def build(db: Session, identity: AdminIdentity) -> dict:
     out["recent_answers"] = [_answer(db, e) for e in answers]
 
     # --- designers ----------------------------------------------------------------
-    if identity.has(DESIGNER):
+    if identity.can(perms.DESIGN):
         def design_bucket(*conds):
             return _bucket(db, select(CertificateDesign, Piece.name).join(Piece, Piece.id == CertificateDesign.piece_id)
                            .where(*conds).order_by(CertificateDesign.updated_at.desc()),
@@ -108,7 +109,7 @@ def build(db: Session, identity: AdminIdentity) -> dict:
                                                               CertificateDesign.change_request.is_not(None))
 
     # --- custodians ---------------------------------------------------------------
-    if identity.has(CUSTODIAN):
+    if identity.can(perms.NFC):
         active_cert = exists().where(Certificate.piece_id == Piece.id, Certificate.status == CertificateStatus.active)
         written_tag = exists().where(NfcTag.piece_id == Piece.id,
                                      NfcTag.status.in_((NfcTagStatus.programmed, NfcTagStatus.locked)))

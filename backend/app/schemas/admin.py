@@ -23,6 +23,8 @@ class AdminMe(BaseModel):
     email: str
     # ADR-030: "editor" always; "designer" and/or "custodian" when granted.
     roles: list[str] = ["editor"]
+    # The permission checkboxes the account holds (app/core/permissions.py).
+    permissions: list[str] = []
 
 
 class CustodyPiece(BaseModel):

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, Text, func
+from sqlalchemy import ARRAY, Boolean, CheckConstraint, DateTime, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -21,6 +21,10 @@ class AdminAccount(Base):
     email: Mapped[str] = mapped_column(Text, primary_key=True)
     # One of "editor", "designer", "custodian" (each includes the ones before) "hero" (editor + the home hero, P-028) or "designer_hero" (designer + the home hero).
     role: Mapped[str] = mapped_column(Text, nullable=False)
+    # Explicit permission checkboxes (app/core/permissions.py). NULL = derive
+    # them from ``role``, which is what every account has until the owner
+    # first edits the matrix.
+    permissions: Mapped[list[str] | None] = mapped_column(ARRAY(Text))
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     note: Mapped[str | None] = mapped_column(Text)
     added_by: Mapped[str] = mapped_column(Text, nullable=False)
