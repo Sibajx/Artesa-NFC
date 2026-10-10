@@ -13,6 +13,8 @@ import { Badge, ErrorState, Loading, PageHeader } from '../ui';
 
 const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 const MAX_VIDEO_BYTES = 200 * 1024 * 1024;
+const MAX_SECONDS = 20;
+const MAX_START_SECONDS = 3600;
 const POLL_MS = 3000;
 
 const STATUS: Record<HeroCampaign['status'], { label: string; tone: 'jade' | 'neutral' | 'lavanda' }> = {
@@ -49,17 +51,24 @@ function splitDay(value: string): [number, number] | null {
   return m ? [Number(m[1]), Number(m[2])] : null;
 }
 
-function DropZone({ campaign, busy, onFile }: { campaign: HeroCampaign; busy: boolean; onFile: (file: File) => void }) {
+function DropZone({ campaign, busy, onFile }: { campaign: HeroCampaign; busy: boolean; onFile: (file: File, start: number) => void }) {
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
+  const [startText, setStartText] = useState('');
   const processing = campaign.status === 'processing';
   const disabled = busy || processing;
+
+  // Empty or invalid means "from the beginning".
+  const start = (() => {
+    const n = Number(startText.replace(',', '.'));
+    return startText.trim() !== '' && Number.isFinite(n) ? Math.min(Math.max(n, 0), MAX_START_SECONDS) : 0;
+  })();
 
   function drop(e: DragEvent<HTMLDivElement>) {
     e.preventDefault();
     setOver(false);
     const file = e.dataTransfer.files[0];
-    if (file && !disabled) onFile(file);
+    if (file && !disabled) onFile(file, start);
   }
 
   return (
@@ -86,10 +95,27 @@ function DropZone({ campaign, busy, onFile }: { campaign: HeroCampaign; busy: bo
         onChange={(e) => {
           const file = e.target.files?.[0];
           e.target.value = '';
-          if (file) onFile(file);
+          if (file) onFile(file, start);
         }}
       />
-      <p className="mt-2 text-xs text-botanica-gris">MP4, MOV o WebM, hasta 200 MB. El sistema lo recorta a 16:9, deja 12 s, quita el audio y lo comprime.</p>
+      <label className="mt-3 flex items-center justify-center gap-2 text-xs text-botanica-grafito">
+        Empezar en el segundo
+        <input
+          type="number"
+          inputMode="decimal"
+          min={0}
+          max={MAX_START_SECONDS}
+          step={0.5}
+          placeholder="0"
+          value={startText}
+          disabled={disabled}
+          onChange={(e) => setStartText(e.target.value)}
+          className="w-20 rounded-lg border border-botanica-gris/30 px-2 py-1 text-center text-sm"
+        />
+      </label>
+      <p className="mt-2 text-xs text-botanica-gris">
+        MP4, MOV o WebM, hasta 200 MB. El sistema lo recorta a 16:9, deja {MAX_SECONDS} s desde ese segundo, quita el audio y lo comprime.
+      </p>
     </div>
   );
 }
@@ -113,7 +139,7 @@ function CampaignCard({
   const status = STATUS[campaign.status];
   const ready = !!campaign.video_mp4 && campaign.status !== 'processing';
 
-  async function upload(file: File) {
+  async function upload(file: File, start: number) {
     if (!file.type.startsWith('video/')) {
       toast('Ese archivo no es un video.', 'error');
       return;
@@ -122,7 +148,7 @@ function CampaignCard({
       toast('El video pesa más de 200 MB.', 'error');
       return;
     }
-    await run(campaign.id, () => adminApi.uploadHeroVideo(campaign.id, file, file.type), 'Video recibido; se está procesando');
+    await run(campaign.id, () => adminApi.uploadHeroVideo(campaign.id, file, file.type, start), 'Video recibido; se está procesando');
   }
 
   async function saveEdit() {
@@ -210,7 +236,7 @@ function CampaignCard({
       )}
 
       {state.ffmpeg_available && state.media_enabled && (
-        <DropZone campaign={campaign} busy={mine} onFile={(f) => void upload(f)} />
+        <DropZone campaign={campaign} busy={mine} onFile={(f, start) => void upload(f, start)} />
       )}
 
       <div className="flex flex-wrap items-center gap-2">
