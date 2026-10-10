@@ -151,7 +151,7 @@ def _original(db: Session, outcome: ownership.UnlockOutcome) -> CertificateOrigi
     db.refresh(outcome.card)
     design = designs.published(db, outcome.certificate.piece_id)
     return CertificateOriginal(
-        design=OriginalDesignPublic(version=design.version, svg=designs.svg(design),
+        design=OriginalDesignPublic(version=design.version, svg=designs.svg(db, design),
                                     approved_by_name=design.approved_by_name, approved_at=design.approved_at)
         if design else None,
         **_public_parts(db, outcome.certificate),

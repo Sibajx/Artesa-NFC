@@ -7,6 +7,7 @@ audited (``design.*``); the review token is never stored or audited.
 from __future__ import annotations
 
 import hashlib
+import re
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -20,6 +21,7 @@ from app.models.artisan import Artisan
 from app.models.audit_event import AuditActorType, AuditEvent, AuditResult
 from app.models.certificate_design import CertificateDesign, DesignStatus
 from app.models.piece import Piece
+from app.services import certificate_art as art_store
 from app.services import certificate_render as renderer
 from app.services.content import Actor, ContentConflict, ContentNotFound, StaleWrite
 
@@ -30,6 +32,7 @@ _REVIEW_PATH = "/revision/#"
 _REHEARSAL_REVIEW_BASE = "http://127.0.0.1:5500" + _REVIEW_PATH
 # Mexico (Oaxaca) has no daylight saving time since 2022: a fixed UTC-6.
 _LOCAL = timezone(timedelta(hours=-6), "CST")
+_SHA_RE = re.compile(r"[0-9a-f]{64}")
 TEXT_LIMITS = {"title": 60, "piece_name": 120, "artisan_name": 120, "quote": 240, "public_code": 32}
 
 
@@ -61,8 +64,9 @@ def _audit(db: Session, *, actor: Actor | None, design: CertificateDesign, actio
     ))
 
 
-def clean_params(raw: dict[str, Any]) -> dict[str, Any]:
-    """Only known keys, bounded texts, valid colours and seed."""
+def clean_params(raw: dict[str, Any], db: Session | None = None) -> dict[str, Any]:
+    """Only known keys, bounded texts, valid colours and seed, and (phase 5b)
+    an artwork that exists when ``db`` is given."""
     params: dict[str, Any] = {}
     template = raw.get("template")
     params["template"] = template if template in renderer.TEMPLATES else "clasico"
@@ -83,6 +87,19 @@ def clean_params(raw: dict[str, Any]) -> dict[str, Any]:
     params["palette"] = [c.lower() for c in palette]
     seed = raw.get("seed")
     params["seed"] = seed if isinstance(seed, int) and 0 <= seed < 2**31 else 1
+    art = raw.get("art")
+    if art:
+        if not isinstance(art, dict) or not isinstance(art.get("id"), str) or not _SHA_RE.fullmatch(art["id"]):
+            raise ContentConflict("invalid_design", "Unknown artwork.", "art")
+        placement = art.get("placement", "sello")
+        if placement not in renderer.ART_PLACEMENTS:
+            raise ContentConflict("invalid_design", "Unknown artwork placement.", "art")
+        opacity = art.get("opacity", 0.15)
+        if isinstance(opacity, bool) or not isinstance(opacity, (int, float)) or not 0.05 <= opacity <= 0.6:
+            raise ContentConflict("invalid_design", "The artwork opacity goes from 0.05 to 0.6.", "art")
+        if db is not None and not art_store.exists(db, art["id"]):
+            raise ContentConflict("invalid_design", "Unknown artwork.", "art")
+        params["art"] = {"id": art["id"], "placement": placement, "opacity": round(float(opacity), 2)}
     return params
 
 
@@ -96,17 +113,23 @@ def defaults(db: Session, piece: Piece) -> dict[str, Any]:
     })
 
 
-def svg(design: CertificateDesign) -> str:
+def _art_uri(db: Session, params: dict[str, Any]) -> str | None:
+    art = params.get("art")
+    return art_store.data_uri(db, art.get("id")) if isinstance(art, dict) else None
+
+
+def svg(db: Session, design: CertificateDesign) -> str:
     # The date printed on the certificate is the artisan's local date.
     approved_on = design.approved_at.astimezone(_LOCAL).strftime("%d/%m/%Y") if design.approved_at else None
     watermark = None if design.status in (DesignStatus.approved, DesignStatus.published, DesignStatus.superseded) \
         else ("EN REVISIÓN" if design.status == DesignStatus.in_review else "BORRADOR")
     return renderer.render(design.params, version=design.version, approved_by=design.approved_by_name,
-                           approved_on=approved_on, watermark=watermark)
+                           approved_on=approved_on, watermark=watermark, art_uri=_art_uri(db, design.params))
 
 
-def preview(params: dict[str, Any], version: int) -> str:
-    return renderer.render(clean_params(params), version=version, watermark="BORRADOR")
+def preview(db: Session, params: dict[str, Any], version: int) -> str:
+    clean = clean_params(params, db)
+    return renderer.render(clean, version=version, watermark="BORRADOR", art_uri=_art_uri(db, clean))
 
 
 def versions(db: Session, piece_id: uuid.UUID) -> list[CertificateDesign]:
@@ -165,7 +188,7 @@ def update(db: Session, actor: Actor, design_id: uuid.UUID, expected: datetime, 
     design = _locked(db, design_id, expected)
     if design.status not in (DesignStatus.draft, DesignStatus.in_review):
         raise ContentConflict("design_frozen", "An approved or published design cannot change. Create a new version.")
-    params = clean_params({**design.params, **raw})
+    params = clean_params({**design.params, **raw}, db)
     if design.status == DesignStatus.in_review:
         # The artisan was reviewing something else: the link stops working.
         design.status = DesignStatus.draft
