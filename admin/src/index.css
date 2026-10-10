@@ -495,8 +495,21 @@
   }
 }
 
-/* Printing the buyer's card: only the card itself goes to paper. */
+/* Printing the buyer's card: only the card itself goes to paper, on a page the
+   size of a credit card (ISO/IEC 7810 ID-1, 85.6 x 54 mm) with no margins. */
 @media print {
+  @page {
+    size: 85.6mm 54mm;
+    margin: 0;
+  }
+  html,
+  body {
+    width: 85.6mm;
+    height: 54mm;
+    margin: 0;
+    padding: 0;
+    background: #fff;
+  }
   body * {
     visibility: hidden;
   }
@@ -505,9 +518,53 @@
     visibility: visible;
   }
   .print-card {
-    position: absolute;
-    top: 1cm;
-    left: 50%;
-    transform: translateX(-50%);
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 85.6mm;
+    height: 54mm;
+    max-width: none;
+    margin: 0;
+    padding: 3mm 4mm;
+    box-sizing: border-box;
+    border: 0;
+    border-radius: 0;
+    gap: 0.8mm;
+    justify-content: center;
+    overflow: hidden;
+    transform: none;
+    page-break-inside: avoid;
+  }
+  .print-card p {
+    margin: 0;
+    line-height: 1.15;
+  }
+  .print-card .print-card__brand {
+    font-size: 13pt;
+  }
+  .print-card .print-card__of {
+    font-size: 6.5pt;
+  }
+  .print-card .print-card__name {
+    font-size: 9pt;
+  }
+  .print-card .print-card__code {
+    font-size: 6pt;
+  }
+  .print-card .print-card__keybox {
+    margin: 0.6mm 0;
+    padding: 1.2mm 2mm;
+    border: 0.25mm solid #111;
+    border-radius: 1.5mm;
+    background: none;
+  }
+  .print-card .print-card__keylabel {
+    font-size: 5pt;
+  }
+  .print-card .print-card__key {
+    font-size: 14pt;
+  }
+  .print-card .print-card__note {
+    font-size: 5.5pt;
   }
 }

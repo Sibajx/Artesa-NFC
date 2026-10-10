@@ -20,6 +20,7 @@ from typing import Any
 
 from PIL import Image, ImageOps, UnidentifiedImageError, features
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.audit_event import AuditActorType, AuditEvent, AuditResult
@@ -172,18 +173,26 @@ def set_image(db: Session, actor: Actor, public_root: Path, key: str, data: byte
     slot = slot_of(key)
     rendered = render(data, slot)
     paths = _store(public_root, slot, rendered)
-    row = db.get(SiteImage, slot.key, with_for_update=True)
-    old = [row.avif, row.webp, row.jpg] if row else []
-    if row is None:
-        row = SiteImage(slot=slot.key, avif=paths["avif"], webp=paths["webp"], jpg=paths["jpg"],
-                        width=rendered.width, height=rendered.height)
-        db.add(row)
-    else:
-        row.avif, row.webp, row.jpg = paths["avif"], paths["webp"], paths["jpg"]
-        row.width, row.height = rendered.width, rendered.height
-    row.updated_by = actor.identity.email
-    _audit(db, actor, slot.key, "updated", {"bytes": len(data), "width": rendered.width, "height": rendered.height})
-    db.commit()
+    for attempt in (1, 2):
+        row = db.get(SiteImage, slot.key, with_for_update=True)
+        old = [row.avif, row.webp, row.jpg] if row else []
+        if row is None:
+            row = SiteImage(slot=slot.key, avif=paths["avif"], webp=paths["webp"], jpg=paths["jpg"],
+                            width=rendered.width, height=rendered.height)
+            db.add(row)
+        else:
+            row.avif, row.webp, row.jpg = paths["avif"], paths["webp"], paths["jpg"]
+            row.width, row.height = rendered.width, rendered.height
+        row.updated_by = actor.identity.email
+        _audit(db, actor, slot.key, "updated", {"bytes": len(data), "width": rendered.width, "height": rendered.height})
+        try:
+            db.commit()
+            break
+        except IntegrityError:
+            # Two people uploaded the first photo of the slot at once: the other insert won.
+            db.rollback()
+            if attempt == 2:
+                raise
     _remove(public_root, [p for p in old if p not in paths.values()])
     return row
 

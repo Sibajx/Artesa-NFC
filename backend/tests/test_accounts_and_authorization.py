@@ -13,7 +13,7 @@ from app.core.config import get_settings
 from app.main import app
 from app.models.artisan_authorization import ArtisanAuthorization
 from app.models.audit_event import AuditEvent
-from app.services import cloudflare_access
+from app.services import cloudflare_access, mailer
 from tests.test_admin_api import AUD, CUSTODIAN_EMAIL, TEAM, FakeJWKS, auth, make_token
 from tests.test_admin_writes import new_artisan  # noqa: F401
 
@@ -327,3 +327,76 @@ def test_an_in_person_authorization_can_be_confirmed_by_whatsapp(owner_client, m
     assert detail["authorization"]["medium"] == "whatsapp" and detail["authorization"]["expires_at"] is None
     assert c.post(f"/api/admin/v1/artisans/{a['id']}/authorization/request", json={},
                   headers=H()).json()["error"]["code"] == "already_authorized"
+
+
+# --- 2026-10-10: the owner is told by email when an artisan asks for changes or declines ----
+
+
+@pytest.fixture()
+def outbox(monkeypatch):
+    sent: list[tuple[str, str, str]] = []
+    monkeypatch.setattr(get_settings(), "smtp_host", "smtp.example.org")
+    monkeypatch.setattr(mailer, "send_email", lambda to, subject, body: sent.append((to, subject, body)))
+    return sent
+
+
+def test_asking_for_changes_emails_the_owner_with_what_was_written(owner_client, outbox):
+    c = owner_client
+    a, _ = _artisan_with_pieces(c)
+    token = _link(c, a["id"])
+    assert _decide(c, token, "changes", "Mi grupo se llama Topos Azteca") == "recorded"
+    assert len(outbox) == 1
+    to, subject, body = outbox[0]
+    assert to == OWNER and subject == "ArtesaNFC: Rigoberto Ramírez Robles pidió cambios antes de autorizar"
+    assert "Mi grupo se llama Topos Azteca" in body and "https://gestion.artesanfc.com/" in body
+    assert token not in body and "#" not in body.split("Gestión")[0]  # no link or token in the message
+
+
+def test_authorizing_does_not_email_the_owner(owner_client, outbox):
+    c = owner_client
+    a, _ = _artisan_with_pieces(c)
+    assert _decide(c, _link(c, a["id"]), "authorize") == "recorded"
+    assert outbox == []
+
+
+def test_declining_emails_the_owner(owner_client, outbox):
+    c = owner_client
+    a, _ = _artisan_with_pieces(c)
+    assert _decide(c, _link(c, a["id"]), "decline", "Prefiero no salir") == "recorded"
+    assert len(outbox) == 1 and outbox[0][1] == "ArtesaNFC: Rigoberto Ramírez Robles no autorizó su publicación"
+    assert "Prefiero no salir" in outbox[0][2] and "volvieron a borrador" in outbox[0][2]
+
+
+def test_the_answer_is_recorded_even_when_the_email_cannot_be_sent(owner_client, monkeypatch, db_session):
+    c = owner_client
+    a, _ = _artisan_with_pieces(c)
+    # No mail settings: nothing is sent, nothing breaks.
+    monkeypatch.setattr(get_settings(), "smtp_host", "")
+    calls: list[str] = []
+    monkeypatch.setattr(mailer, "send_email", lambda *x: calls.append("sent"))
+    assert _decide(c, _link(c, a["id"]), "changes", "Corregir mi biografía") == "recorded"
+    assert calls == []
+    # The relay fails: the answer still stands.
+    monkeypatch.setattr(get_settings(), "smtp_host", "smtp.example.org")
+
+    def boom(*_):
+        raise mailer.MailError("SMTPServerDisconnected")
+
+    monkeypatch.setattr(mailer, "send_email", boom)
+    assert _decide(c, _link(c, a["id"]), "changes", "Corregir mi historia") == "recorded"
+    assert _detail(c, "artisans", a["id"])["last_answer"]["status"] == "changes_requested"
+    assert db_session.execute(select(func.count()).select_from(AuditEvent).where(
+        AuditEvent.action == "artisan.authorization_changes_requested")).scalar_one() == 2
+
+
+def test_a_name_that_breaks_the_email_header_does_not_break_the_answer(owner_client, monkeypatch):
+    c = owner_client
+    a, _ = _artisan_with_pieces(c)
+    monkeypatch.setattr(get_settings(), "smtp_host", "smtp.example.org")
+
+    def refuses(*_):
+        raise ValueError("Header values may not contain linefeed or carriage return characters")
+
+    monkeypatch.setattr(mailer, "send_email", refuses)
+    assert _decide(c, _link(c, a["id"]), "changes", "Corregir mi biografía") == "recorded"
+    assert _detail(c, "artisans", a["id"])["last_answer"]["status"] == "changes_requested"

@@ -283,19 +283,19 @@ function Printable({ card, name, onPrinted }: { card: CardKey; name: string; onP
   return (
     <section className="card-elevated p-5 sm:p-6 flex flex-col gap-4">
       <p role="alert" className="no-print rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-botanica-negro">
-        Esta clave se muestra <strong>una sola vez</strong>. Imprímela ahora, prueba el desbloqueo escaneando el chip
+        Esta clave se muestra <strong>una sola vez</strong>. Se imprime a tamaño tarjeta de crédito (85.6 × 54 mm): en el diálogo de impresión elige «Tamaño real» o 100 %, sin márgenes. Imprímela ahora, prueba el desbloqueo escaneando el chip
         (sin reclamar la pieza) y después cúbrela con la capa rasca.
       </p>
       <div className="print-card mx-auto w-full max-w-sm rounded-2xl border-2 border-botanica-negro p-6 text-center flex flex-col gap-3">
-        <p className="font-serif text-2xl text-botanica-negro">ArtesaNFC</p>
-        <p className="text-sm text-botanica-grafito">Certificado original de</p>
-        <p className="font-serif text-lg text-botanica-negro">{name}</p>
-        <p className="text-xs font-mono text-botanica-gris">{card.public_code}</p>
-        <div className="my-2 rounded-xl bg-botanica-gris/10 py-4">
-          <p className="text-xs uppercase tracking-widest text-botanica-gris">Clave secreta</p>
-          <p className="font-mono text-2xl sm:text-3xl tracking-[0.08em] whitespace-nowrap text-botanica-negro">{card.key}</p>
+        <p className="print-card__brand font-serif text-2xl text-botanica-negro">ArtesaNFC</p>
+        <p className="print-card__of text-sm text-botanica-grafito">Certificado original de</p>
+        <p className="print-card__name font-serif text-lg text-botanica-negro">{name}</p>
+        <p className="print-card__code text-xs font-mono text-botanica-gris">{card.public_code}</p>
+        <div className="print-card__keybox my-2 rounded-xl bg-botanica-gris/10 py-4">
+          <p className="print-card__keylabel text-xs uppercase tracking-widest text-botanica-gris">Clave secreta</p>
+          <p className="print-card__key font-mono text-2xl sm:text-3xl tracking-[0.08em] whitespace-nowrap text-botanica-negro">{card.key}</p>
         </div>
-        <p className="text-xs text-botanica-grafito">
+        <p className="print-card__note text-xs text-botanica-grafito">
           Escanea el chip de tu pieza y escribe esta clave. Solo en <strong>artesanfc.com</strong>: nadie de ArtesaNFC te
           la pedirá por mensaje.
         </p>

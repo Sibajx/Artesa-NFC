@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.access import ASSIGNABLE_ROLES, CUSTODIAN, DESIGNER, EDITOR, HERO
+from app.core.access import ASSIGNABLE_ROLES, CUSTODIAN, DESIGNER, DESIGNER_HERO, EDITOR, HERO
 from app.core.config import get_settings
 from app.models.admin_account import AdminAccount
 from app.models.audit_event import AuditActorType, AuditEvent, AuditResult
@@ -25,7 +25,8 @@ from app.services.content import Actor, ContentConflict, ContentNotFound
 EMAIL_RE = re.compile(r"[^@\s]{1,64}@[^@\s]{1,255}\.[^@\s]{2,63}")
 _ACCOUNTS_ENTITY = uuid.UUID(int=0)
 _ROLE_SETS = {EDITOR: frozenset({EDITOR}), DESIGNER: frozenset({EDITOR, DESIGNER}),
-              CUSTODIAN: frozenset({EDITOR, DESIGNER, CUSTODIAN}), HERO: frozenset({EDITOR, HERO})}
+              CUSTODIAN: frozenset({EDITOR, DESIGNER, CUSTODIAN}), HERO: frozenset({EDITOR, HERO}),
+              DESIGNER_HERO: frozenset({EDITOR, DESIGNER, HERO})}
 
 
 def roles_for(db: Session, email: str) -> frozenset[str] | None:
