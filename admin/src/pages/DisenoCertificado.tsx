@@ -164,6 +164,7 @@ function EditorForm({ design, onChanged, setError, piecePalette, contact }: {
     number: design.params.edition ? String(design.params.edition.number) : '',
     total: design.params.edition ? String(design.params.edition.total) : '',
   });
+  const [viewport, setViewport] = useState<'escritorio' | 'celular'>('escritorio');
   const [reviewUrl, setReviewUrl] = useState<string | null>(null);
   const [approving, setApproving] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -266,7 +267,20 @@ function EditorForm({ design, onChanged, setError, piecePalette, contact }: {
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] items-start">
       <figure className="card-elevated p-3 lg:sticky lg:top-6">
-        {svg ? <img src={svgSrc(svg)} alt={`Vista previa del certificado de ${params.piece_name}`} className="w-full rounded-lg" /> : <Loading label="Dibujando..." />}
+        <div role="group" aria-label="Tamaño de la vista previa" className="mb-3 flex gap-2 text-sm">
+          {(['escritorio', 'celular'] as const).map((v) => (
+            <button key={v} type="button" aria-pressed={viewport === v} onClick={() => setViewport(v)}
+              className={`rounded-full border px-3 py-1 ${viewport === v ? 'border-botanica-jade bg-botanica-jade/10 font-medium text-botanica-negro' : 'border-botanica-gris/30 text-botanica-grafito'}`}>
+              {v === 'escritorio' ? 'Escritorio' : 'Celular'}
+            </button>
+          ))}
+        </div>
+        {svg ? (
+          <img src={svgSrc(svg)} alt={`Vista previa del certificado de ${params.piece_name}`}
+            className={viewport === 'celular'
+              ? 'mx-auto w-full max-w-[300px] rounded-[2rem] border-[10px] border-botanica-negro bg-botanica-negro'
+              : 'w-full rounded-lg'} />
+        ) : <Loading label="Dibujando..." />}
         <figcaption className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-botanica-grafito">
           <span>Versión {design.version}</span>
           <Badge tone={STATUS[design.status].tone}>{STATUS[design.status].label}</Badge>
