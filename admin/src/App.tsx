@@ -2,7 +2,7 @@ import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import type { ReactElement } from 'react';
 import { adminApi, LOGOUT_URL } from './api';
 import { useLoad } from './hooks';
-import { ErrorState, Loading } from './ui';
+import { ErrorState, Loading, ThemeToggle } from './ui';
 import Dashboard from './pages/Dashboard';
 import Artesanos from './pages/Artesanos';
 import ArtesanoDetalle from './pages/ArtesanoDetalle';
@@ -123,11 +123,11 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-botanica-hueso">
-      <aside className="w-full md:w-60 bg-white border-r border-botanica-gris/15 flex flex-col shrink-0">
-        <div className="px-6 pt-7 pb-6 border-b border-botanica-gris/10">
+      <aside className="sidebar w-full md:w-60 border-r border-botanica-gris/20 flex flex-col shrink-0">
+        <div className="px-6 pt-7 pb-6 border-b border-botanica-gris/20">
           <div className="flex items-center gap-2.5 mb-1">
             <div className="side-logo w-7 h-7 rounded-md bg-botanica-jade/10 border border-botanica-jade/20 flex items-center justify-center shrink-0">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3E806E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-botanica-jade" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M6 8.32a7.43 7.43 0 0 1 0 7.36"/>
                 <path d="M9.46 6.21a11.76 11.76 0 0 1 0 11.58"/>
                 <path d="M12.91 4.1a15.91 15.91 0 0 1 .01 15.8"/>
@@ -157,7 +157,8 @@ export default function App() {
           ))}
         </nav>
 
-        <div className="px-4 py-4 border-t border-botanica-gris/10">
+        <div className="px-4 py-4 border-t border-botanica-gris/20 flex flex-col gap-3">
+          <ThemeToggle />
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-botanica-jade/15 border border-botanica-jade/20 flex items-center justify-center shrink-0">
               <span className="text-xs font-semibold text-botanica-jade" aria-hidden="true">{email.charAt(0).toUpperCase()}</span>
