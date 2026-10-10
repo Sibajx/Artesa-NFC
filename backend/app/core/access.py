@@ -47,10 +47,12 @@ AUTH_UNAVAILABLE_ERROR = {
 
 
 EDITOR, DESIGNER, CUSTODIAN, OWNER, HERO = "editor", "designer", "custodian", "owner", "hero"
+# An account's single role can be the combination of a designer and the hero manager.
+DESIGNER_HERO = "designer_hero"
 # Roles an account can be given from Gestión (the owner is fixed in .env).
 # HERO (P-028) is an editor who also manages the home hero's seasonal videos;
-# the owner always has it.
-ASSIGNABLE_ROLES = (EDITOR, DESIGNER, CUSTODIAN, HERO)
+# the owner always has it. DESIGNER_HERO is both a designer and a hero manager.
+ASSIGNABLE_ROLES = (EDITOR, DESIGNER, CUSTODIAN, HERO, DESIGNER_HERO)
 
 
 @dataclass(frozen=True)

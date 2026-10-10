@@ -19,7 +19,7 @@ class AdminAccount(Base):
     __table_args__ = (CheckConstraint("email = lower(email)", name="ck_admin_account_email_lower"),)
 
     email: Mapped[str] = mapped_column(Text, primary_key=True)
-    # One of "editor", "designer", "custodian" (each includes the ones before) or "hero" (editor + the home hero, P-028).
+    # One of "editor", "designer", "custodian" (each includes the ones before) "hero" (editor + the home hero, P-028) or "designer_hero" (designer + the home hero).
     role: Mapped[str] = mapped_column(Text, nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     note: Mapped[str | None] = mapped_column(Text)

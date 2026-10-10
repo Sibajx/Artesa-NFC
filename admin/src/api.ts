@@ -83,7 +83,7 @@ export interface ArtisanAuthorization {
 // P-026 G4: the owner's accounts page.
 export interface Account {
   email: string;
-  role: 'editor' | 'designer' | 'custodian' | 'hero';
+  role: 'editor' | 'designer' | 'custodian' | 'hero' | 'designer_hero';
   source: 'configuracion' | 'gestion';
   owner: boolean;
   added_by: string | null;

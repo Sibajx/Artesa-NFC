@@ -183,6 +183,22 @@ def test_the_partner_gets_the_hero_role_from_usuarios(hero_client):
     assert hero_client.get("/api/admin/v1/accounts", headers=auth(make_token(email=SOL))).status_code == 403
 
 
+def test_the_partner_can_be_designer_and_hero_at_once(hero_client):
+    r = hero_client.post("/api/admin/v1/accounts", json={"email": SOL, "role": "designer_hero"}, headers=JSON())
+    assert r.status_code == 200, r.text
+    me = hero_client.get("/api/admin/v1/me", headers=auth(make_token(email=SOL))).json()
+    assert me["roles"] == ["designer", "editor", "hero"]  # no custody, no owner
+    assert state(hero_client, SOL)["today"]
+    assert hero_client.get("/api/admin/v1/custody/pieces", headers=auth(make_token(email=SOL))).status_code == 403
+    assert hero_client.get("/api/admin/v1/accounts", headers=auth(make_token(email=SOL))).status_code == 403
+    # The role can move between hero and designer_hero, and designer alone has no hero.
+    for role, expected in (("hero", ["editor", "hero"]), ("designer", ["designer", "editor"]),
+                           ("designer_hero", ["designer", "editor", "hero"])):
+        assert hero_client.post(f"/api/admin/v1/accounts/{SOL}/role", json={"role": role}, headers=JSON()).status_code == 200
+        assert hero_client.get("/api/admin/v1/me", headers=auth(make_token(email=SOL))).json()["roles"] == expected
+    assert hero_client.get("/api/admin/v1/hero", headers=auth(make_token(email=SOL))).status_code == 200
+
+
 def test_writes_need_the_admin_header(hero_client):
     r = hero_client.post("/api/admin/v1/hero/force", json={"campaign_id": "00000000-0000-0000-0000-000000000000"},
                          headers={**auth(make_token(email=OWNER)), "Content-Type": "application/json"})

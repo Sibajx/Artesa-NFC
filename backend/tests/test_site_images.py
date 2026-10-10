@@ -6,6 +6,7 @@ from pathlib import Path
 
 from PIL import Image
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app.core.config import get_settings
 from app.models.audit_event import AuditEvent
@@ -122,3 +123,19 @@ def test_only_hero_accounts_may_touch_the_site_images(hero_client):
         "Content-Type": "image/jpeg", **auth(make_token(email=OWNER))})
     assert no_csrf.status_code == 403
     assert put(hero_client, photo(size=(900, 1125)), slot="nope").status_code == 404
+
+
+def test_two_people_uploading_the_first_photo_at_once_do_not_break_it(hero_client, db_session, monkeypatch):
+    real, state = db_session.commit, {"raised": False}
+
+    def flaky():
+        if not state["raised"] and any(isinstance(o, SiteImage) for o in db_session.new):
+            state["raised"] = True
+            raise IntegrityError("INSERT INTO site_image", {}, Exception("duplicate key value"))
+        return real()
+
+    monkeypatch.setattr(db_session, "commit", flaky)
+    r = put(hero_client, photo(size=(900, 1125)))
+    assert r.status_code == 200, r.text
+    assert state["raised"] and db_session.get(SiteImage, SLOT) is not None
+    assert len(files()) == 3
