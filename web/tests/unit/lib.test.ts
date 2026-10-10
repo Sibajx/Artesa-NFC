@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createApiClient } from "../../src/lib/api";
 import { apiConfigFor, resolveApiBase, resolveMediaUrl } from "../../src/lib/api-config";
 import {
   formatBytes,
@@ -143,5 +144,43 @@ describe("palette (ADR-030 phase 4)", () => {
     const roles = paletteRoles(["#5c3f28", "#f2a33a", "#efe4cf", "#7a7a7a"]);
     expect(roles).toEqual({ accent: "#f2a33a", dark: "#5c3f28", light: "#efe4cf" });
     expect(paletteRoles(["#111111"])).toBeNull();
+  });
+});
+
+describe("getHero (P-028)", () => {
+  const config = apiConfigFor("artesanfc.com");
+  const clientFor = (status: number, body: unknown) =>
+    createApiClient({
+      config,
+      fetch: async () => new Response(JSON.stringify(body), { status }),
+    });
+  const campaign = {
+    slug: "dia-de-muertos",
+    name: "Día de Muertos",
+    reason: "date",
+    video: { mp4: "/media/hero/dia-de-muertos/a.mp4", webm: null },
+    poster: "/media/hero/dia-de-muertos/a.jpg",
+  };
+
+  it("returns the campaign, or null when none applies", async () => {
+    expect(await clientFor(200, { data: campaign }).getHero()).toEqual({
+      kind: "ok",
+      data: { data: campaign },
+    });
+    expect(await clientFor(200, { data: null }).getHero()).toEqual({
+      kind: "ok",
+      data: { data: null },
+    });
+  });
+
+  it("rejects a body that is not the contract and treats errors as unavailable", async () => {
+    expect(await clientFor(200, { data: { slug: "x" } }).getHero()).toEqual({
+      kind: "unavailable",
+      reason: "malformed",
+    });
+    expect(await clientFor(503, {}).getHero()).toEqual({
+      kind: "unavailable",
+      reason: "server_error",
+    });
   });
 });

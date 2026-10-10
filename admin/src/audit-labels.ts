@@ -27,7 +27,18 @@ const LABELS: Record<string, string> = {
   'piece.availability_changed': 'Cambió la disponibilidad',
   'piece.palette_set': 'Cambió los colores del certificado',
   'piece.sold': 'Registró una venta',
+  'piece.moved': 'Cambió la ubicación de la pieza',
   'piece.sale_cancelled': 'Canceló una venta',
+  'hero.created': 'Creó una temporada del hero',
+  'hero.updated': 'Editó una temporada del hero',
+  'hero.deleted': 'Borró una temporada del hero',
+  'hero.video_uploaded': 'Subió un video del hero',
+  'hero.video_ready': 'El video del hero quedó listo',
+  'hero.video_failed': 'Falló el procesamiento del video del hero',
+  'hero.published': 'Publicó una temporada del hero',
+  'hero.unpublished': 'Despublicó una temporada del hero',
+  'hero.forced': 'Forzó una temporada en el hero',
+  'hero.unforced': 'Quitó el hero forzado',
   'media.uploaded': 'Subió un archivo',
   'media.updated': 'Editó un archivo',
   'media.archived': 'Archivó un archivo',
@@ -62,6 +73,7 @@ const LABELS: Record<string, string> = {
   'account.added': 'Dio acceso a Gestión',
   'account.role_changed': 'Cambió el rol de una cuenta',
   'account.removed': 'Quitó el acceso a Gestión',
+  'export.pieces': 'Exportó el inventario a CSV',
 };
 
 export const actionLabel = (action: string): string => LABELS[action] ?? action;
@@ -75,6 +87,7 @@ export const AUDIT_CATEGORIES: { value: string; label: string }[] = [
   { value: 'ownership.', label: 'Certificado original (público)' },
   { value: 'design.', label: 'Diseños de certificado' },
   { value: 'account.', label: 'Usuarios' },
+  { value: 'export.', label: 'Exportaciones' },
 ];
 
 /** Who did it: an email, or the public link (no account) for system events. */

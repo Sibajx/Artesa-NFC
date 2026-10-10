@@ -112,6 +112,8 @@ const hasVideo = heroMedia.desktopVideo.length > 0;
   // Sources are attached here (preload="none" + no <source> in the HTML), so
   // a visitor who does not get the video downloads none of it.
   import { startHeroField } from "@/scripts/hero-field";
+  import { createApiClient } from "@/lib/api";
+  import { currentApiConfig, resolveMediaUrl } from "@/lib/api-config";
 
   interface NetworkInformationLike {
     saveData?: boolean;
@@ -140,52 +142,89 @@ const hasVideo = heroMedia.desktopVideo.length > 0;
   const field = document.querySelector<HTMLCanvasElement>("[data-hero-field]");
   if (field) startHeroField(field);
 
-  if (video && motionAllowed()) {
-    const sources = JSON.parse(video.dataset.sources ?? "{}") as Record<
+  type VideoSource = { src: string; type: string };
+
+  // P-028: the season's video and poster, when Gestión has one for today.
+  // Asked only when the video would play (no extra request for visitors on
+  // reduced motion or Save-Data); any failure keeps the built-in hero.
+  async function seasonalHero(): Promise<{ sources: VideoSource[]; poster: string } | null> {
+    const config = currentApiConfig();
+    const result = await createApiClient({ config, timeoutMs: 2500 }).getHero();
+    if (result.kind !== "ok" || result.data.data === null) return null;
+    const { video, poster } = result.data.data;
+    const mp4 = resolveMediaUrl(video.mp4, config);
+    const webm = video.webm ? resolveMediaUrl(video.webm, config) : null;
+    const posterUrl = resolveMediaUrl(poster, config);
+    if (!mp4 || !posterUrl) return null;
+    const sources: VideoSource[] = [];
+    if (webm) sources.push({ src: webm, type: "video/webm" });
+    sources.push({ src: mp4, type: "video/mp4" });
+    return { sources, poster: posterUrl };
+  }
+
+  function showSeasonalPoster(url: string): void {
+    const picture = document.querySelector(".hero__poster");
+    const img = picture?.querySelector("img");
+    if (!picture || !img) return;
+    picture.querySelectorAll("source").forEach((s) => s.remove());
+    img.removeAttribute("srcset");
+    img.src = url;
+    document.querySelector('[data-provisional="hero"]')?.remove();
+  }
+
+  async function startVideo(el: HTMLVideoElement): Promise<void> {
+    const sources = JSON.parse(el.dataset.sources ?? "{}") as Record<
       "desktop" | "mobile",
-      { src: string; type: string }[]
+      VideoSource[]
     >;
     const portrait = window.matchMedia("(max-width: 700px) and (orientation: portrait)").matches;
-    const chosen = (portrait ? sources.mobile : sources.desktop) ?? [];
-    const playable = chosen.filter((s) => video.canPlayType(s.type) !== "");
+    let chosen = (portrait ? sources.mobile : sources.desktop) ?? [];
+    const season = await seasonalHero().catch(() => null);
+    if (season) {
+      chosen = season.sources;
+      showSeasonalPoster(season.poster);
+    }
+    const playable = chosen.filter((s) => el.canPlayType(s.type) !== "");
 
     if (playable.length > 0) {
       for (const source of playable) {
-        const el = document.createElement("source");
-        el.src = source.src;
-        el.type = source.type;
-        video.appendChild(el);
+        const node = document.createElement("source");
+        node.src = source.src;
+        node.type = source.type;
+        el.appendChild(node);
       }
       let userPaused = false;
-      video.addEventListener("playing", () => {
-        video.classList.add("is-playing");
+      el.addEventListener("playing", () => {
+        el.classList.add("is-playing");
         setToggle(true);
       });
-      video.addEventListener("pause", () => setToggle(false));
+      el.addEventListener("pause", () => setToggle(false));
       // Any decoding/network failure leaves the poster in place.
-      video.addEventListener("error", () => video.remove(), true);
+      el.addEventListener("error", () => el.remove(), true);
 
       toggle?.addEventListener("click", () => {
-        if (video.paused) {
+        if (el.paused) {
           userPaused = false;
-          void video.play();
+          void el.play();
         } else {
           userPaused = true;
-          video.pause();
+          el.pause();
         }
       });
 
       // Play only while visible; never resume a video the visitor paused.
       const observer = new IntersectionObserver(([entry]) => {
         if (entry?.isIntersecting && !userPaused) {
-          video.play().catch(() => setToggle(false));
-        } else if (!entry?.isIntersecting && !video.paused) {
-          video.pause();
+          el.play().catch(() => setToggle(false));
+        } else if (!entry?.isIntersecting && !el.paused) {
+          el.pause();
         }
       });
-      observer.observe(video);
+      observer.observe(el);
     }
   }
+
+  if (video && motionAllowed()) void startVideo(video);
 </script>
 
 <style>

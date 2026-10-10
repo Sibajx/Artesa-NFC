@@ -83,7 +83,7 @@ export interface ArtisanAuthorization {
 // P-026 G4: the owner's accounts page.
 export interface Account {
   email: string;
-  role: 'editor' | 'designer' | 'custodian';
+  role: 'editor' | 'designer' | 'custodian' | 'hero';
   source: 'configuracion' | 'gestion';
   owner: boolean;
   added_by: string | null;
@@ -95,6 +95,37 @@ export interface AccountList {
   data: Account[];
   cloudflare: string;
   sync_configured: boolean;
+}
+
+// P-028: the home hero by season.
+export interface HeroCampaign {
+  id: string;
+  slug: string;
+  name: string;
+  is_default: boolean;
+  start_month: number | null;
+  start_day: number | null;
+  end_month: number | null;
+  end_day: number | null;
+  status: 'no_video' | 'processing' | 'error' | 'draft' | 'live' | 'scheduled';
+  error: string | null;
+  published: boolean;
+  forced: boolean;
+  forced_until: string | null;
+  video_mp4: string | null;
+  video_webm: string | null;
+  poster: string | null;
+  updated_by: string | null;
+  updated_at: string;
+}
+
+export interface HeroState {
+  today: string;
+  ffmpeg_available: boolean;
+  media_enabled: boolean;
+  live_id: string | null;
+  live_reason: 'forced' | 'date' | 'default' | null;
+  campaigns: HeroCampaign[];
 }
 
 export interface ArtisanDetail {
@@ -236,6 +267,8 @@ export interface PieceDetail {
   price_cents?: number | null;
   price_currency?: string;
   sales?: Sale[];
+  // P-026 G12: where the piece is, newest move first.
+  locations?: PieceLocation[];
   // ADR-030 phase 4: { palette: string[], palette_source: 'auto' | 'manual' } and any other keys.
   visual_theme: Record<string, unknown> | null;
   availability_status: string;
@@ -264,6 +297,16 @@ export interface DesignParams {
   quote: string;
   palette: string[];
   seed: number;
+  // ADR-030 phase 5b: the team's artwork (null removes it).
+  art?: DesignArt | null;
+}
+
+export type ArtPlacement = 'sello' | 'encabezado' | 'fondo';
+
+export interface DesignArt {
+  id: string;
+  placement: ArtPlacement;
+  opacity: number;
 }
 
 export interface Design {
@@ -316,6 +359,26 @@ export interface SaleInput {
   sold_by: string;
   buyer_name: string | null;
   buyer_contact: string | null;
+  note: string | null;
+}
+
+// P-026 G12: one move of a piece; the newest is where it is now.
+export type LocationKind = 'taller' | 'bodega' | 'tienda' | 'exhibicion' | 'transito' | 'entregada' | 'otro';
+
+export interface PieceLocation {
+  id: string;
+  location: LocationKind;
+  place: string | null;
+  moved_on: string;
+  note: string | null;
+  recorded_by: string;
+  created_at: string;
+}
+
+export interface LocationInput {
+  location: LocationKind;
+  place: string | null;
+  moved_on: string;
   note: string | null;
 }
 
@@ -545,6 +608,10 @@ export const adminApi = {
     get<{ data: Design[] }>(`/pieces/${encodeURIComponent(pieceId)}/designs`, undefined, signal),
   design: (id: string, signal?: AbortSignal) => get<Design>(`/designs/${encodeURIComponent(id)}`, undefined, signal),
   createDesign: (pieceId: string) => request<Design>('POST', `/pieces/${encodeURIComponent(pieceId)}/designs`, { body: {} }),
+  uploadArt: (file: Blob, contentType: string) =>
+    request<{ id: string; mime_type: string; width: number; height: number }>('POST', '/certificate-art', {
+      file: { data: file, contentType },
+    }),
   previewDesign: (params: DesignParams, version: number) =>
     request<{ svg: string }>('POST', '/designs/preview', { body: { params, version } }),
   updateDesign: (id: string, params: Partial<DesignParams>, version: string) =>
@@ -571,6 +638,8 @@ export const adminApi = {
     request<ArtisanDetail>('POST', `/artisans/${encodeURIComponent(id)}/authorization/record`, { body: { note } }),
   revokeAuthorization: (id: string, note: string) =>
     request<ArtisanDetail>('POST', `/artisans/${encodeURIComponent(id)}/authorization/revoke`, { body: { note } }),
+  movePiece: (id: string, body: LocationInput, version: string) =>
+    request<PieceDetail>('POST', `/pieces/${encodeURIComponent(id)}/location`, { body, version }),
   registerSale: (id: string, body: SaleInput, version: string) =>
     request<PieceDetail>('POST', `/pieces/${encodeURIComponent(id)}/sale`, { body, version }),
   cancelSale: (id: string, reason: string, version: string) =>
@@ -579,6 +648,20 @@ export const adminApi = {
     request<PieceDetail>('POST', `/pieces/${encodeURIComponent(id)}/palette/generate`, { body: {}, version }),
   setPalette: (id: string, colors: string[], version: string) =>
     request<PieceDetail>('POST', `/pieces/${encodeURIComponent(id)}/palette`, { body: { colors }, version }),
+
+  hero: (signal?: AbortSignal) => get<HeroState>('/hero', undefined, signal),
+  createHeroCampaign: (body: { name: string; start_month: number; start_day: number; end_month: number; end_day: number }) =>
+    request<HeroState>('POST', '/hero/campaigns', { body }),
+  updateHeroCampaign: (id: string, body: { name?: string; start_month?: number; start_day?: number; end_month?: number; end_day?: number }) =>
+    request<HeroState>('PATCH', `/hero/campaigns/${encodeURIComponent(id)}`, { body }),
+  deleteHeroCampaign: (id: string) => request<HeroState>('DELETE', `/hero/campaigns/${encodeURIComponent(id)}`, { body: {} }),
+  publishHeroCampaign: (id: string, published: boolean) =>
+    request<HeroState>('POST', `/hero/campaigns/${encodeURIComponent(id)}/${published ? 'publish' : 'unpublish'}`, { body: {} }),
+  forceHeroCampaign: (id: string, until: string | null) =>
+    request<HeroState>('POST', '/hero/force', { body: { campaign_id: id, until } }),
+  unforceHero: () => request<HeroState>('DELETE', '/hero/force', { body: {} }),
+  uploadHeroVideo: (id: string, file: Blob, contentType: string) =>
+    request<HeroState>('POST', `/hero/campaigns/${encodeURIComponent(id)}/video`, { file: { data: file, contentType } }),
 
   uploadMedia: (owner: 'artisans' | 'pieces', id: string, file: Blob, contentType: string, role: MediaRole, altText?: string) =>
     request<AdminMedia>('POST', `/${owner}/${encodeURIComponent(id)}/media`, {
@@ -594,4 +677,7 @@ export const adminApi = {
 };
 
 // Cloudflare Access ends the session at this path on the protected hostname.
+// P-026 G11: a plain link downloads it; Cloudflare Access covers the request.
+export const PIECES_CSV_URL = `${BASE}/exports/pieces.csv`;
+
 export const LOGOUT_URL = '/cdn-cgi/access/logout';

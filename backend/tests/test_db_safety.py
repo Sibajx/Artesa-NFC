@@ -19,6 +19,7 @@ from app.core.db_safety import (
     DatabaseTarget,
     UnsafeConfigurationError,
     assert_database_url_configured,
+    assert_safe_for_migrations,
     assert_safe_for_tests,
     is_test_database_name,
     normalize_app_env,
@@ -199,3 +200,40 @@ def test_pytest_session_aborts_when_database_url_is_missing(blank):
     assert result.returncode == 2
     assert "DATABASE_URL is not set" in output
     assert "passed" not in output
+
+
+
+# --- PEND-011: Alembic only runs against a target that matches APP_ENV ---------------------------
+
+
+@pytest.mark.parametrize(("env", "url"), [
+    ("test", credentialed_url("artesanfc_test", host="db.internal.example")),
+    ("local", credentialed_url("artesanfc")),
+    ("local", credentialed_url("artesanfc", host="db")),
+    ("production", credentialed_url("artesanfc_prod", host="db.internal.example")),
+])
+def test_migrations_allowed_when_the_target_matches_app_env(env, url):
+    assert_safe_for_migrations(env, url)
+
+
+@pytest.mark.parametrize(("env", "url", "match"), [
+    ("local", credentialed_url("artesanfc", host="db.internal.example"), "local development host"),
+    ("test", credentialed_url("artesanfc_prod"), "test database"),
+    ("production", "postgresql://artesanfc:artesanfc@localhost:5432/artesanfc", ""),
+    ("dev", credentialed_url("artesanfc"), "unsupported value"),
+])
+def test_migrations_refused_when_the_target_does_not_match(env, url, match):
+    with pytest.raises(UnsafeConfigurationError, match=match) as exc:
+        assert_safe_for_migrations(env, url)
+    assert_no_secrets(exc.value)
+
+
+def test_alembic_refuses_a_remote_database_under_app_env_local():
+    """End to end through alembic/env.py: nothing connects (the host does not exist)."""
+    env = {**os.environ, "APP_ENV": "local",
+           "DATABASE_URL": credentialed_url("artesanfc", host="db.internal.example")}
+    run = subprocess.run([sys.executable, "-m", "alembic", "current"], cwd=BACKEND_DIR, env=env,
+                         capture_output=True, text=True, timeout=60)
+    assert run.returncode != 0
+    assert "Refusing to run Alembic" in run.stderr
+    assert CANARY_PASSWORD not in run.stderr + run.stdout

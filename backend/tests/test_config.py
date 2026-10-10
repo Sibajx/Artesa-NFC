@@ -170,6 +170,20 @@ def test_app_env_is_normalized_before_the_production_guard():
         _settings(app_env=" Production ", cors_allowed_origins="http://localhost:5500")
 
 
+@pytest.mark.parametrize("extra", ["http://localhost:5500", "http://artesanfc.com", "https://staging.artesanfc.com",
+                                   "https://artesanfc.com.evil.example", "*"])
+def test_production_rejects_any_extra_cors_origin(extra):
+    """N-01: including the apex is not enough; nothing else may be allowed."""
+    with pytest.raises(UnsafeConfigurationError, match="may only list") as exc:
+        _settings(cors_allowed_origins=f"{PROD_ORIGIN},{extra}")
+    assert extra in str(exc.value)
+
+
+def test_production_accepts_the_www_origin_next_to_the_apex():
+    settings = _settings(cors_allowed_origins="https://artesanfc.com, https://www.artesanfc.com")
+    assert settings.cors_allowed_origins_list == ["https://artesanfc.com", "https://www.artesanfc.com"]
+
+
 def test_production_with_explicit_safe_values_is_accepted():
     settings = _settings()
     assert settings.app_env == "production"

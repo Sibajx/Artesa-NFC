@@ -464,6 +464,13 @@ producto por adelantado.
 
 - Todas las escrituras usan `If-Match` y quedan auditadas como `design.*`.
 - `params`: `template` (`clasico` \| `greca` \| `constelacion`), `variant` (`claro` \| `oscuro`), `title`, `piece_name`, `artisan_name`, `public_code`, `quote` (hasta 240 caracteres), `palette` (de 3 a 5 colores) y `seed`.
+- **Arte propio (fase 5b):**
+  - `POST /certificate-art`, solo con rol de diseño. El cuerpo es la imagen misma: PNG, JPEG o WebP, hasta 8 MB, con su `Content-Type` y `X-Artesa-Admin: 1`. Responde `201 {id, mime_type, width, height}`.
+  - El servidor la decodifica y la vuelve a codificar: no conserva metadatos ni datos extra, el lado mayor queda en 1000 px, es PNG si tiene transparencia y JPEG si no.
+  - El `id` es el SHA-256 del resultado. La imagen no cambia ni se borra, así que una versión congelada se dibuja igual para siempre.
+  - Errores: `415 unsupported_media_type`, `413 too_large`, `422 unsupported_type` / `image_too_large` / `empty_file`.
+  - El diseño la usa con `params.art = {id, placement: "sello" | "encabezado" | "fondo", opacity: 0.05–0.6}`. Un `id` que no existe da `409 invalid_design`, y `art: null` quita el arte.
+  - El SVG la incrusta como `data:` URI, armada en el servidor; los `params` solo llevan el hash.
 
 ### 7.4 Ventas y precio (P-026)
 
@@ -499,6 +506,32 @@ producto por adelantado.
   - `POST /accounts/sync`.
 
   Todas responden `{data, cloudflare, sync_configured}`, donde `cloudflare` es `synced`, `not_configured`, `unchanged` o el texto del error. Las cuentas de `ADMIN_EMAILS` aparecen como fijas (`409 fixed_account`).
+
+### 7.6 Exportar a CSV (P-026 G11)
+
+- `GET /api/admin/v1/exports/pieces.csv` → `text/csv; charset=utf-8` con BOM, `Content-Disposition: attachment; filename="artesanfc-piezas-AAAA-MM-DD.csv"` y `no-store`, como toda la API de Gestión.
+- Una fila por pieza fuera de la papelera, ordenadas por artesano y código. No aplica los filtros de la lista.
+- **Columnas para cualquier cuenta de Gestión:** código, pieza, artesano, publicación, disponibilidad, precio y moneda, ubicación y lugar actuales (§7.7), técnica, materiales, año, fecha, precio y canal de la venta activa, creada y actualizada.
+  - Los estados van en español.
+  - Las fechas van en hora de México (UTC−6).
+  - El dinero va con dos decimales.
+- **Columnas extra para custodios** (ADR-030): certificado y versión, chip y modelo, tarjeta, con dueño, diseño del certificado y reportada como robada.
+- **Datos que no salen:** el nombre y el contacto del comprador.
+- **Celdas de texto:** si empiezan con `=`, `+`, `-`, `@`, tabulador o retorno de carro, se les antepone un apóstrofo para que la hoja de cálculo no las evalúe como fórmula.
+- **Auditoría:** `export.pieces` con `{rows, custody_columns}`.
+
+### 7.7 Ubicación física de la pieza (P-026 G12)
+
+- **Solo Gestión:** la API pública no expone la ubicación.
+- `POST /api/admin/v1/pieces/{id}/location` `{location, place?, moved_on, note?}` con `If-Match` registra un movimiento y responde el detalle de la pieza:
+  - `location` es `taller`, `bodega`, `tienda`, `exhibicion`, `transito`, `entregada` u `otro`;
+  - `place` (hasta 120 caracteres) dice cuál tienda, feria o museo;
+  - `moved_on` no puede ser futura (`409 invalid_location`);
+  - una pieza en la papelera responde `409 trashed`.
+- **Historial:** los movimientos no se editan; una corrección es un movimiento nuevo. El detalle de la pieza trae `locations` del más reciente al más antiguo, y el primero es la ubicación actual.
+- **Purga:** los movimientos se borran junto con la pieza solo cuando se purga de la papelera un borrador que nunca fue público.
+- **Auditoría:** `piece.moved` con `{location_id, from, to, place, moved_on}`.
+- **Tabla:** `piece_location`, creada por la migración `57cc7fb123cb` (additive).
 
 ## 8. Listados, filtrado y paginación
 
@@ -623,7 +656,8 @@ Reglas adicionales:
 | `413 Payload Too Large` | Solo `POST /api/v1/certificates/resolve`: cuerpo de más de 1024 bytes (`Content-Length` mayor, o cuerpo sin `Content-Length`/chunked que lo supera al llegar). Se rechaza sin leer el resto. Código `payload_too_large`; lleva `Cache-Control: no-store` y CORS del origen permitido (`SECURITY.md` §5.6). |
 | `422 Unprocessable Entity` | Errores de validación de entrada de la solicitud — body, parámetros de query y parámetros de path — incluyendo tipo incorrecto, campo faltante, o valor fuera del rango/enum esperado (ej. `token` ausente en `certificates/resolve`, o `availability_status=xyz` en un filtro de query). Corresponde al comportamiento estándar de validación de FastAPI/Pydantic; no se requiere convertir estos casos a `400`. |
 | `429 Too Many Requests` | Rate limiting activado (mecanismo definido en `SECURITY.md`; el código y la forma de respuesta sí son parte de este contrato). |
-| `500 Internal Server Error` | Error no controlado del servidor. |
+| `500 Internal Server Error` | Error no controlado del servidor. En `certificates/resolve` y en `/api/admin` lleva `Cache-Control: no-store`, y lleva CORS si el origen está permitido (N-02). |
+| `503 Service Unavailable` | La base de datos no está disponible: no hay conexión, o el servidor de base de datos se está apagando o rechaza conexiones. Código `service_unavailable`, con `Retry-After: 30`. Un error de una consulta, como un timeout de bloqueo o un constraint, sigue siendo `500` (N-02). |
 
 **Nota sobre `certificates/resolve`:** este endpoint responde `200 OK`
 tanto para `authentic` como para `unavailable`, porque la resolución en
@@ -636,7 +670,7 @@ solicitud en sí (ej. `token` ausente o de tipo incorrecto), nunca para
 distinguir por qué un token no produjo un certificado válido — ese
 resultado siempre es `200 OK` con `status: unavailable`.
 
-### Forma de error (para `400`, `404`, `405`, `413`, `422`, `429`, `500`)
+### Forma de error (para `400`, `404`, `405`, `413`, `422`, `429`, `500`, `503`)
 
 ```json
 {
@@ -996,6 +1030,24 @@ blanca); cualquier otra, `404` sin tocar el disco. Cabeceras:
 públicos: `<model-viewer>` pide el GLB con CORS, y Cloudflare guarda una sola
 copia por URL sin mirar `Vary: Origin`. La regla A de producción fue ampliada y
 verificada para `GET|HEAD /media/*` el 2026-09-30 (`OPERATIONS.md` §8).
+
+### 14.4 Hero por temporada (P-028, 2026-10-09)
+
+**Público.** `GET /api/v1/hero` → `{"data": null}` o `{"data": {"slug", "name", "reason": "forced"|"date"|"default", "video": {"mp4", "webm"|null}, "poster"}}`. Las URLs son rutas `/media/hero/{slug}/{hash}.{mp4|webm|jpg}` contra el origen de la API. `Cache-Control: public, max-age=300`. `data: null` = el sitio conserva su hero incluido. Elige, en orden: la temporada **forzada** (si no pasó su fecha de fin), una **publicada** cuyo rango anual cubre hoy en `America/Mexico_City` (si varias, la que empezó más tarde), el hero normal **publicado**.
+
+**Gestión** (`/api/admin/v1/hero`, solo rol `hero` y dueño; los demás reciben 403). Escrituras con `X-Artesa-Admin: 1` y JSON; sin `If-Match` (dos personas, cambios simples). Todas devuelven el estado completo.
+
+| Método y ruta | Qué hace |
+|---|---|
+| `GET /hero` | Estado: `today`, `ffmpeg_available`, `media_enabled`, `live_id`, `live_reason`, `campaigns[]` (`status`: `no_video`, `processing`, `error`, `draft`, `live`, `scheduled`). |
+| `POST /hero/campaigns` | Crea una temporada (`name`, `start_month/day`, `end_month/day`; se repite cada año). |
+| `PATCH /hero/campaigns/{id}` | Cambia nombre y/o fechas (el hero normal no tiene fechas). |
+| `DELETE /hero/campaigns/{id}` | Borra la temporada y sus archivos (no el hero normal ni la forzada). |
+| `POST /hero/campaigns/{id}/video` | Sube el video **como cuerpo** (`video/mp4`, `video/webm` o `video/quicktime`, hasta 200 MB). 202: se procesa en segundo plano con `ffmpeg` (16:9 centrado, 12 s, sin audio, ≤1080p, MP4 + WebM + portada). Mientras procesa o si falla, el video anterior sigue visible. |
+| `POST /hero/campaigns/{id}/publish` · `/unpublish` | Requiere un video listo. |
+| `POST /hero/force` `{campaign_id, until?}` · `DELETE /hero/force` | Muestra una temporada para todos ya, con fin opcional; solo una a la vez. |
+
+Errores: `no_video`, `already_processing`, `ffmpeg_unavailable`, `unsupported_media_type`, `too_large` (413), `not_a_video`, `encode_failed`, `too_heavy`, `invalid_date`, `invalid_name`, `default_campaign`, `forced_campaign`. Auditoría: `hero.*`.
 
 ## 15. Estado de las decisiones
 

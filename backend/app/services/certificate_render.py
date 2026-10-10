@@ -7,7 +7,9 @@ same forever.
 
 Safety: every text is XML-escaped, colours are validated "#rrggbb", there
 are no external references, scripts or fonts (the SVG is shown inside
-<img>, where a web font would not load anyway).
+<img>, where a web font would not load anyway). The team's artwork (phase
+5b) is embedded as a data: URI built server-side from a stored, re-encoded
+PNG/JPEG (services/certificate_art.py); the params only carry its hash.
 """
 from __future__ import annotations
 
@@ -19,6 +21,8 @@ from xml.sax.saxutils import escape
 
 TEMPLATES = ("clasico", "greca", "constelacion")
 VARIANTS = ("claro", "oscuro")
+# Phase 5b: where the team's artwork goes.
+ART_PLACEMENTS = ("sello", "encabezado", "fondo")
 HEX_RE = re.compile(r"#[0-9a-f]{6}")
 W, H = 1200, 1600
 SERIF = "Georgia, 'Times New Roman', serif"
@@ -149,10 +153,17 @@ def _constellation(colors: list[str], rng: random.Random, area: tuple[float, flo
 # --- the sheet ------------------------------------------------------------------------
 
 
+def _image(uri: str, x: float, y: float, w: float, h: float, *, slice_: bool = False, extra: str = "") -> str:
+    fit = "xMidYMid slice" if slice_ else "xMidYMid meet"
+    return (f'<image href="{_t(uri)}" x="{x:.0f}" y="{y:.0f}" width="{w:.0f}" height="{h:.0f}" '
+            f'preserveAspectRatio="{fit}"{extra}/>')
+
+
 def render(params: dict, *, version: int, approved_by: str | None = None, approved_on: str | None = None,
-           watermark: str | None = None) -> str:
+           watermark: str | None = None, art_uri: str | None = None) -> str:
     """The certificate as an SVG document. ``watermark`` (e.g. "BORRADOR")
-    is drawn across the sheet for anything not yet published."""
+    is drawn across the sheet for anything not yet published. ``art_uri`` is
+    the team's artwork for ``params["art"]``, as a data: URI."""
     template = params.get("template") if params.get("template") in TEMPLATES else "clasico"
     variant = "oscuro" if template == "constelacion" else (params.get("variant") if params.get("variant") in VARIANTS else "claro")
     colors = _palette(params)
@@ -167,8 +178,14 @@ def render(params: dict, *, version: int, approved_by: str | None = None, approv
     out = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}" '
            f'role="img" aria-label="Certificado original de {_t(params.get("piece_name"))}">',
            f'<rect width="{W}" height="{H}" fill="{paper}"/>']
+    art = params.get("art") if isinstance(params.get("art"), dict) and art_uri else None
+    placement = art.get("placement") if art and art.get("placement") in ART_PLACEMENTS else "sello"
+    if art and placement == "fondo":
+        opacity = art.get("opacity") if isinstance(art.get("opacity"), (int, float)) else 0.15
+        out.append(_image(art_uri, 0, 0, W, H, slice_=True, extra=f' opacity="{min(max(opacity, 0.05), 0.6):.2f}"'))
 
-    if template == "constelacion":
+    header_art = art is not None and placement == "encabezado"
+    if template == "constelacion" and not header_art:
         out.append(_constellation(colors, rng, (100, 100, W - 100, 430)))
     if template == "greca":
         out.append(_greca(colors, roles, rng, 56))
@@ -179,6 +196,9 @@ def render(params: dict, *, version: int, approved_by: str | None = None, approv
 
     dense = template == "constelacion"
     top = 560 if dense else 330
+    if header_art:
+        y0 = 110 if dense else 96
+        out.append(_image(art_uri, 300, y0, W - 600, top - 90 - y0))
     out.append(_band(colors, 300, top - 70, W - 600, 12, ink))
     out.append(f'<text x="{W / 2}" y="{top}" text-anchor="middle" font-family="{SANS}" font-size="26" '
                f'letter-spacing="7" fill="{ink}">{_t((params.get("title") or "Certificado original").upper())}</text>')
@@ -195,7 +215,15 @@ def render(params: dict, *, version: int, approved_by: str | None = None, approv
         out.append(_text_block(q_lines, W / 2, y + 120, 34, 1.4, text_anchor="middle",
                                font_family=SERIF, font_style="italic", fill=roles["mid"] if variant == "claro" else ink))
 
-    out.append(_seal(W / 2, H - 445 if dense else H - 540, 88 if dense else 120, roles, rng))
+    seal_y, seal_r = (H - 445, 88) if dense else (H - 540, 120)
+    if art is not None and placement == "sello":
+        # The artwork inside the seal's rings, clipped to a circle.
+        out.append(f'<clipPath id="art-seal"><circle cx="{W / 2}" cy="{seal_y}" r="{seal_r - 16}"/></clipPath>')
+        out.append(f'<circle cx="{W / 2}" cy="{seal_y}" r="{seal_r}" fill="none" stroke="{roles["accent"]}" stroke-width="6"/>')
+        side = 2 * (seal_r - 16)
+        out.append(_image(art_uri, W / 2 - side / 2, seal_y - side / 2, side, side, extra=' clip-path="url(#art-seal)"'))
+    else:
+        out.append(_seal(W / 2, seal_y, seal_r, roles, rng))
 
     facts = [("Código", params.get("public_code") or ""), ("Diseño", f"versión {version}")]
     if approved_by:

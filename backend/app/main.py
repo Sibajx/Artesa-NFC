@@ -8,15 +8,20 @@ from app.api.admin.accounts import reads as admin_accounts_reads
 from app.api.admin.accounts import writes as admin_accounts_writes
 from app.api.admin.custody import router as admin_custody_router
 from app.api.admin.designs import reads as admin_designs_reads
+from app.api.admin.designs import art_router as admin_designs_art
 from app.api.admin.designs import writes as admin_designs_writes
+from app.api.admin.exports import router as admin_exports_router
 from app.api.admin.custody import writes_router as admin_custody_writes_router
+from app.api.admin.hero import reads as admin_hero_reads
+from app.api.admin.hero import uploads as admin_hero_uploads
+from app.api.admin.hero import writes as admin_hero_writes
 from app.api.admin.media import router as admin_media_router
 from app.api.admin.media import upload_router as admin_upload_router
 from app.api.admin.router import router as admin_router
 from app.api.admin.writes import router as admin_writes_router
 from app.api.v1.router import router as api_v1_router
 from app.core.config import get_settings
-from app.core.errors import error_response, register_exception_handlers
+from app.core.errors import UnhandledErrorMiddleware, error_response, register_exception_handlers
 from app.core.media_files import MediaFilesMiddleware
 from app.db.session import check_database_connection
 
@@ -171,6 +176,8 @@ app.add_middleware(ResolveBodySizeLimitMiddleware)
 # Added before CORSMiddleware so it sits inside it: CORS headers are still
 # applied by the outer layer, and this only touches the resolve responses
 # produced by the app itself.
+# N-02: inside the no-store and CORS layers, so an unexpected 500 gets both.
+app.add_middleware(UnhandledErrorMiddleware)
 app.add_middleware(ResolveNoStoreMiddleware)
 app.add_middleware(AdminNoStoreMiddleware)
 # Explicit allowlist only (docs/SECURITY.md section 10) - no "*", no origin
@@ -196,15 +203,20 @@ app.include_router(api_v1_router)
 app.include_router(admin_router)
 app.include_router(admin_custody_router)
 app.include_router(admin_custody_writes_router)
+app.include_router(admin_exports_router)
 # ADR-030 phase 5. Before the content writes: POST /pieces/{id}/designs would
 # otherwise match their /pieces/{id}/{action} transition route.
 app.include_router(admin_accounts_reads)
 app.include_router(admin_accounts_writes)
 app.include_router(admin_designs_reads)
 app.include_router(admin_designs_writes)
+app.include_router(admin_designs_art)
 # Before the writes: POST /{owner}/{id}/media would otherwise match their
 # /{owner}/{id}/{action} transition route and fail as an unknown action.
 app.include_router(admin_upload_router)
+app.include_router(admin_hero_reads)
+app.include_router(admin_hero_writes)
+app.include_router(admin_hero_uploads)
 app.include_router(admin_writes_router)
 app.include_router(admin_media_router)
 

@@ -52,6 +52,18 @@
     "d3f8a1c6e5b2": {
       "class": "additive",
       "note": "Adds the owner_verification table (emailed one-time codes that confirm the owner for PIN resets and lost cards). Nothing existing changes; older code ignores the table, so a rollback is compatible."
+    },
+    "e7a4c9b1d6f3": {
+      "class": "additive",
+      "note": "Adds the hero_campaign table (P-028, hero by season) and seeds three rows (Hero normal, Día de Muertos, Navidad). Nothing existing changes; older code ignores the table, so a rollback is compatible."
+    },
+    "57cc7fb123cb": {
+      "class": "additive",
+      "note": "Creates piece_location (check on the location category, index on piece_id, ON DELETE CASCADE from piece) for P-026 G12. Nothing existing changes and older code never reads or writes it, so a code rollback is safe without a downgrade."
+    },
+    "be517598c1d4": {
+      "class": "additive",
+      "note": "Creates certificate_art (content-addressed artwork for original certificates, ADR-030 phase 5b). Older code never reads it; a design that references art renders without it under older code. Prefer a code-only rollback: the downgrade drops the table and with it the art of frozen designs."
     }
   }
 }

@@ -32,6 +32,7 @@ from app.schemas.admin_write import (
     AvailabilityBody,
     PieceCreate,
     PieceUpdate,
+    LocationBody,
     SaleBody,
     SaleCancelBody,
     TransitionBody,
@@ -40,7 +41,7 @@ from app.schemas.admin_write import (
 from pathlib import Path
 
 from app.core.config import get_settings
-from app.services import content, palette, sales, trash
+from app.services import content, locations, palette, sales, trash
 from app.services.content import Actor, ContentError
 
 ADMIN_WRITE_HEADER = "X-Artesa-Admin"
@@ -276,6 +277,17 @@ def cancel_sale(piece_id: uuid.UUID, body: SaleCancelBody, expected: datetime = 
                 who: Actor = Depends(actor), db: Session = Depends(get_db)) -> AdminPieceDetail:
     try:
         sales.cancel(db, who, piece_id, expected, body.reason)
+    except ContentError as exc:
+        raise _fail(exc) from None
+    return reads.get_piece(piece_id, db, who.identity)
+
+
+# P-026 G12. Declared before the generic /{action} transition.
+@router.post("/pieces/{piece_id}/location", response_model=AdminPieceDetail)
+def move_piece(piece_id: uuid.UUID, body: LocationBody, expected: datetime = Depends(expected_version),
+               who: Actor = Depends(actor), db: Session = Depends(get_db)) -> AdminPieceDetail:
+    try:
+        locations.move(db, who, piece_id, expected, body.model_dump())
     except ContentError as exc:
         raise _fail(exc) from None
     return reads.get_piece(piece_id, db, who.identity)

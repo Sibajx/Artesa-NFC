@@ -26,6 +26,10 @@ ENV_FILE = BACKEND_DIR / ".env"
 
 # The one browser origin production must allow (docs/SECURITY.md section 10).
 PRODUCTION_FRONTEND_ORIGIN = "https://artesanfc.com"
+# N-01: the only browser origins production may allow. The apex is required;
+# www is tolerated (the deploy rehearsals use it). Anything else -- localhost,
+# plain http, a preview host -- refuses to start.
+PRODUCTION_ALLOWED_ORIGINS = frozenset({PRODUCTION_FRONTEND_ORIGIN, "https://www.artesanfc.com"})
 
 _ACCESS_TEAM_DOMAIN_RE = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.cloudflareaccess\.com")
 _ACCESS_AUD_RE = re.compile(r"[0-9a-f]{64}")
@@ -152,6 +156,12 @@ class Settings(BaseSettings):
                 raise UnsafeConfigurationError(
                     "Refusing to start with APP_ENV=production: "
                     f"CORS_ALLOWED_ORIGINS must include {PRODUCTION_FRONTEND_ORIGIN}."
+                )
+            extra = sorted(set(self.cors_allowed_origins_list) - PRODUCTION_ALLOWED_ORIGINS)
+            if extra:
+                raise UnsafeConfigurationError(
+                    "Refusing to start with APP_ENV=production: CORS_ALLOWED_ORIGINS may only list "
+                    f"{', '.join(sorted(PRODUCTION_ALLOWED_ORIGINS))}; remove {', '.join(extra)}."
                 )
             if self.debug:
                 raise UnsafeConfigurationError(

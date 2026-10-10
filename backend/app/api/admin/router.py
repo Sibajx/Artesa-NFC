@@ -36,11 +36,13 @@ from app.schemas.admin import (
     AdminMedia,
     AdminNfcTag,
     AdminPieceDetail,
+    AdminPieceLocation,
     AdminSale,
     AdminPieceSummary,
 )
 from app.schemas.common import ListEnvelope, ListMeta
 from app.schemas.media import media_asset_to_public
+from app.services import locations as locations_service
 from app.services import media as media_service
 from app.services import sales as sales_service
 from app.services import trash as trash_service
@@ -260,6 +262,8 @@ def get_piece(piece_id: uuid.UUID, db: Session = Depends(get_db),
         publication_status=piece.publication_status.value,
         sales=[AdminSale(**{f: getattr(s, f) for f in AdminSale.model_fields if f != "status"}, status=s.status.value)
                for s in sales_service.sales_of(db, piece.id)],
+        locations=[AdminPieceLocation(**{f: getattr(m, f) for f in AdminPieceLocation.model_fields})
+                   for m in locations_service.history(db, piece.id)],
         publicly_visible=(
             piece.publication_status == PublicationStatus.published
             and artisan.publication_status == PublicationStatus.published

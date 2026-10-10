@@ -263,3 +263,35 @@ def assert_safe_for_provisioning(app_env: str | None, url: str) -> None:
             "ser local (localhost, 127.0.0.1, ::1, db o un socket unix). "
             "No se tocó la base de datos."
         )
+
+
+def assert_safe_for_migrations(app_env: str | None, url: str) -> None:
+    """PEND-011: Alembic writes the schema, so it only runs against a target
+    that matches APP_ENV, like the seed and provisioning guards:
+
+    * ``production`` / ``staging``: a production-grade database URL (what
+      ``Settings`` already demands at startup; the deploy tool runs Alembic
+      with the release's shared/.env, so it is unaffected);
+    * ``test``: a test-marked database name (CI: ``artesanfc_test``);
+    * ``local``: a local development host only.
+
+    It stops, for instance, ``APP_ENV=local`` pointed at a remote database."""
+    env = normalize_app_env(app_env)
+    if env in (ENV_PRODUCTION, ENV_STAGING):
+        assert_production_grade_database(url, env)
+        return
+    target = parse_database_target(url)
+    if env == ENV_TEST:
+        if not is_test_database_name(target.database):
+            raise UnsafeConfigurationError(
+                "Refusing to run Alembic: with APP_ENV=test the database name must be "
+                "marked as a test database (a 'test' token delimited by '_' or '-'). "
+                "No database was touched."
+            )
+        return
+    if not all(_is_local_host(host) for host in target.hosts):
+        raise UnsafeConfigurationError(
+            "Refusing to run Alembic: with APP_ENV=local the database host must be a "
+            "local development host (localhost, 127.0.0.1, ::1, db or a unix socket). "
+            "No database was touched."
+        )

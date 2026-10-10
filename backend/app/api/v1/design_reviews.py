@@ -60,7 +60,7 @@ def resolve_review(body: TokenBody, db: Session = Depends(get_db)) -> ReviewOpen
     if design is None:
         return ReviewUnavailable()
     return ReviewOpen(piece_name=design.params.get("piece_name") or "", artisan_name=design.params.get("artisan_name") or "",
-                      version=design.version, expires_at=design.review_expires_at, svg=designs.svg(design))
+                      version=design.version, expires_at=design.review_expires_at, svg=designs.svg(db, design))
 
 
 @router.post("/decision", response_model=DecisionResult)

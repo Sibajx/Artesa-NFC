@@ -70,6 +70,18 @@ export function joinList(value: unknown[] | null): string {
 }
 
 const CONFLICT_TEXT: Record<string, string> = {
+  no_video: 'Primero sube un video y espera a que esté listo.',
+  already_processing: 'Esa temporada ya está procesando un video. Espera a que termine.',
+  ffmpeg_unavailable: 'El servidor no tiene ffmpeg instalado, así que no puede procesar videos.',
+  media_unavailable: 'El servidor no tiene la carpeta de medios configurada.',
+  not_a_video: 'No se pudo leer un video en ese archivo.',
+  encode_failed: 'No se pudo convertir ese video. Prueba con otro archivo.',
+  too_heavy: 'El video queda demasiado pesado aun comprimido. Usa uno más corto o sencillo.',
+  default_campaign: 'El hero normal no se puede borrar.',
+  default_has_no_dates: 'El hero normal no tiene fechas.',
+  forced_campaign: 'Quita primero el forzado de esa temporada.',
+  invalid_date: 'Revisa las fechas: alguna no existe o ya pasó.',
+  invalid_name: 'El nombre debe tener entre 1 y 60 letras.',
   stale: 'Alguien más modificó este registro después de que lo abriste. Recarga la página para ver la versión actual y vuelve a intentarlo.',
   precondition_required: 'Recarga la página y vuelve a intentarlo.',
   draft_only: 'Ese dato solo se puede cambiar mientras el registro está en borrador.',
