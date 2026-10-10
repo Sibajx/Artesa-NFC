@@ -280,10 +280,10 @@ export const aboutCopy = {
     body: "Para artesanos, coleccionistas y proyectos culturales. Escríbenos por el canal que prefieras.",
     channels: [
       { kind: "email", label: "Correo", href: null },
-      { kind: "instagram", label: "Instagram", href: null },
-      { kind: "facebook", label: "Facebook", href: null },
+      { kind: "instagram", label: "Instagram", href: "https://www.instagram.com/artesanfc" },
+      { kind: "facebook", label: "Facebook", href: "https://www.facebook.com/share/14r4Q8tXELe/" },
       { kind: "whatsapp", label: "WhatsApp", href: null },
-      { kind: "tiktok", label: "TikTok", href: null },
+      { kind: "tiktok", label: "TikTok", href: "https://www.tiktok.com/@artesanfc7" },
     ] satisfies Channel[],
   },
 } as const;
