@@ -24,7 +24,8 @@ from sqlalchemy.orm import Session
 from app.api.admin.custody import custody_pieces
 from app.api.admin.writes import actor
 from app.api.deps import get_db
-from app.core.access import CUSTODIAN, require_admin
+from app.core import permissions as perms
+from app.core.access import require_admin
 from app.models.artisan import Artisan
 from app.models.audit_event import AuditActorType, AuditEvent, AuditResult
 from app.models.piece import Piece
@@ -94,7 +95,7 @@ def export_pieces(db: Session = Depends(get_db), who: Actor = Depends(actor)) ->
         sales = {s.piece_id: s for s in db.execute(
             select(Sale).where(Sale.piece_id.in_(ids), Sale.status == SaleStatus.active)).scalars()}
     where = locations_service.current_by_piece(db, ids)
-    with_custody = who.identity.has(CUSTODIAN)
+    with_custody = who.identity.can(perms.NFC)
     custody = {c.id: c for c in custody_pieces(db).data} if with_custody else {}
 
     out = io.StringIO()

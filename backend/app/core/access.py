@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.api.v1.common import not_found
+from app.core import permissions as perms
 from app.core.config import get_settings
 
 ACCESS_JWT_HEADER = "Cf-Access-Jwt-Assertion"
@@ -61,9 +62,22 @@ class AdminIdentity:
     # ADR-030: everyone allowed is an editor; designer and custodian come from
     # their own allowlists (a custodian is also a designer).
     roles: frozenset[str] = frozenset({EDITOR})
+    # Explicit permissions of an account managed from Gestión (None = derive
+    # them from the roles, which is what every account does until PR 2/3).
+    granted: frozenset[str] | None = None
 
     def has(self, role: str) -> bool:
         return role in self.roles
+
+    @property
+    def permissions(self) -> frozenset[str]:
+        """What this identity may do. The owner always has everything."""
+        if OWNER in self.roles:
+            return frozenset(perms.ALL_PERMISSIONS)
+        return self.granted if self.granted is not None else perms.for_roles(self.roles)
+
+    def can(self, permission: str) -> bool:
+        return permission in self.permissions
 
 
 class AccessUnavailable(Exception):
@@ -106,7 +120,8 @@ class AccessVerifier:
             headers={"User-Agent": "artesanfc-admin-api"},
         )
 
-    def verify(self, token: str, accounts: Callable[[str], frozenset[str] | None] | None = None) -> AdminIdentity:
+    def verify(self, token: str, accounts: Callable[[str], frozenset[str] | None] | None = None,
+               permissions: Callable[[str], frozenset[str] | None] | None = None) -> AdminIdentity:
         """``accounts`` (P-026 G4): the roles of an account managed from
         Gestión, or None. An email must be in ADMIN_EMAILS or be an active
         account; the roles are the union of both."""
@@ -148,7 +163,10 @@ class AccessVerifier:
         if email in self.owners:
             roles.add(OWNER)
             roles.add(HERO)
-        return AdminIdentity(email=email, roles=frozenset(roles))
+        # An explicit list (set from the owner's matrix) narrows or widens what the
+        # roles give; the owner always has everything (AdminIdentity.permissions).
+        granted = permissions(email) if permissions else None
+        return AdminIdentity(email=email, roles=frozenset(roles), granted=granted)
 
 
 @lru_cache
@@ -176,6 +194,15 @@ def get_access_verifier() -> AccessVerifier | None:
     )
 
 
+def require_permission(permission: str) -> Callable[..., AdminIdentity]:
+    """A dependency: the account must be allowed (403 otherwise) and hold ``permission``."""
+    def dependency(identity: AdminIdentity = Depends(require_admin)) -> AdminIdentity:
+        if not identity.can(permission):
+            raise HTTPException(status_code=403, detail=FORBIDDEN_ERROR)
+        return identity
+    return dependency
+
+
 def require_admin(
     request: Request,
     verifier: AccessVerifier | None = Depends(get_access_verifier),
@@ -191,7 +218,8 @@ def require_admin(
         # Imported here: the accounts service imports models, which import config.
         from app.services import admin_accounts
 
-        return verifier.verify(token, accounts=lambda email: admin_accounts.roles_for(db, email))
+        return verifier.verify(token, accounts=lambda email: admin_accounts.roles_for(db, email),
+                               permissions=lambda email: admin_accounts.permissions_for(db, email))
     except AccessUnavailable:
         raise HTTPException(status_code=503, detail=AUTH_UNAVAILABLE_ERROR) from None
     except AccessDenied as exc:

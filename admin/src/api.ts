@@ -89,10 +89,18 @@ export interface Account {
   added_by: string | null;
   added_at: string | null;
   note: string | null;
+  // The checkboxes the account holds; `custom` = ticked by hand (not just what its role gives).
+  permissions: string[];
+  custom: boolean;
+  // A fixed account (server config) that already has a row here, so it can be edited.
+  imported: boolean;
 }
 
 export interface AccountList {
   data: Account[];
+  // The checkboxes in order, and what each role (a shortcut) gives.
+  catalog: string[];
+  presets: Record<string, string[]>;
   cloudflare: string;
   sync_configured: boolean;
 }
@@ -574,7 +582,7 @@ export interface PieceInput {
 }
 
 export const adminApi = {
-  me: (signal?: AbortSignal) => get<{ email: string; roles: string[] }>('/me', undefined, signal),
+  me: (signal?: AbortSignal) => get<{ email: string; roles: string[]; permissions: string[] }>('/me', undefined, signal),
   custodyPieces: (signal?: AbortSignal) => get<ListEnvelope<CustodyPiece>>('/custody/pieces', undefined, signal),
   custodyState: (id: string, signal?: AbortSignal) => get<CustodyState>(`/custody/pieces/${encodeURIComponent(id)}/state`, undefined, signal),
   custodyIssue: (id: string, uid: string) => request<CustodyIssued>('POST', `/custody/pieces/${encodeURIComponent(id)}/issue`, { body: { uid } }),
@@ -656,6 +664,9 @@ export const adminApi = {
     request<AccountList>('POST', `/accounts/${encodeURIComponent(email)}/role`, { body: { role } }),
   removeAccount: (email: string) => request<AccountList>('POST', `/accounts/${encodeURIComponent(email)}/remove`, { body: {} }),
   syncAccounts: () => request<AccountList>('POST', '/accounts/sync', { body: {} }),
+  setAccountPermissions: (email: string, permissions: string[] | null) =>
+    request<AccountList>('POST', `/accounts/${encodeURIComponent(email)}/permissions`, { body: { permissions } }),
+  importFixedAccounts: () => request<AccountList>('POST', '/accounts/import-fixed', { body: {} }),
   requestAuthorization: (id: string) =>
     request<{ url: string; whatsapp: string | null; contact_name: string | null; artisan_name: string }>(
       'POST', `/artisans/${encodeURIComponent(id)}/authorization/request`, { body: {} }),

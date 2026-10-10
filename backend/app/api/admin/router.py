@@ -17,7 +17,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.api.v1.common import media_order_by, not_found
-from app.core.access import CUSTODIAN, AdminIdentity, require_admin
+from app.core import permissions as perms
+from app.core.access import AdminIdentity, require_admin
 from app.models.artisan import Artisan
 from app.models.audit_event import AuditEvent
 from app.models.certificate import Certificate
@@ -96,7 +97,7 @@ def _piece_summaries(db: Session, pieces: list[Piece]) -> list[AdminPieceSummary
 
 @router.get("/me", response_model=AdminMe)
 def me(identity: AdminIdentity = Depends(require_admin)) -> AdminMe:
-    return AdminMe(email=identity.email, roles=sorted(identity.roles))
+    return AdminMe(email=identity.email, roles=sorted(identity.roles), permissions=sorted(identity.permissions))
 
 
 @router.get("/artisans", response_model=ListEnvelope[AdminArtisanSummary])
@@ -239,7 +240,7 @@ def get_piece(piece_id: uuid.UUID, db: Session = Depends(get_db),
         .order_by(NfcTag.created_at.desc(), cast(NfcTag.status, String).asc())
     ).scalars().all()
     # ADR-030: certificates and NFC tags belong to the custody area.
-    custody_visible = isinstance(identity, AdminIdentity) and identity.has(CUSTODIAN)
+    custody_visible = isinstance(identity, AdminIdentity) and identity.can(perms.NFC)
     if not custody_visible:
         certificates, tags = [], []
     return AdminPieceDetail(

@@ -34,7 +34,8 @@ from app.api.admin.writes import (
     require_write_guard,
 )
 from app.api.deps import get_db
-from app.core.access import require_admin
+from app.core import permissions as perms
+from app.core.access import require_admin, require_permission
 from app.core.config import get_settings
 from app.models.media_asset import MediaRole, MediaType
 from app.schemas.admin import AdminMedia
@@ -86,7 +87,7 @@ upload_router = APIRouter(
 )
 
 
-@upload_router.post("/{owner}/{owner_id}/media", status_code=201, response_model=AdminMedia)
+@upload_router.post("/{owner}/{owner_id}/media", status_code=201, response_model=AdminMedia, dependencies=[Depends(require_permission(perms.EDIT))])
 async def upload_media(
     owner: Literal["artisans", "pieces"],
     owner_id: uuid.UUID,
@@ -117,7 +118,7 @@ router = APIRouter(
 )
 
 
-@router.patch("/media/{media_id}", response_model=AdminMedia)
+@router.patch("/media/{media_id}", response_model=AdminMedia, dependencies=[Depends(require_permission(perms.EDIT))])
 def update_media(media_id: uuid.UUID, body: MediaUpdate, expected: datetime = Depends(expected_version),
                  who: Actor = Depends(actor), db: Session = Depends(get_db)) -> AdminMedia:
     try:
@@ -127,7 +128,7 @@ def update_media(media_id: uuid.UUID, body: MediaUpdate, expected: datetime = De
     return admin_media(db, asset)
 
 
-@router.post("/media/{media_id}/{action}", response_model=AdminMedia)
+@router.post("/media/{media_id}/{action}", response_model=AdminMedia, dependencies=[Depends(require_permission(perms.EDIT))])
 def transition_media(media_id: uuid.UUID, action: media.MediaAction, body: TransitionBody,
                      expected: datetime = Depends(expected_version), who: Actor = Depends(actor),
                      db: Session = Depends(get_db)) -> AdminMedia:
@@ -138,7 +139,7 @@ def transition_media(media_id: uuid.UUID, action: media.MediaAction, body: Trans
     return admin_media(db, asset)
 
 
-@router.delete("/media/{media_id}", status_code=204)
+@router.delete("/media/{media_id}", status_code=204, dependencies=[Depends(require_permission(perms.EDIT))])
 def delete_media(media_id: uuid.UUID, expected: datetime = Depends(expected_version),
                  who: Actor = Depends(actor), db: Session = Depends(get_db)) -> Response:
     root = _media_root()
