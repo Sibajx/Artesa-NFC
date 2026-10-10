@@ -15,7 +15,7 @@ import CertificarPieza from './pages/CertificarPieza';
 import DisenoCertificado from './pages/DisenoCertificado';
 import Usuarios from './pages/Usuarios';
 import Hero from './pages/Hero';
-import { RolesContext } from './roles-context';
+import { PermissionsContext, RolesContext } from './roles-context';
 import ArtesanoForm from './pages/ArtesanoForm';
 import PiezaForm from './pages/PiezaForm';
 
@@ -86,14 +86,15 @@ const icons: Record<string, ReactElement> = {
   ),
 };
 
-const menuItems = [
+// `any` = the account needs at least one of these permissions; `role` = a role (the owner's page).
+const menuItems: { name: string; path: string; any?: string[]; role?: string }[] = [
   { name: 'Resumen', path: '/resumen' },
   { name: 'Artesanos', path: '/artesanos' },
   { name: 'Piezas', path: '/piezas' },
-  { name: 'Certificación', path: '/certificacion', role: 'custodian' },
+  { name: 'Certificación', path: '/certificacion', any: ['nfc', 'revocations'] },
   { name: 'Archivados', path: '/archivados' },
   { name: 'Papelera', path: '/papelera' },
-  { name: 'Hero', path: '/hero', role: 'hero' },
+  { name: 'Hero', path: '/hero', any: ['hero'] },
   { name: 'Auditoría', path: '/auditoria' },
   { name: 'Usuarios', path: '/usuarios', role: 'owner' },
 ];
@@ -116,7 +117,9 @@ export default function App() {
 
   const email = me.data.email;
   const roles = me.data.roles ?? ['editor'];
-  const visibleItems = menuItems.filter((item) => !('role' in item) || roles.includes(item.role as string));
+  const permissions = me.data.permissions ?? [];
+  const can = (...wanted: string[]) => wanted.some((p) => permissions.includes(p));
+  const visibleItems = menuItems.filter((item) => (!item.role || roles.includes(item.role)) && (!item.any || can(...item.any)));
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-botanica-hueso">
@@ -183,6 +186,7 @@ export default function App() {
 
       <main className="flex-1 p-6 md:p-10 overflow-auto">
         <RolesContext.Provider value={roles}>
+        <PermissionsContext.Provider value={permissions}>
         <Routes>
           <Route path="/resumen" element={<Dashboard />} />
           <Route path="/artesanos/nuevo" element={<ArtesanoForm />} />
@@ -193,16 +197,17 @@ export default function App() {
           <Route path="/piezas/:id/editar" element={<PiezaForm />} />
           <Route path="/piezas/:id" element={<PiezaDetalle />} />
           <Route path="/piezas" element={<Piezas />} />
-          {roles.includes('custodian') && <Route path="/certificacion" element={<Certificacion />} />}
-          {roles.includes('custodian') && <Route path="/certificacion/:id" element={<CertificarPieza />} />}
-          {roles.includes('designer') && <Route path="/diseno/:id" element={<DisenoCertificado />} />}
+          {can('nfc', 'revocations') && <Route path="/certificacion" element={<Certificacion />} />}
+          {can('nfc', 'revocations') && <Route path="/certificacion/:id" element={<CertificarPieza />} />}
+          {can('design') && <Route path="/diseno/:id" element={<DisenoCertificado />} />}
           {roles.includes('owner') && <Route path="/usuarios" element={<Usuarios />} />}
-          {roles.includes('hero') && <Route path="/hero" element={<Hero />} />}
+          {can('hero') && <Route path="/hero" element={<Hero />} />}
           <Route path="/archivados" element={<Apartado key="archivados" mode="archivados" />} />
           <Route path="/papelera" element={<Apartado key="papelera" mode="papelera" />} />
           <Route path="/auditoria" element={<Auditoria />} />
           <Route path="*" element={<Navigate to="/resumen" replace />} />
         </Routes>
+        </PermissionsContext.Provider>
         </RolesContext.Provider>
       </main>
     </div>

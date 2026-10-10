@@ -7,13 +7,13 @@ import { MediaSection } from '../MediaSection';
 import { PaletteSection } from '../PaletteSection';
 import { VentaSection } from '../VentaSection';
 import { UbicacionSection } from '../UbicacionSection';
-import { useRoles } from '../roles-context';
+import { usePermissions } from '../roles-context';
 import { PublishChecklist } from '../PublishChecklist';
 import { RecordActions } from '../RecordActions';
 import { Badge, ErrorState, Field, Loading, PublicationBadge } from '../ui';
 
 export default function PiezaDetalle() {
-  const roles = useRoles();
+  const permissions = usePermissions();
   const { id = '' } = useParams<{ id: string }>();
   const [revision, setRevision] = useState(0);
   const state = useLoad(`piece:${id}:${revision}`, (signal) => adminApi.piece(id, signal));
@@ -142,7 +142,7 @@ export default function PiezaDetalle() {
 
             <PaletteSection key={p.updated_at} piece={p} onChanged={() => setRevision((r) => r + 1)} />
 
-            {roles.includes('designer') && (
+            {permissions.includes('design') && (
               <section className="card-elevated p-5 sm:p-6 flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="text-xl font-serif text-botanica-negro">Certificado original</h2>

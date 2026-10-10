@@ -163,9 +163,9 @@ class AccessVerifier:
         if email in self.owners:
             roles.add(OWNER)
             roles.add(HERO)
-        # Explicit permissions only apply to an account managed from Gestión that
-        # is not fixed in shared/.env (those keep what their roles give).
-        granted = permissions(email) if permissions and email not in self.allowed_emails else None
+        # An explicit list (set from the owner's matrix) narrows or widens what the
+        # roles give; the owner always has everything (AdminIdentity.permissions).
+        granted = permissions(email) if permissions else None
         return AdminIdentity(email=email, roles=frozenset(roles), granted=granted)
 
 

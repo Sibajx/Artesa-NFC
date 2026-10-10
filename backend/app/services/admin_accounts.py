@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.access import ASSIGNABLE_ROLES, CUSTODIAN, DESIGNER, DESIGNER_HERO, EDITOR, HERO
+from app.core.access import ASSIGNABLE_ROLES, CUSTODIAN, DESIGNER, DESIGNER_HERO, EDITOR, HERO, OWNER
 from app.core import permissions
 from app.core.config import get_settings
 from app.models.admin_account import AdminAccount
@@ -53,6 +53,13 @@ class AccountView:
     added_by: str | None
     added_at: datetime | None
     note: str | None
+    # What the account can do now, and whether that is a custom list (True)
+    # or just what its role gives (False).
+    permissions: tuple[str, ...] = ()
+    custom: bool = False
+    # A fixed account (shared/.env) that already has a row in Gestión, so the
+    # owner can narrow its permissions. Not removable from here.
+    imported: bool = False
 
 
 def _env_role(email: str) -> str:
@@ -64,16 +71,40 @@ def _env_role(email: str) -> str:
     return EDITOR
 
 
+def _env_roles(email: str) -> frozenset[str]:
+    s = get_settings()
+    role = _env_role(email)
+    return {CUSTODIAN: frozenset({EDITOR, DESIGNER, CUSTODIAN}), DESIGNER: frozenset({EDITOR, DESIGNER}),
+            EDITOR: frozenset({EDITOR})}[role] | ({OWNER} if email in s.owner_emails_list else frozenset())
+
+
+def _effective(roles: frozenset[str], explicit: list[str] | None) -> tuple[tuple[str, ...], bool]:
+    if OWNER in roles:
+        return tuple(permissions.ALL_PERMISSIONS), False
+    if explicit is not None:
+        granted = permissions.clean(explicit)
+        return tuple(p for p in permissions.ALL_PERMISSIONS if p in granted), True
+    derived = permissions.for_roles(roles)
+    return tuple(p for p in permissions.ALL_PERMISSIONS if p in derived), False
+
+
 def listing(db: Session) -> list[AccountView]:
     s = get_settings()
-    fixed = [AccountView(email=e, role=_env_role(e), source="configuracion", owner=e in s.owner_emails_list,
-                         added_by=None, added_at=None, note=None) for e in s.admin_emails_list]
-    fixed_emails = {a.email for a in fixed}
-    managed = [AccountView(email=a.email, role=a.role, source="gestion", owner=False, added_by=a.added_by,
-                           added_at=a.added_at, note=a.note)
-               for a in db.execute(select(AdminAccount).where(AdminAccount.active.is_(True))
-                                   .order_by(AdminAccount.added_at)).scalars()
-               if a.email not in fixed_emails]
+    rows = {a.email: a for a in db.execute(select(AdminAccount).where(AdminAccount.active.is_(True))
+                                           .order_by(AdminAccount.added_at)).scalars()}
+    fixed = []
+    for e in s.admin_emails_list:
+        perms, custom = _effective(_env_roles(e), rows[e].permissions if e in rows else None)
+        fixed.append(AccountView(email=e, role=_env_role(e), source="configuracion", owner=e in s.owner_emails_list,
+                                 added_by=None, added_at=None, note=None, permissions=perms, custom=custom,
+                                 imported=e in rows and e not in s.owner_emails_list))
+    managed = []
+    for a in rows.values():
+        if a.email in s.admin_emails_list:
+            continue
+        perms, custom = _effective(_ROLE_SETS.get(a.role, frozenset({EDITOR})), a.permissions)
+        managed.append(AccountView(email=a.email, role=a.role, source="gestion", owner=False, added_by=a.added_by,
+                                   added_at=a.added_at, note=a.note, permissions=perms, custom=custom))
     return sorted(fixed, key=lambda a: (not a.owner, a.email)) + managed
 
 
@@ -118,14 +149,68 @@ def add(db: Session, actor: Actor, email: str, role: str, note: str | None) -> N
 
 def change_role(db: Session, actor: Actor, email: str, role: str) -> None:
     email, role = _clean(email, role)
+    if _fixed(email):
+        raise ContentConflict("fixed_account", "Esta cuenta está fija en la configuración del servidor.")
     account = db.execute(select(AdminAccount).where(AdminAccount.email == email, AdminAccount.active.is_(True))
                          .with_for_update()).scalar_one_or_none()
     if account is None:
-        raise ContentConflict("fixed_account", "Esta cuenta está fija en la configuración del servidor.") \
-            if _fixed(email) else ContentNotFound("not_found", "Esa cuenta no existe.")
+        raise ContentNotFound("not_found", "Esa cuenta no existe.")
     before, account.role, account.updated_at = account.role, role, datetime.now(timezone.utc)
+    # A role is a shortcut: picking one drops any custom list and goes back to what the role gives.
+    account.permissions = None
     _audit(db, actor, "role_changed", {"email": email, "from": before, "to": role})
     db.commit()
+
+
+def set_permissions(db: Session, actor: Actor, email: str, requested: list[str] | None) -> None:
+    """Sets the account's permission checkboxes; None goes back to what its role gives.
+    The owner's permissions are fixed (all of them)."""
+    email = email.strip().lower()
+    if email in get_settings().owner_emails_list:
+        raise ContentConflict("owner_account", "El dueño siempre tiene todos los permisos.")
+    account = db.execute(select(AdminAccount).where(AdminAccount.email == email, AdminAccount.active.is_(True))
+                         .with_for_update()).scalar_one_or_none()
+    if account is None:
+        raise ContentConflict("not_imported", "Importa primero las cuentas fijas a Gestión.") \
+            if _fixed(email) else ContentNotFound("not_found", "Esa cuenta no existe.")
+    if requested is not None:
+        unknown = [p for p in requested if p not in permissions.ALL_PERMISSIONS]
+        if unknown:
+            raise ContentConflict("invalid_permission", "Permiso desconocido.", "permissions")
+        if permissions.VIEW not in requested:
+            raise ContentConflict("view_required", "Toda cuenta con acceso debe poder ver.", "permissions")
+    before = account.permissions
+    account.permissions = None if requested is None else [p for p in permissions.ALL_PERMISSIONS if p in requested]
+    account.updated_at = datetime.now(timezone.utc)
+    _audit(db, actor, "permissions_changed", {"email": email, "from": before, "to": account.permissions})
+    db.commit()
+
+
+def import_fixed(db: Session, actor: Actor) -> int:
+    """Creates a row in Gestión for every fixed account except the owner, with the permissions it has now
+    (so access does not change), so the owner can edit them from the matrix. Returns how many were created."""
+    s = get_settings()
+    now = datetime.now(timezone.utc)
+    created = 0
+    for email in s.admin_emails_list:
+        if email in s.owner_emails_list:
+            continue
+        account = db.execute(select(AdminAccount).where(AdminAccount.email == email).with_for_update()).scalar_one_or_none()
+        if account is not None and account.active:
+            continue
+        current = [p for p in permissions.ALL_PERMISSIONS if p in permissions.for_roles(_env_roles(email))]
+        if account is None:
+            db.add(AdminAccount(email=email, role=_env_role(email), active=True, permissions=current,
+                                note="Importada de la configuración del servidor", added_by=actor.identity.email,
+                                added_at=now, updated_at=now))
+        else:
+            account.role, account.active, account.permissions = _env_role(email), True, current
+            account.added_by, account.added_at, account.updated_at = actor.identity.email, now, now
+            account.removed_by = account.removed_at = None
+        _audit(db, actor, "imported", {"email": email, "permissions": current})
+        created += 1
+    db.commit()
+    return created
 
 
 def remove(db: Session, actor: Actor, email: str) -> None:

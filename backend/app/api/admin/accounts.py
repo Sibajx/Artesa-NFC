@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.api.admin.writes import _fail, actor, require_write_guard
 from app.api.deps import get_db
+from app.core import permissions as perms
 from app.core.access import FORBIDDEN_ERROR, OWNER, AdminIdentity, require_admin
 from app.core.config import get_settings
 from app.services import admin_accounts
@@ -33,10 +34,19 @@ class Account(BaseModel):
     added_by: str | None
     added_at: datetime | None
     note: str | None
+    # What the account can do now (checkbox ids, app/core/permissions.py); ``custom`` is True when the
+    # owner ticked them by hand, False when they are just what the role gives.
+    permissions: list[str]
+    custom: bool
+    # A fixed account that already has a row here, so its permissions can be edited.
+    imported: bool
 
 
 class AccountList(BaseModel):
     data: list[Account]
+    # The checkboxes in order, and what each role (a shortcut) gives.
+    catalog: list[str]
+    presets: dict[str, list[str]]
     # "synced" | "not_configured" | an error text, for the last change;
     # "unchanged" on a plain read.
     cloudflare: str
@@ -53,14 +63,22 @@ class RoleBody(BaseModel):
     role: Role
 
 
+class PermissionsBody(BaseModel):
+    # None goes back to what the account's role gives.
+    permissions: list[str] | None
+
+
 reads = APIRouter(prefix="/api/admin/v1", tags=["admin", "accounts"], dependencies=[Depends(require_owner)])
 writes = APIRouter(prefix="/api/admin/v1", tags=["admin", "accounts"],
                    dependencies=[Depends(require_owner), Depends(require_write_guard)])
 
 
 def _list(db: Session, cloudflare: str) -> AccountList:
-    return AccountList(data=[Account(**vars(a)) for a in admin_accounts.listing(db)], cloudflare=cloudflare,
-                       sync_configured=get_settings().access_sync_enabled)
+    return AccountList(data=[Account(**{**vars(a), "permissions": list(a.permissions)}) for a in admin_accounts.listing(db)],
+                       catalog=list(perms.ALL_PERMISSIONS),
+                       presets={r: [p for p in perms.ALL_PERMISSIONS if p in perms.for_roles({r})]
+                                for r in ("editor", "designer", "custodian", "hero", "designer_hero")},
+                       cloudflare=cloudflare, sync_configured=get_settings().access_sync_enabled)
 
 
 def _change(db: Session, call) -> AccountList:
@@ -94,3 +112,22 @@ def change_role(email: str, body: RoleBody, who: Actor = Depends(actor), db: Ses
 @writes.post("/accounts/{email}/remove", response_model=AccountList)
 def remove_account(email: str, who: Actor = Depends(actor), db: Session = Depends(get_db)) -> AccountList:
     return _change(db, lambda: admin_accounts.remove(db, who, email))
+
+
+@writes.post("/accounts/import-fixed", response_model=AccountList)
+def import_fixed_accounts(who: Actor = Depends(actor), db: Session = Depends(get_db)) -> AccountList:
+    try:
+        admin_accounts.import_fixed(db, who)
+    except ContentError as exc:
+        raise _fail(exc) from None
+    return _list(db, "unchanged")
+
+
+@writes.post("/accounts/{email}/permissions", response_model=AccountList)
+def set_permissions(email: str, body: PermissionsBody, who: Actor = Depends(actor),
+                    db: Session = Depends(get_db)) -> AccountList:
+    try:
+        admin_accounts.set_permissions(db, who, email, body.permissions)
+    except ContentError as exc:
+        raise _fail(exc) from None
+    return _list(db, "unchanged")
