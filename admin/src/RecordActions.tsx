@@ -6,6 +6,7 @@ import { PURGE_BLOCKERS, formatDateTime, labels, writeErrorMessage } from './for
 import { FormError } from './forms';
 import { useConfirm, useToast } from './feedback-context';
 import { usePublish } from './usePublish';
+import { usePermissions } from './roles-context';
 import type { PublishTarget } from './usePublish';
 
 interface Props {
@@ -104,6 +105,10 @@ export function RecordActions({ kind, id, version, status, availability, trashed
     }, `«${name}» eliminado`);
   }
 
+  const permissions = usePermissions();
+  const canEdit = permissions.includes('edit');
+  const canPublish = permissions.includes('publish');
+
   if (trashedAt) {
     return (
       <section aria-label="En la papelera" className="rounded-xl border border-red-200 bg-red-50/60 p-5 flex flex-col gap-3">
@@ -114,13 +119,15 @@ export function RecordActions({ kind, id, version, status, availability, trashed
             {purgeBlocker ? PURGE_BLOCKERS[purgeBlocker] ?? 'No se puede eliminar definitivamente.' : 'Puedes restaurarlo o eliminarlo definitivamente.'}
           </p>
         </div>
-        <div className="flex flex-wrap gap-3">
-          <button type="button" disabled={busy} className="btn-primary"
-            onClick={() => void run(() => adminApi.trashAction(kind, id, version, 'untrash'), `«${name}» restaurado`)}>Restaurar</button>
-          {!purgeBlocker && (
-            <button type="button" disabled={busy} onClick={() => void purge()} className="btn-danger">Eliminar definitivamente</button>
-          )}
-        </div>
+        {canEdit ? (
+          <div className="flex flex-wrap gap-3">
+            <button type="button" disabled={busy} className="btn-primary"
+              onClick={() => void run(() => adminApi.trashAction(kind, id, version, 'untrash'), `«${name}» restaurado`)}>Restaurar</button>
+            {!purgeBlocker && (
+              <button type="button" disabled={busy} onClick={() => void purge()} className="btn-danger">Eliminar definitivamente</button>
+            )}
+          </div>
+        ) : <p className="text-sm text-botanica-gris">Tu cuenta no tiene permiso para restaurarlo o eliminarlo.</p>}
       </section>
     );
   }
@@ -134,12 +141,12 @@ export function RecordActions({ kind, id, version, status, availability, trashed
     <div className="record-bar flex flex-col gap-3">
       <FormError message={error ? writeErrorMessage(error) : null} />
       <div className="flex flex-wrap items-center gap-3">
-        {status === 'draft' && (
+        {status === 'draft' && canPublish && (
           <button type="button" disabled={busy} onClick={() => void doPublish()} className="btn-primary btn-publish">
             Publicar
           </button>
         )}
-        {kind === 'artisans' && status !== 'archived' && draftPieces.length > 0 && (
+        {kind === 'artisans' && canPublish && status !== 'archived' && draftPieces.length > 0 && (
           <button type="button" disabled={busy} onClick={() => void doPublish(draftPieces, status === 'published')}
             className={status === 'draft' ? 'btn-secondary' : 'btn-primary btn-publish'}>
             {status === 'draft'
@@ -147,20 +154,20 @@ export function RecordActions({ kind, id, version, status, availability, trashed
               : `Publicar ${draftPieces.length === 1 ? 'su pieza en borrador' : `sus ${draftPieces.length} piezas en borrador`}`}
           </button>
         )}
-        {status !== 'archived' && <Link to={`${base}/${id}/editar`} className="btn-secondary">Editar</Link>}
-        {buttons.filter((b) => b.action !== 'publish').map((b) => (
+        {status !== 'archived' && canEdit && <Link to={`${base}/${id}/editar`} className="btn-secondary">Editar</Link>}
+        {canPublish && buttons.filter((b) => b.action !== 'publish').map((b) => (
           <button key={b.action} type="button" disabled={busy} onClick={() => void transition(b.action)} className="btn-secondary">
             {b.label}
           </button>
         ))}
-        {status !== 'published' && (
+        {status !== 'published' && canEdit && (
           <button type="button" disabled={busy} onClick={() => void toTrash()}
             className="btn-secondary text-red-700 border-red-200 hover:bg-red-50">Mover a la papelera</button>
         )}
         {kind === 'pieces' && availability === 'sold' && (
           <p className="ml-auto text-sm text-botanica-grafito">Disponibilidad: <strong>Vendida</strong> (se cambia cancelando la venta)</p>
         )}
-        {kind === 'pieces' && availability && availability !== 'sold' && status !== 'archived' && (
+        {kind === 'pieces' && canPublish && availability && availability !== 'sold' && status !== 'archived' && (
           <label className="flex items-center gap-2 text-sm text-botanica-grafito ml-auto">
             Disponibilidad
             <select value={availability} disabled={busy}

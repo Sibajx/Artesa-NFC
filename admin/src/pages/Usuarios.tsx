@@ -74,7 +74,7 @@ type Run = (call: () => Promise<AccountList>, done: string) => Promise<boolean>;
 
 // Persons x permissions. The owner always has everything; a fixed account (server
 // config) has to be imported first so it can be edited. A role is a shortcut.
-function Matrix({ list, busy, run }: { list: AccountList; busy: boolean; run: Run }) {
+function Matrix({ list, busy, run, onRemove }: { list: AccountList; busy: boolean; run: Run; onRemove: (a: Account) => void }) {
   const catalog = list.catalog;
   const hasFixed = list.data.some((a) => a.source === 'configuracion' && !a.owner && !a.imported);
 
@@ -116,6 +116,13 @@ function Matrix({ list, busy, run }: { list: AccountList; busy: boolean; run: Ru
                   <td className="px-4 py-3 whitespace-nowrap sticky left-0 bg-white">
                     {a.email}
                     {a.owner && <span className="ml-2 rounded-full bg-botanica-jade/10 px-2 py-0.5 text-xs text-botanica-jade">Dueño</span>}
+                    {a.note && <span className="block text-xs text-botanica-gris">{a.note}</span>}
+                    <span className="block text-xs text-botanica-gris">
+                      {a.source === 'gestion' && a.added_at ? `Alta ${formatDateTime(a.added_at)} · ${a.added_by}` : 'Configuración del servidor'}
+                    </span>
+                    {a.source === 'gestion' && !a.owner && (
+                      <button type="button" className="mt-1 text-xs text-red-700 underline" disabled={busy} aria-label={`Quitar acceso de ${a.email}`} onClick={() => onRemove(a)}>Quitar acceso</button>
+                    )}
                   </td>
                   <td className="px-3 py-3 whitespace-nowrap">
                     {a.source === 'gestion' && !a.owner ? (
@@ -226,45 +233,7 @@ export default function Usuarios() {
         <p className="text-xs text-botanica-gris">{ROLES.map((r) => `${r.label}: ${r.hint}`).join(' · ')}</p>
       </section>
 
-      <Matrix list={list} busy={busy} run={run} />
-
-      <section className="card-elevated overflow-hidden" aria-label="Personas con acceso">
-        <table className="w-full text-sm">
-          <thead className="bg-botanica-hueso/60 text-left text-xs uppercase tracking-wide text-botanica-gris">
-            <tr><th className="px-5 py-3">Correo</th><th className="px-5 py-3">Rol</th><th className="px-5 py-3 hidden md:table-cell">Alta</th><th className="px-5 py-3" /></tr>
-          </thead>
-          <tbody>
-            {list.data.map((a) => (
-              <tr key={a.email} className="border-t border-botanica-gris/10">
-                <td className="px-5 py-3 break-all">
-                  {a.email}
-                  {a.owner && <span className="ml-2 rounded-full bg-botanica-jade/10 px-2 py-0.5 text-xs text-botanica-jade">Dueño</span>}
-                  {a.note && <span className="block text-xs text-botanica-gris">{a.note}</span>}
-                </td>
-                <td className="px-5 py-3">
-                  {a.source === 'gestion' ? (
-                    <select value={a.role} disabled={busy} aria-label={`Rol de ${a.email}`}
-                      onChange={(e) => void run(() => adminApi.changeAccountRole(a.email, e.target.value), 'Rol actualizado')}
-                      className="px-2 py-1 border border-botanica-gris/30 rounded-md bg-white">
-                      {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-                    </select>
-                  ) : (
-                    <span title="Fijo en la configuración del servidor">{roleLabel(a.role)} · fijo</span>
-                  )}
-                </td>
-                <td className="px-5 py-3 hidden md:table-cell text-botanica-gris">
-                  {a.source === 'gestion' && a.added_at ? `${formatDateTime(a.added_at)} · ${a.added_by}` : 'Configuración del servidor'}
-                </td>
-                <td className="px-5 py-3 text-right">
-                  {a.source === 'gestion' && (
-                    <button type="button" className="btn-secondary text-red-700 border-red-200" disabled={busy} onClick={() => void remove(a)}>Quitar</button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
+      <Matrix list={list} busy={busy} run={run} onRemove={(a) => void remove(a)} />
     </div>
   );
 }
