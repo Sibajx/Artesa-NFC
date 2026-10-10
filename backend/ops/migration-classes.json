@@ -64,6 +64,10 @@
     "be517598c1d4": {
       "class": "additive",
       "note": "Creates certificate_art (content-addressed artwork for original certificates, ADR-030 phase 5b). Older code never reads it; a design that references art renders without it under older code. Prefer a code-only rollback: the downgrade drops the table and with it the art of frozen designs."
+    },
+    "c8f1d2a7b9e4": {
+      "class": "additive",
+      "note": "Adds the site_image table (images of the public site that Gestión can replace, P-029). Nothing existing changes and no row is seeded; older code ignores the table, so a rollback is compatible."
     }
   }
 }

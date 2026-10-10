@@ -181,3 +181,17 @@ export interface HeroCampaign {
 export interface HeroEnvelope {
   readonly data: HeroCampaign | null;
 }
+
+// GET /site-images (P-029): the replaceable images of the public site by slot;
+// a slot without an entry keeps the image built into the page.
+export interface SiteImageFiles {
+  readonly avif: string;
+  readonly webp: string;
+  readonly jpg: string;
+  readonly width: number;
+  readonly height: number;
+}
+
+export interface SiteImagesEnvelope {
+  readonly data: Readonly<Record<string, SiteImageFiles>>;
+}
