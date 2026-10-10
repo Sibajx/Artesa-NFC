@@ -21,7 +21,7 @@ from app.api.admin.writes import ADMIN_WRITE_HEADER, CSRF_ERROR, _fail, _same_or
 from app.api.deps import get_db
 from app.core.access import FORBIDDEN_ERROR, HERO, AdminIdentity, require_admin
 from app.core.config import get_settings
-from app.services import hero
+from app.services import hero, site_images
 from app.services.content import Actor, ContentError
 
 UPLOAD_TYPES = frozenset({"video/mp4", "video/webm", "video/quicktime", "application/octet-stream"})
@@ -254,3 +254,102 @@ async def upload_video(campaign_id: uuid.UUID, request: Request, background: Bac
         raise
     background.add_task(hero.run_job, campaign_id, settings.media_public_dir, original, start)
     return _state(db)
+
+
+# --- P-029: replaceable images of the public site (same role as the seasons) ---------------
+
+IMAGE_TYPES = frozenset({"image/jpeg", "image/png", "image/webp", "application/octet-stream"})
+IMAGE_TYPE_ERROR = {"code": "unsupported_media_type", "message": "Send the photo as the body with its own content type."}
+IMAGE_TOO_LARGE_ERROR = {"code": "too_large", "message": "La foto pesa más de 25 MB."}
+
+
+def require_image_guard(request: Request) -> None:
+    if request.headers.get(ADMIN_WRITE_HEADER) != "1" or not _same_origin(request):
+        raise HTTPException(status_code=403, detail=CSRF_ERROR)
+    if request.headers.get("content-type", "").split(";")[0].strip().lower() not in IMAGE_TYPES:
+        raise HTTPException(status_code=415, detail=IMAGE_TYPE_ERROR)
+
+
+async def _read_bytes(request: Request, limit: int) -> bytes:
+    declared = request.headers.get("content-length")
+    if declared and declared.isascii() and declared.isdigit() and int(declared) > limit:
+        raise HTTPException(status_code=413, detail=IMAGE_TOO_LARGE_ERROR)
+    chunks: list[bytes] = []
+    received = 0
+    async for chunk in request.stream():
+        received += len(chunk)
+        if received > limit:
+            raise HTTPException(status_code=413, detail=IMAGE_TOO_LARGE_ERROR)
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+class SiteImageOut(BaseModel):
+    avif: str
+    webp: str
+    jpg: str
+    width: int
+    height: int
+    updated_by: str | None
+    updated_at: datetime
+
+
+class SiteSlotOut(BaseModel):
+    slot: str
+    label: str
+    ratio: str
+    image: SiteImageOut | None
+
+
+class SiteImagesState(BaseModel):
+    media_enabled: bool
+    slots: list[SiteSlotOut]
+
+
+def _site_state(db: Session) -> SiteImagesState:
+    rows = site_images.all_images(db)
+    return SiteImagesState(
+        media_enabled=get_settings().media_enabled,
+        slots=[SiteSlotOut(
+            slot=slot.key, label=slot.label, ratio=f"{slot.ratio[0]}:{slot.ratio[1]}",
+            image=SiteImageOut(avif=row.avif, webp=row.webp, jpg=row.jpg, width=row.width, height=row.height,
+                               updated_by=row.updated_by, updated_at=row.updated_at) if (row := rows.get(slot.key)) else None,
+        ) for slot in site_images.SLOTS.values()],
+    )
+
+
+images = APIRouter(prefix="/api/admin/v1/hero", tags=["admin", "hero"],
+                   dependencies=[Depends(require_hero), Depends(require_image_guard)])
+
+
+@reads.get("/site-images", response_model=SiteImagesState)
+def get_site_images(db: Session = Depends(get_db)) -> SiteImagesState:
+    return _site_state(db)
+
+
+@images.post("/site-images/{slot}", response_model=SiteImagesState)
+async def upload_site_image(slot: str, request: Request, who: Actor = Depends(actor),
+                            db: Session = Depends(get_db)) -> SiteImagesState:
+    root = _public_root()
+    if root is None:
+        raise HTTPException(status_code=503, detail={"code": "media_unavailable",
+                                                     "message": "El servidor no tiene carpeta de medios configurada."})
+    try:
+        site_images.slot_of(slot)
+    except ContentError as exc:
+        raise _fail(exc) from None
+    data = await _read_bytes(request, site_images.MAX_BYTES)
+    try:
+        await run_in_threadpool(site_images.set_image, db, who, root, slot, data)
+    except ContentError as exc:
+        raise _fail(exc) from None
+    return _site_state(db)
+
+
+@writes.delete("/site-images/{slot}", response_model=SiteImagesState)
+def clear_site_image(slot: str, who: Actor = Depends(actor), db: Session = Depends(get_db)) -> SiteImagesState:
+    try:
+        site_images.clear(db, who, _public_root(), slot)
+    except ContentError as exc:
+        raise _fail(exc) from None
+    return _site_state(db)

@@ -491,6 +491,7 @@ producto por adelantado.
     - `changes` ("Quiero cambios") exige un comentario de al menos 3 letras (`comment_required` si falta) y **no despublica nada**;
     - `decline` ("No autorizo") pasa a borrador, en la misma transacción, al artesano y a sus piezas publicadas. Lo audita el sistema (`artisan.unpublished`/`piece.unpublished` con `reason: authorization_declined`).
   - Las dos rutas tienen el límite de 1 KB y `no-store`.
+  - Cuando la respuesta es `changes` o `decline`, el sistema avisa por correo a los dueños (`OWNER_EMAILS`) en segundo plano: el nombre del artesano, lo que escribió y un enlace a Gestión, sin el enlace del artesano ni su contacto. Sin correo configurado o si el envío falla, la respuesta queda registrada igual.
 - **API de Gestión, autorización:**
   - `POST /artisans/{id}/authorization/request` → `{url, whatsapp, contact_name, artisan_name}`. Es la única respuesta con el enlace; vale 14 días y reemplaza al pendiente. Con una autorización **en persona** también se puede pedir: es la confirmación por WhatsApp, y la autorización sigue valiendo mientras el enlace está abierto. Con una autorización por WhatsApp responde `409 already_authorized`;
   - `POST /artisans/{id}/authorization/record` `{note}`, cuando el artesano autorizó en persona;
@@ -1035,7 +1036,7 @@ verificada para `GET|HEAD /media/*` el 2026-09-30 (`OPERATIONS.md` §8).
 
 **Público.** `GET /api/v1/hero` → `{"data": null}` o `{"data": {"slug", "name", "reason": "forced"|"date"|"default", "video": {"mp4", "webm"|null}, "poster"}}`. Las URLs son rutas `/media/hero/{slug}/{hash}.{mp4|webm|jpg}` contra el origen de la API. `Cache-Control: public, max-age=300`. `data: null` = el sitio conserva su hero incluido. Elige, en orden: la temporada **forzada** (si no pasó su fecha de fin), una **publicada** cuyo rango anual cubre hoy en `America/Mexico_City` (si varias, la que empezó más tarde), el hero normal **publicado**.
 
-**Gestión** (`/api/admin/v1/hero`, solo rol `hero` y dueño; los demás reciben 403). Escrituras con `X-Artesa-Admin: 1` y JSON; sin `If-Match` (dos personas, cambios simples). Todas devuelven el estado completo.
+**Gestión** (`/api/admin/v1/hero`, solo los roles `hero` y `designer_hero` (Diseñador y Hero) y el dueño; los demás reciben 403). Escrituras con `X-Artesa-Admin: 1` y JSON; sin `If-Match` (dos personas, cambios simples). Todas devuelven el estado completo.
 
 | Método y ruta | Qué hace |
 |---|---|
@@ -1048,6 +1049,22 @@ verificada para `GET|HEAD /media/*` el 2026-09-30 (`OPERATIONS.md` §8).
 | `POST /hero/force` `{campaign_id, until?}` · `DELETE /hero/force` | Muestra una temporada para todos ya, con fin opcional; solo una a la vez. |
 
 Errores: `no_video`, `already_processing`, `ffmpeg_unavailable`, `unsupported_media_type`, `too_large` (413), `not_a_video`, `encode_failed`, `too_heavy`, `invalid_date`, `invalid_name`, `default_campaign`, `forced_campaign`. Auditoría: `hero.*`.
+
+### 14.5 Imágenes del sitio (P-029, 2026-10-10)
+
+Fotos fijas de la página pública que el dueño y los roles `hero` y `designer_hero` pueden cambiar desde Gestión → Hero → «Imágenes del sitio». Cada **ranura** es un lugar de la página; hoy solo existe `collection-entry` («Entrada a la colección», proporción 4:5, hasta 1200×1500). Una ranura sin foto conserva la imagen provisional incluida en el sitio.
+
+**Público.** `GET /api/v1/site-images` → `{"data": {"<ranura>": {"avif", "webp", "jpg", "width", "height"}}}`; solo aparecen las ranuras con foto. Las URLs son rutas `/media/sitio/{ranura}/{hash}.{avif|webp|jpg}` contra el origen de la API. `Cache-Control: public, max-age=300`.
+
+**Gestión** (`/api/admin/v1/hero/site-images`, mismo rol que las temporadas; los demás reciben 403):
+
+| Método y ruta | Qué hace |
+|---|---|
+| `GET /hero/site-images` | Estado: `media_enabled` y `slots[]` (`slot`, `label`, `ratio`, `image` o `null`). |
+| `POST /hero/site-images/{ranura}` | Sube la foto **como cuerpo** (`image/jpeg`, `image/png` o `image/webp`, hasta 25 MB, con `X-Artesa-Admin: 1`). Se recorta al centro a la proporción de la ranura, se limita a su ancho máximo y se guarda en AVIF + WebP + JPEG sin metadatos. Mínimo 600 px de ancho en esa proporción. 200 con el estado completo. |
+| `DELETE /hero/site-images/{ranura}` | Vuelve a la imagen provisional y borra los archivos. |
+
+Errores: `unsupported_type` (422), `empty_file` (422), `too_small` (422), `image_too_large` (422), `too_large` (413), `unsupported_media_type` (415), `avif_unavailable` (503), `media_unavailable` (503), `not_found` (404, ranura desconocida).
 
 ## 15. Estado de las decisiones
 

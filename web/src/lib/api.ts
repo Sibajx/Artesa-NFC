@@ -25,6 +25,7 @@ import type {
   AuthorizationDecision,
   DesignReviewOpen,
   HeroEnvelope,
+  SiteImagesEnvelope,
   ListEnvelope,
   Piece,
   PieceSummary,
@@ -145,6 +146,19 @@ export const isHeroEnvelope: Validator<HeroEnvelope> = (p): p is HeroEnvelope =>
   );
 };
 
+export const isSiteImagesEnvelope: Validator<SiteImagesEnvelope> = (p): p is SiteImagesEnvelope =>
+  isRecord(p) &&
+  isRecord(p.data) &&
+  Object.values(p.data).every(
+    (f) =>
+      isRecord(f) &&
+      isString(f.avif) &&
+      isString(f.webp) &&
+      isString(f.jpg) &&
+      typeof f.width === "number" &&
+      typeof f.height === "number",
+  );
+
 function isCertificateAuthentic(payload: unknown): payload is CertificateAuthentic {
   if (!isRecord(payload) || !isRecord(payload.authenticity)) return false;
   const auth = payload.authenticity;
@@ -239,6 +253,8 @@ export function createApiClient(options: ApiClientOptions = {}) {
     getArtisan: (slug: string) => getJson(`/artisans/${segment(slug)}`, isArtisan),
     // P-028: the home hero's campaign for today (null = keep the built-in hero).
     getHero: () => getJson("/hero", isHeroEnvelope),
+    // P-029: photos of the public site that Gestión can replace (by slot).
+    getSiteImages: () => getJson("/site-images", isSiteImagesEnvelope),
 
     // POST /certificates/resolve (§7). Never logs the token, the URL or the
     // payload; the token only lives in this call's request body.

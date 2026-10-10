@@ -10,7 +10,7 @@ import ipaddress
 from datetime import datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -84,6 +84,9 @@ def resolve(body: TokenBody, db: Session = Depends(get_db)) -> AuthorizationOpen
 
 
 @router.post("/decision", response_model=DecisionResult)
-def decision(body: DecisionBody, request: Request, db: Session = Depends(get_db)) -> DecisionResult:
-    return DecisionResult(status=authorizations.decide(db, body.token, decision=body.decision,
-                                                       comment=body.comment, ip=_ip(request)))
+def decision(body: DecisionBody, request: Request, background: BackgroundTasks,
+             db: Session = Depends(get_db)) -> DecisionResult:
+    # The owner's email goes out after the response (the relay can take seconds).
+    return DecisionResult(status=authorizations.decide(
+        db, body.token, decision=body.decision, comment=body.comment, ip=_ip(request),
+        on_recorded=lambda *notice: background.add_task(authorizations.notify_operators, *notice)))

@@ -184,3 +184,40 @@ describe("getHero (P-028)", () => {
     });
   });
 });
+
+describe("getSiteImages (P-029)", () => {
+  const config = apiConfigFor("artesanfc.com");
+  const clientFor = (status: number, body: unknown) =>
+    createApiClient({
+      config,
+      fetch: async () => new Response(JSON.stringify(body), { status }),
+    });
+  const files = {
+    avif: "/media/sitio/collection-entry/a.avif",
+    webp: "/media/sitio/collection-entry/a.webp",
+    jpg: "/media/sitio/collection-entry/a.jpg",
+    width: 1200,
+    height: 1500,
+  };
+
+  it("returns the images by slot, or an empty map when none was replaced", async () => {
+    expect(await clientFor(200, { data: { "collection-entry": files } }).getSiteImages()).toEqual({
+      kind: "ok",
+      data: { data: { "collection-entry": files } },
+    });
+    expect(await clientFor(200, { data: {} }).getSiteImages()).toEqual({
+      kind: "ok",
+      data: { data: {} },
+    });
+  });
+
+  it("rejects a body that is not the contract and treats errors as unavailable", async () => {
+    expect(
+      await clientFor(200, { data: { "collection-entry": { jpg: "/x.jpg" } } }).getSiteImages(),
+    ).toEqual({ kind: "unavailable", reason: "malformed" });
+    expect(await clientFor(503, {}).getSiteImages()).toEqual({
+      kind: "unavailable",
+      reason: "server_error",
+    });
+  });
+});

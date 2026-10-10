@@ -12,6 +12,7 @@ from app.api.admin.designs import art_router as admin_designs_art
 from app.api.admin.designs import writes as admin_designs_writes
 from app.api.admin.exports import router as admin_exports_router
 from app.api.admin.custody import writes_router as admin_custody_writes_router
+from app.api.admin.hero import images as admin_hero_images
 from app.api.admin.hero import reads as admin_hero_reads
 from app.api.admin.hero import uploads as admin_hero_uploads
 from app.api.admin.hero import writes as admin_hero_writes
@@ -164,6 +165,38 @@ class AdminNoStoreMiddleware:
         await self.app(scope, receive, send_with_no_store)
 
 
+class SecurityHeadersMiddleware:
+    """Baseline security headers on every response of the API and of /media/ (audit
+    2026-10-10; the site already sends them from public/_headers). A header the
+    app set itself is left as it is. HSTS only matters over HTTPS (browsers ignore
+    it on the loopback origin) and no other host is under this one."""
+
+    _HEADERS = (
+        ("X-Content-Type-Options", "nosniff"),
+        ("Referrer-Policy", "no-referrer"),
+        ("X-Frame-Options", "DENY"),
+        ("Strict-Transport-Security", "max-age=31536000; includeSubDomains"),
+    )
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_with_headers(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+                for name, value in self._HEADERS:
+                    if name not in headers:
+                        headers[name] = value
+            await send(message)
+
+        await self.app(scope, receive, send_with_headers)
+
+
 _docs_urls: dict[str, None] = (
     {} if settings.docs_enabled else {"docs_url": None, "redoc_url": None, "openapi_url": None}
 )
@@ -197,6 +230,8 @@ app.add_middleware(
 )
 # Outermost: /media/ is answered before CORS and the app (app/core/media_files.py).
 app.add_middleware(MediaFilesMiddleware)
+# Outermost of all: every response, /media/ included, carries the baseline headers.
+app.add_middleware(SecurityHeadersMiddleware)
 register_exception_handlers(app)
 app.include_router(api_v1_router)
 # Always mounted; without the admin configuration require_admin answers 404.
@@ -217,6 +252,7 @@ app.include_router(admin_upload_router)
 app.include_router(admin_hero_reads)
 app.include_router(admin_hero_writes)
 app.include_router(admin_hero_uploads)
+app.include_router(admin_hero_images)
 app.include_router(admin_writes_router)
 app.include_router(admin_media_router)
 

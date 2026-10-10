@@ -20,9 +20,11 @@ is stored only as SHA-256 and never audited.
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
 import secrets
 import uuid
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func, select
@@ -35,7 +37,10 @@ from app.models.audit_event import AuditActorType, AuditEvent, AuditResult
 from app.models.enums import PublicationStatus
 from app.models.media_asset import MediaAsset, MediaAssetStatus, MediaRole
 from app.models.piece import Piece
+from app.services import mailer
 from app.services.content import Actor, ContentConflict, ContentNotFound
+
+logger = logging.getLogger(__name__)
 
 LINK_DAYS = 14
 _PATH = "/autorizacion/#"
@@ -202,9 +207,43 @@ def _unpublish_all(db: Session, artisan_id: uuid.UUID, authorization_id: uuid.UU
     return done
 
 
-def decide(db: Session, token: str, *, decision: str, comment: str | None, ip: str | None) -> str:
+GESTION_URL = "https://gestion.artesanfc.com/"
+_NOTICE_SUBJECT = {
+    "changes": "ArtesaNFC: {name} pidió cambios antes de autorizar",
+    "decline": "ArtesaNFC: {name} no autorizó su publicación",
+}
+_NOTICE_BODY = {
+    "changes": "{name} respondió a su enlace de autorización y pidió cambios.\n\n{said}"
+               "Corrige lo que pide en Gestión y manda un enlace nuevo desde su ficha: {url}\n"
+               "Mientras tanto, lo que ya estaba publicado sigue publicado.\n",
+    "decline": "{name} respondió a su enlace de autorización y no autorizó.\n\n{said}"
+               "Su ficha y sus piezas volvieron a borrador y ya no se ven en el sitio. Revísalo en Gestión: {url}\n",
+}
+
+
+def notify_operators(name: str, decision: str, note: str | None) -> None:
+    """Tells the owner(s) by email that an artisan asked for changes or declined, so it
+    does not wait unseen in Gestión. Best effort: without mail settings, or if the relay
+    fails, nothing is sent and the artisan's answer is untouched. No link, token or
+    contact data goes in the message, and nothing here logs a recipient."""
+    settings = get_settings()
+    if decision not in _NOTICE_SUBJECT or not settings.mail_configured:
+        return
+    said = f"Lo que escribió:\n«{note}»\n\n" if note else ""
+    subject = _NOTICE_SUBJECT[decision].format(name=name)
+    body = _NOTICE_BODY[decision].format(name=name, said=said, url=GESTION_URL)
+    for to in settings.owner_emails_list:
+        try:
+            mailer.send_email(to, subject, body)
+        except (mailer.MailUnavailable, mailer.MailError, ValueError) as exc:  # ValueError: a header with a line break
+            logger.warning("authorization notice not sent: %s", type(exc).__name__)
+
+
+def decide(db: Session, token: str, *, decision: str, comment: str | None, ip: str | None,
+           on_recorded: Callable[[str, str, str | None], None] | None = None) -> str:
     """``recorded``, ``unavailable`` (unknown, expired or already answered
-    link) or ``comment_required`` ("Quiero cambios" without saying what)."""
+    link) or ``comment_required`` ("Quiero cambios" without saying what).
+    ``on_recorded(name, decision, note)`` runs after the answer is saved."""
     if decision not in DECISIONS:  # pragma: no cover - the router validates it
         raise ValueError(decision)
     note = (comment or "").strip()[:500] or None
@@ -229,7 +268,11 @@ def decide(db: Session, token: str, *, decision: str, comment: str | None, ip: s
     action = {"authorize": "authorized", "changes": "authorization_changes_requested",
               "decline": "authorization_declined"}[decision]
     _audit(db, actor=None, artisan_id=row.artisan_id, ip=ip, action=action, metadata=metadata)
+    artisan = db.get(Artisan, row.artisan_id)
+    name = (artisan.full_name if artisan else None) or "Un artesano"
     db.commit()
+    if on_recorded is not None and decision in ("changes", "decline"):
+        on_recorded(name, decision, note)
     return "recorded"
 
 

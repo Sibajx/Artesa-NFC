@@ -162,7 +162,7 @@ export default function App() {
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium text-botanica-negro truncate" title={email}>{email}</p>
               <p className="text-xs text-botanica-gris">
-                {roles.includes('owner') ? 'Dueño' : roles.includes('custodian') ? 'Custodio' : roles.includes('designer') ? 'Diseñador' : roles.includes('hero') ? 'Hero y contenido' : 'Editor de contenido'}
+                {roles.includes('owner') ? 'Dueño' : roles.includes('custodian') ? 'Custodio' : roles.includes('designer') && roles.includes('hero') ? 'Diseñador y Hero' : roles.includes('designer') ? 'Diseñador' : roles.includes('hero') ? 'Hero y contenido' : 'Editor de contenido'}
               </p>
             </div>
             <a

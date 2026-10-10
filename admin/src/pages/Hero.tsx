@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { DragEvent } from 'react';
-import { ApiError, adminApi, mediaUrl } from '../api';
-import type { HeroCampaign, HeroState } from '../api';
+import { ApiError, MAX_UPLOAD_BYTES, adminApi, mediaUrl } from '../api';
+import type { HeroCampaign, HeroState, SiteImagesState, SiteSlot } from '../api';
 import { writeErrorMessage } from '../format';
 import { useConfirm, useToast } from '../feedback-context';
 import { useLoad } from '../hooks';
@@ -320,6 +320,157 @@ function NewCampaign({ busy, onCreate }: { busy: boolean; onCreate: (name: strin
   );
 }
 
+// P-029: the site's fixed photos. One card per slot; a slot without a photo keeps
+// the provisional image built into the site.
+const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+function SiteSlotCard({ slot, enabled, busy, onUpload, onClear }: {
+  slot: SiteSlot;
+  enabled: boolean;
+  busy: boolean;
+  onUpload: (file: File) => void;
+  onClear: () => void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const [over, setOver] = useState(false);
+  const [rw, rh] = slot.ratio.split(':').map(Number);
+
+  function pick(file: File | undefined) {
+    if (file && enabled && !busy) onUpload(file);
+  }
+
+  return (
+    <section className="card-elevated flex flex-col gap-3" aria-label={slot.label}>
+      <header className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="font-serif text-xl text-botanica-negro">{slot.label}</h3>
+        <Badge tone={slot.image ? 'jade' : 'neutral'}>{slot.image ? 'Foto propia' : 'Imagen provisional'}</Badge>
+      </header>
+      <div
+        className="w-full max-w-xs overflow-hidden rounded-xl border border-botanica-gris/15 bg-botanica-hueso"
+        style={{ aspectRatio: `${rw} / ${rh}` }}
+      >
+        {slot.image ? (
+          <picture>
+            <source type="image/avif" srcSet={mediaUrl(`/media/${slot.image.avif}`)} />
+            <source type="image/webp" srcSet={mediaUrl(`/media/${slot.image.webp}`)} />
+            <img src={mediaUrl(`/media/${slot.image.jpg}`)} width={slot.image.width} height={slot.image.height}
+              alt={`Vista previa de ${slot.label}`} className="h-full w-full object-cover" />
+          </picture>
+        ) : (
+          <div className="flex h-full items-center justify-center p-4 text-center text-sm text-botanica-gris">
+            El sitio muestra su imagen provisional
+          </div>
+        )}
+      </div>
+      <div
+        onDragOver={(e) => { e.preventDefault(); if (enabled && !busy) setOver(true); }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(e) => { e.preventDefault(); setOver(false); pick(e.dataTransfer.files[0]); }}
+        className={`rounded-xl border-2 border-dashed p-4 text-center text-sm transition-colors ${
+          over ? 'border-botanica-jade bg-botanica-jade/5' : 'border-botanica-gris/30'
+        } ${!enabled || busy ? 'opacity-60' : ''}`}
+      >
+        <p className="text-botanica-grafito">{slot.image ? 'Arrastra otra foto aquí para reemplazarla' : 'Arrastra la foto aquí'}</p>
+        <button type="button" className="btn-secondary mt-2" disabled={!enabled || busy} onClick={() => input.current?.click()}>
+          {busy ? 'Subiendo…' : slot.image ? 'Cambiar foto' : 'Elegir foto'}
+        </button>
+        <input
+          ref={input}
+          type="file"
+          accept={IMAGE_TYPES.join(',')}
+          className="sr-only"
+          aria-label={`Foto para ${slot.label}`}
+          onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; pick(file); }}
+        />
+        <p className="mt-2 text-xs text-botanica-gris">
+          JPEG, PNG o WebP, hasta 25 MB. Se recorta al centro en proporción {slot.ratio} y se convierte sola; mínimo 600 px de ancho.
+          Cambios visibles en el sitio en unos 5 minutos.
+        </p>
+      </div>
+      {slot.image && (
+        <p className="text-xs text-botanica-gris">
+          {slot.image.width} × {slot.image.height} px{slot.image.updated_by ? ` · subida por ${slot.image.updated_by}` : ''}
+        </p>
+      )}
+      {slot.image && (
+        <div>
+          <button type="button" className="btn-secondary" disabled={busy} onClick={onClear}>Quitar y volver a la provisional</button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SiteImages() {
+  const loaded = useLoad('site-images', (signal) => adminApi.siteImages(signal));
+  const [changed, setChanged] = useState<SiteImagesState | null>(null);
+  const state = changed ?? (loaded.status === 'ready' ? loaded.data : null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const confirm = useConfirm();
+  const toast = useToast();
+
+  async function run(slot: string, call: () => Promise<SiteImagesState>, done: string) {
+    setBusy(slot);
+    setError(null);
+    try {
+      setChanged(await call());
+      toast(done);
+    } catch (e) {
+      setError(message(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function upload(slot: SiteSlot, file: File) {
+    if (!IMAGE_TYPES.includes(file.type)) {
+      toast('Sube una foto JPEG, PNG o WebP.', 'error');
+      return;
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      toast('La foto pesa más de 25 MB.', 'error');
+      return;
+    }
+    await run(slot.slot, () => adminApi.uploadSiteImage(slot.slot, file, file.type), 'Foto subida');
+  }
+
+  async function clear(slot: SiteSlot) {
+    const answer = await confirm({
+      title: `¿Quitar la foto de «${slot.label}»?`,
+      body: 'El sitio vuelve a mostrar su imagen provisional y la foto se borra del servidor.',
+      confirmLabel: 'Quitar',
+      tone: 'danger',
+    });
+    if (answer !== null) await run(slot.slot, () => adminApi.clearSiteImage(slot.slot), 'Se volvió a la imagen provisional');
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <header>
+        <h2 className="text-3xl font-serif text-botanica-negro tracking-tight mb-1">Imágenes del sitio</h2>
+        <p className="text-botanica-grafito">Fotos fijas de la página pública, aparte de las temporadas del hero.</p>
+      </header>
+      {loaded.status === 'loading' && <Loading label="Cargando las imágenes..." />}
+      {loaded.status === 'error' && <div className="card-elevated"><ErrorState error={loaded.error} /></div>}
+      {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
+      {state && !state.media_enabled && (
+        <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+          El servidor no tiene configurada la carpeta de medios, así que no se pueden subir fotos.
+        </p>
+      )}
+      {state && (
+        <div className="grid gap-6 lg:grid-cols-2">
+          {state.slots.map((slot) => (
+            <SiteSlotCard key={slot.slot} slot={slot} enabled={state.media_enabled} busy={busy === slot.slot}
+              onUpload={(f) => void upload(slot, f)} onClear={() => void clear(slot)} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Hero() {
   const loaded = useLoad('hero', (signal) => adminApi.hero(signal));
   // The latest answer (from a change or a poll) wins over the first load.
@@ -397,6 +548,9 @@ export default function Hero() {
           <CampaignCard key={c.id} campaign={c} state={state} busy={busy} run={run} />
         ))}
       </div>
+
+      <hr className="border-botanica-gris/20" />
+      <SiteImages />
     </div>
   );
 }
