@@ -14,6 +14,7 @@ import Certificacion from './pages/Certificacion';
 import CertificarPieza from './pages/CertificarPieza';
 import DisenoCertificado from './pages/DisenoCertificado';
 import Usuarios from './pages/Usuarios';
+import Hero from './pages/Hero';
 import { RolesContext } from './roles-context';
 import ArtesanoForm from './pages/ArtesanoForm';
 import PiezaForm from './pages/PiezaForm';
@@ -68,6 +69,13 @@ const icons: Record<string, ReactElement> = {
       <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
     </svg>
   ),
+  Hero: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="2" y="4" width="20" height="14" rx="2"/>
+      <polygon points="10 8.5 15 11 10 13.5 10 8.5"/>
+      <line x1="7" y1="21" x2="17" y2="21"/>
+    </svg>
+  ),
   Auditoría: (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -85,6 +93,7 @@ const menuItems = [
   { name: 'Certificación', path: '/certificacion', role: 'custodian' },
   { name: 'Archivados', path: '/archivados' },
   { name: 'Papelera', path: '/papelera' },
+  { name: 'Hero', path: '/hero', role: 'hero' },
   { name: 'Auditoría', path: '/auditoria' },
   { name: 'Usuarios', path: '/usuarios', role: 'owner' },
 ];
@@ -153,7 +162,7 @@ export default function App() {
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium text-botanica-negro truncate" title={email}>{email}</p>
               <p className="text-xs text-botanica-gris">
-                {roles.includes('owner') ? 'Dueño' : roles.includes('custodian') ? 'Custodio' : roles.includes('designer') ? 'Diseñador' : 'Editor de contenido'}
+                {roles.includes('owner') ? 'Dueño' : roles.includes('custodian') ? 'Custodio' : roles.includes('designer') ? 'Diseñador' : roles.includes('hero') ? 'Hero y contenido' : 'Editor de contenido'}
               </p>
             </div>
             <a
@@ -188,6 +197,7 @@ export default function App() {
           {roles.includes('custodian') && <Route path="/certificacion/:id" element={<CertificarPieza />} />}
           {roles.includes('designer') && <Route path="/diseno/:id" element={<DisenoCertificado />} />}
           {roles.includes('owner') && <Route path="/usuarios" element={<Usuarios />} />}
+          {roles.includes('hero') && <Route path="/hero" element={<Hero />} />}
           <Route path="/archivados" element={<Apartado key="archivados" mode="archivados" />} />
           <Route path="/papelera" element={<Apartado key="papelera" mode="papelera" />} />
           <Route path="/auditoria" element={<Auditoria />} />

@@ -13,6 +13,7 @@ const ROLES: { value: Account['role']; label: string; hint: string }[] = [
   { value: 'editor', label: 'Editor', hint: 'Artesanos, piezas, fotos, ventas' },
   { value: 'designer', label: 'Diseñador', hint: 'Lo anterior y el diseño de certificados' },
   { value: 'custodian', label: 'Custodio', hint: 'Todo: chips, tarjetas y certificados' },
+  { value: 'hero', label: 'Hero', hint: 'Editor que también maneja los videos del hero del sitio' },
 ];
 const roleLabel = (r: string) => ROLES.find((x) => x.value === r)?.label ?? r;
 

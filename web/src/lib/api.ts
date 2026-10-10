@@ -24,6 +24,7 @@ import type {
   ArtisanAuthorizationOpen,
   AuthorizationDecision,
   DesignReviewOpen,
+  HeroEnvelope,
   ListEnvelope,
   Piece,
   PieceSummary,
@@ -129,6 +130,21 @@ export const isArtisan: Validator<Artisan> = (a): a is Artisan =>
   Array.isArray(a.media) &&
   Array.isArray(a.techniques);
 
+export const isHeroEnvelope: Validator<HeroEnvelope> = (p): p is HeroEnvelope => {
+  if (!isRecord(p) || !("data" in p)) return false;
+  const c = p.data;
+  if (c === null) return true;
+  return (
+    isRecord(c) &&
+    isString(c.slug) &&
+    isString(c.name) &&
+    isString(c.poster) &&
+    isRecord(c.video) &&
+    isString(c.video.mp4) &&
+    (c.video.webm === null || isString(c.video.webm))
+  );
+};
+
 function isCertificateAuthentic(payload: unknown): payload is CertificateAuthentic {
   if (!isRecord(payload) || !isRecord(payload.authenticity)) return false;
   const auth = payload.authenticity;
@@ -221,6 +237,8 @@ export function createApiClient(options: ApiClientOptions = {}) {
     getPiece: (slug: string) => getJson(`/pieces/${segment(slug)}`, isPiece),
     getArtisans: () => getJson("/artisans", isListOf(isArtisanSummary)),
     getArtisan: (slug: string) => getJson(`/artisans/${segment(slug)}`, isArtisan),
+    // P-028: the home hero's campaign for today (null = keep the built-in hero).
+    getHero: () => getJson("/hero", isHeroEnvelope),
 
     // POST /certificates/resolve (§7). Never logs the token, the URL or the
     // payload; the token only lives in this call's request body.

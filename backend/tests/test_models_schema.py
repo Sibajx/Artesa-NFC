@@ -14,7 +14,7 @@ from app.models.nfc_tag import NfcTagStatus
 # 904d7f9d6509).
 EXPECTED_TABLES = {"artisan", "piece", "media_asset", "certificate", "nfc_tag", "audit_event", "ownership_card",
                    "piece_claim", "owner_verification", "certificate_design", "sale",
-                   "admin_account", "artisan_authorization", "alembic_version"}
+                   "admin_account", "artisan_authorization", "hero_campaign", "alembic_version"}
 
 
 def test_migration_head_creates_only_expected_tables():

@@ -1,7 +1,7 @@
 """Serves /media/ from MEDIA_ROOT/publico (docs/MEDIA.md section 4, option A).
 
 Only paths shaped like what the upload service writes are served:
-``{artesanos|piezas|sitio}/{slug}/{name}.{ext}``, lowercase, with an allowed
+``{artesanos|piezas|sitio|hero}/{slug}/{name}.{ext}``, lowercase, with an allowed
 extension. Anything else (``..``, encoded separators, hidden files, other
 extensions, originales/) is a 404 before the filesystem is touched, and the
 resolved file must still sit under publico/ as a regular file (no symlink
@@ -39,7 +39,7 @@ from app.core.errors import error_response
 MEDIA_PREFIX = "/media/"
 _SEGMENT = r"[a-z0-9]+(?:-[a-z0-9]+)*"
 _MEDIA_PATH_RE = re.compile(
-    rf"^(?:artesanos|piezas|sitio)/{_SEGMENT}/{_SEGMENT}\.(jpg|jpeg|webp|avif|png|mp4|webm|glb)$"
+    rf"^(?:artesanos|piezas|sitio|hero)/{_SEGMENT}/{_SEGMENT}\.(jpg|jpeg|webp|avif|png|mp4|webm|glb)$"
 )
 CONTENT_TYPES = {
     "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp", "avif": "image/avif", "png": "image/png",
