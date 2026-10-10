@@ -24,7 +24,8 @@ from sqlalchemy.orm import Session
 from app.api.admin import router as reads
 from app.api.deps import get_db
 from app.models.artisan import Artisan
-from app.core.access import AdminIdentity, require_admin
+from app.core import permissions as perms
+from app.core.access import AdminIdentity, require_admin, require_permission
 from app.schemas.admin import AdminArtisanDetail, AdminPieceDetail
 from app.schemas.admin_write import (
     ArtisanCreate,
@@ -116,7 +117,7 @@ def _media_root_or_none() -> Path | None:
 
 def _trash_routes(kind: str, plural: str, read, model):
     @router.post(f"/{plural}/{{entity_id}}/trash", response_model=model,
-                 name=f"trash_{kind}")
+                 name=f"trash_{kind}", dependencies=[Depends(require_permission(perms.EDIT))])
     def trash_entity(entity_id: uuid.UUID, body: TransitionBody, expected: datetime = Depends(expected_version),
                      who: Actor = Depends(actor), db: Session = Depends(get_db)):
         try:
@@ -126,7 +127,7 @@ def _trash_routes(kind: str, plural: str, read, model):
         return read(entity_id, db, who.identity)
 
     @router.post(f"/{plural}/{{entity_id}}/untrash", response_model=model,
-                 name=f"untrash_{kind}")
+                 name=f"untrash_{kind}", dependencies=[Depends(require_permission(perms.EDIT))])
     def untrash_entity(entity_id: uuid.UUID, body: TransitionBody, expected: datetime = Depends(expected_version),
                        who: Actor = Depends(actor), db: Session = Depends(get_db)):
         try:
@@ -135,7 +136,8 @@ def _trash_routes(kind: str, plural: str, read, model):
             raise _fail(exc) from None
         return read(entity_id, db, who.identity)
 
-    @router.post(f"/{plural}/{{entity_id}}/purge", status_code=204, name=f"purge_{kind}")
+    @router.post(f"/{plural}/{{entity_id}}/purge", status_code=204, name=f"purge_{kind}",
+                 dependencies=[Depends(require_permission(perms.EDIT))])
     def purge_entity(entity_id: uuid.UUID, body: TransitionBody, expected: datetime = Depends(expected_version),
                      who: Actor = Depends(actor), db: Session = Depends(get_db)) -> Response:
         try:
@@ -149,7 +151,7 @@ _trash_routes("artisan", "artisans", reads.get_artisan, AdminArtisanDetail)
 _trash_routes("piece", "pieces", reads.get_piece, AdminPieceDetail)
 
 
-@router.post("/artisans", status_code=201, response_model=AdminArtisanDetail)
+@router.post("/artisans", status_code=201, response_model=AdminArtisanDetail, dependencies=[Depends(require_permission(perms.EDIT))])
 def create_artisan(body: ArtisanCreate, who: Actor = Depends(actor), db: Session = Depends(get_db)) -> AdminArtisanDetail:
     try:
         artisan = content.create_artisan(db, who, body.model_dump())
@@ -158,7 +160,7 @@ def create_artisan(body: ArtisanCreate, who: Actor = Depends(actor), db: Session
     return reads.get_artisan(artisan.id, db)
 
 
-@router.patch("/artisans/{artisan_id}", response_model=AdminArtisanDetail)
+@router.patch("/artisans/{artisan_id}", response_model=AdminArtisanDetail, dependencies=[Depends(require_permission(perms.EDIT))])
 def update_artisan(artisan_id: uuid.UUID, body: ArtisanUpdate, expected: datetime = Depends(expected_version),
                    who: Actor = Depends(actor), db: Session = Depends(get_db)) -> AdminArtisanDetail:
     try:
@@ -168,7 +170,7 @@ def update_artisan(artisan_id: uuid.UUID, body: ArtisanUpdate, expected: datetim
     return reads.get_artisan(artisan_id, db)
 
 
-@router.post("/artisans/{artisan_id}/{action}", response_model=AdminArtisanDetail)
+@router.post("/artisans/{artisan_id}/{action}", response_model=AdminArtisanDetail, dependencies=[Depends(require_permission(perms.PUBLISH))])
 def transition_artisan(artisan_id: uuid.UUID, action: content.TransitionAction, body: TransitionBody,
                        expected: datetime = Depends(expected_version), who: Actor = Depends(actor),
                        db: Session = Depends(get_db)) -> AdminArtisanDetail:
@@ -179,7 +181,7 @@ def transition_artisan(artisan_id: uuid.UUID, action: content.TransitionAction, 
     return reads.get_artisan(artisan_id, db)
 
 
-@router.post("/pieces", status_code=201, response_model=AdminPieceDetail)
+@router.post("/pieces", status_code=201, response_model=AdminPieceDetail, dependencies=[Depends(require_permission(perms.EDIT))])
 def create_piece(body: PieceCreate, who: Actor = Depends(actor), db: Session = Depends(get_db)) -> AdminPieceDetail:
     try:
         piece = content.create_piece(db, who, body.model_dump())
@@ -188,7 +190,7 @@ def create_piece(body: PieceCreate, who: Actor = Depends(actor), db: Session = D
     return reads.get_piece(piece.id, db, who.identity)
 
 
-@router.patch("/pieces/{piece_id}", response_model=AdminPieceDetail)
+@router.patch("/pieces/{piece_id}", response_model=AdminPieceDetail, dependencies=[Depends(require_permission(perms.EDIT))])
 def update_piece(piece_id: uuid.UUID, body: PieceUpdate, expected: datetime = Depends(expected_version),
                  who: Actor = Depends(actor), db: Session = Depends(get_db)) -> AdminPieceDetail:
     try:
@@ -198,7 +200,7 @@ def update_piece(piece_id: uuid.UUID, body: PieceUpdate, expected: datetime = De
     return reads.get_piece(piece_id, db, who.identity)
 
 
-@router.post("/pieces/{piece_id}/availability", response_model=AdminPieceDetail)
+@router.post("/pieces/{piece_id}/availability", response_model=AdminPieceDetail, dependencies=[Depends(require_permission(perms.PUBLISH))])
 def set_availability(piece_id: uuid.UUID, body: AvailabilityBody, expected: datetime = Depends(expected_version),
                      who: Actor = Depends(actor), db: Session = Depends(get_db)) -> AdminPieceDetail:
     try:
@@ -222,7 +224,7 @@ class AuthorizationLink(BaseModel):
     artisan_name: str
 
 
-@router.post("/artisans/{artisan_id}/authorization/request", response_model=AuthorizationLink)
+@router.post("/artisans/{artisan_id}/authorization/request", response_model=AuthorizationLink, dependencies=[Depends(require_permission(perms.AUTHORIZATION))])
 def request_authorization(artisan_id: uuid.UUID, who: Actor = Depends(actor),
                           db: Session = Depends(get_db)) -> AuthorizationLink:
     from app.services import authorizations
@@ -237,7 +239,7 @@ def request_authorization(artisan_id: uuid.UUID, who: Actor = Depends(actor),
                              artisan_name=artisan.artistic_name or artisan.full_name)
 
 
-@router.post("/artisans/{artisan_id}/authorization/record", response_model=AdminArtisanDetail)
+@router.post("/artisans/{artisan_id}/authorization/record", response_model=AdminArtisanDetail, dependencies=[Depends(require_permission(perms.AUTHORIZATION))])
 def record_authorization(artisan_id: uuid.UUID, body: AuthorizationNote, who: Actor = Depends(actor),
                          db: Session = Depends(get_db)) -> AdminArtisanDetail:
     from app.services import authorizations
@@ -249,7 +251,7 @@ def record_authorization(artisan_id: uuid.UUID, body: AuthorizationNote, who: Ac
     return reads.get_artisan(artisan_id, db, who.identity)
 
 
-@router.post("/artisans/{artisan_id}/authorization/revoke", response_model=AdminArtisanDetail)
+@router.post("/artisans/{artisan_id}/authorization/revoke", response_model=AdminArtisanDetail, dependencies=[Depends(require_permission(perms.AUTHORIZATION))])
 def revoke_authorization(artisan_id: uuid.UUID, body: AuthorizationNote, who: Actor = Depends(actor),
                          db: Session = Depends(get_db)) -> AdminArtisanDetail:
     from app.services import authorizations
@@ -262,7 +264,7 @@ def revoke_authorization(artisan_id: uuid.UUID, body: AuthorizationNote, who: Ac
 
 
 # P-026 G1. Declared before the generic /{action} transition.
-@router.post("/pieces/{piece_id}/sale", response_model=AdminPieceDetail)
+@router.post("/pieces/{piece_id}/sale", response_model=AdminPieceDetail, dependencies=[Depends(require_permission(perms.SALES))])
 def register_sale(piece_id: uuid.UUID, body: SaleBody, expected: datetime = Depends(expected_version),
                   who: Actor = Depends(actor), db: Session = Depends(get_db)) -> AdminPieceDetail:
     try:
@@ -272,7 +274,7 @@ def register_sale(piece_id: uuid.UUID, body: SaleBody, expected: datetime = Depe
     return reads.get_piece(piece_id, db, who.identity)
 
 
-@router.post("/pieces/{piece_id}/sale/cancel", response_model=AdminPieceDetail)
+@router.post("/pieces/{piece_id}/sale/cancel", response_model=AdminPieceDetail, dependencies=[Depends(require_permission(perms.SALES))])
 def cancel_sale(piece_id: uuid.UUID, body: SaleCancelBody, expected: datetime = Depends(expected_version),
                 who: Actor = Depends(actor), db: Session = Depends(get_db)) -> AdminPieceDetail:
     try:
@@ -283,7 +285,7 @@ def cancel_sale(piece_id: uuid.UUID, body: SaleCancelBody, expected: datetime = 
 
 
 # P-026 G12. Declared before the generic /{action} transition.
-@router.post("/pieces/{piece_id}/location", response_model=AdminPieceDetail)
+@router.post("/pieces/{piece_id}/location", response_model=AdminPieceDetail, dependencies=[Depends(require_permission(perms.LOGISTICS))])
 def move_piece(piece_id: uuid.UUID, body: LocationBody, expected: datetime = Depends(expected_version),
                who: Actor = Depends(actor), db: Session = Depends(get_db)) -> AdminPieceDetail:
     try:
@@ -298,7 +300,7 @@ class PaletteBody(BaseModel):
 
 
 # ADR-030 phase 4. Declared before the generic /{action} transition.
-@router.post("/pieces/{piece_id}/palette/generate", response_model=AdminPieceDetail)
+@router.post("/pieces/{piece_id}/palette/generate", response_model=AdminPieceDetail, dependencies=[Depends(require_permission(perms.EDIT))])
 def generate_palette(piece_id: uuid.UUID, expected: datetime = Depends(expected_version),
                      who: Actor = Depends(actor), db: Session = Depends(get_db)) -> AdminPieceDetail:
     try:
@@ -308,7 +310,7 @@ def generate_palette(piece_id: uuid.UUID, expected: datetime = Depends(expected_
     return reads.get_piece(piece_id, db, who.identity)
 
 
-@router.post("/pieces/{piece_id}/palette", response_model=AdminPieceDetail)
+@router.post("/pieces/{piece_id}/palette", response_model=AdminPieceDetail, dependencies=[Depends(require_permission(perms.EDIT))])
 def set_palette(piece_id: uuid.UUID, body: PaletteBody, expected: datetime = Depends(expected_version),
                 who: Actor = Depends(actor), db: Session = Depends(get_db)) -> AdminPieceDetail:
     try:
@@ -318,7 +320,7 @@ def set_palette(piece_id: uuid.UUID, body: PaletteBody, expected: datetime = Dep
     return reads.get_piece(piece_id, db, who.identity)
 
 
-@router.post("/pieces/{piece_id}/{action}", response_model=AdminPieceDetail)
+@router.post("/pieces/{piece_id}/{action}", response_model=AdminPieceDetail, dependencies=[Depends(require_permission(perms.PUBLISH))])
 def transition_piece(piece_id: uuid.UUID, action: content.TransitionAction, body: TransitionBody,
                      expected: datetime = Depends(expected_version), who: Actor = Depends(actor),
                      db: Session = Depends(get_db)) -> AdminPieceDetail:

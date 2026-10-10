@@ -19,7 +19,8 @@ from sqlalchemy.orm import Session
 
 from app.api.admin.writes import ADMIN_WRITE_HEADER, CSRF_ERROR, _fail, _same_origin, actor, require_write_guard
 from app.api.deps import get_db
-from app.core.access import FORBIDDEN_ERROR, HERO, AdminIdentity, require_admin
+from app.core import permissions as perms
+from app.core.access import FORBIDDEN_ERROR, AdminIdentity, require_admin
 from app.core.config import get_settings
 from app.services import hero, site_images
 from app.services.content import Actor, ContentError
@@ -29,7 +30,7 @@ UPLOAD_TYPE_ERROR = {"code": "unsupported_media_type", "message": "Send the vide
 
 
 def require_hero(identity: AdminIdentity = Depends(require_admin)) -> AdminIdentity:
-    if not identity.has(HERO):
+    if not identity.can(perms.HERO):
         raise HTTPException(status_code=403, detail=FORBIDDEN_ERROR)
     return identity
 
