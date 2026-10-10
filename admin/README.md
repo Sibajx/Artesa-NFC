@@ -38,7 +38,7 @@ navegador ── https://gestion.artesanfc.com ── Cloudflare Access (login p
   no está en `ADMIN_EMAILS`. Para cerrar sesión: `/cdn-cgi/access/logout`.
 - **Rutas con `#`** (`#/piezas/<id>`): el servidor de estáticos no necesita
   redirigir rutas profundas a `index.html`.
-- **La UI no guarda nada** en `localStorage` ni maneja tokens.
+- **La UI no guarda nada** en `localStorage` ni maneja tokens. Única excepción (decidida por el PO, 2026-10-10): `src/theme.ts` recuerda la elección claro/oscuro con la clave `artesa-theme`; es una preferencia de pantalla, nunca una sesión ni datos, y el chequeo de CI (`admin-ci.yml`) la limita a ese archivo.
 - **Escrituras:** cada una lleva `X-Artesa-Admin: 1`, JSON y `If-Match` con el
   `updated_at` que se ve en pantalla. Si otra persona cambió el registro, la API
   responde 412 y la UI pide recargar. Los errores se muestran en español a

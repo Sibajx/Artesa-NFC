@@ -6,7 +6,7 @@
    Los colores son variables semánticas por tema; los nombres `botanica-*` de
    Tailwind y `white`/`red-*`/`amber-*` apuntan a ellas, así el resto de las
    pantallas cambia de tema sin tocarlas. Por defecto sigue al sistema; el
-   botón de la barra lateral guarda la elección (localStorage "artesa-theme"). */
+   botón de la barra lateral guarda la elección en el navegador (src/theme.ts). */
 
 :root {
   --bg: #efe6d3;

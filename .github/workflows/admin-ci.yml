@@ -58,8 +58,17 @@ jobs:
 
       # The prototype stored data in localStorage and faked login and
       # certificate hashes (Brain B-026). None of that may come back.
+      # One narrow exception, decided by the PO (2026-10-10): src/theme.ts may keep
+      # the light/dark choice under the key "artesa-theme" (a display preference,
+      # never a session or data). Nothing else may touch localStorage.
       - name: No client-side storage, fake auth or client-generated hashes
         run: |
-          if grep -rnE "localStorage|sessionStorage|getRandomValues|isAuthenticated" src; then
+          if grep -rnE "sessionStorage|getRandomValues|isAuthenticated" src; then
             echo "forbidden client-side pattern found"; exit 1
+          fi
+          if grep -rnE "localStorage" src --exclude=theme.ts; then
+            echo "localStorage is only allowed in src/theme.ts (theme choice)"; exit 1
+          fi
+          if grep -nE "localStorage\.[a-zA-Z]+\(" src/theme.ts | grep -v "KEY"; then
+            echo "src/theme.ts may only use the theme key"; exit 1
           fi
