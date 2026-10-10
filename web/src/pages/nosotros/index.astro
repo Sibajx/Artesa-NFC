@@ -76,6 +76,7 @@ const anyProvisional = team.members.some((m) => m.provisional);
                 </div>
               </div>
               <p class="crew-card__bio">{m.bio}</p>
+              {m.quote && <blockquote class="crew-card__quote">“{m.quote}”</blockquote>}
               <Channels channels={m.channels} owner={m.name} />
             </article>
           </li>
