@@ -1,7 +1,9 @@
 """P-028: the home hero by season (Gestión → Hero)."""
 from __future__ import annotations
 
+import os
 import subprocess
+import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -272,7 +274,7 @@ def upload(c, campaign_id, data, email=OWNER, content_type="video/mp4"):
 def test_a_video_is_cropped_trimmed_muted_and_published(hero_client, db_session, tmp_path, monkeypatch):
     monkeypatch.setattr(hero_service, "run_job", lambda *a: None)  # the background task uses its own session
     muertos = by_slug(state(hero_client), "dia-de-muertos")
-    data = sample_video(tmp_path / "in.mp4", seconds=20, size="1000x1000")  # square, with audio, 20 s
+    data = sample_video(tmp_path / "in.mp4", seconds=30, size="1000x1000")  # square, with audio, 30 s
     r = upload(hero_client, muertos["id"], data)
     assert r.status_code == 202, r.text
     assert by_slug(r.json(), "dia-de-muertos")["status"] == "processing"
@@ -289,7 +291,7 @@ def test_a_video_is_cropped_trimmed_muted_and_published(hero_client, db_session,
     mp4 = root / "publico" / c.video_mp4
     info = probe(mp4)
     assert info["codec_type"] == "video" and "audio" not in info.values()
-    assert float(info["duration"]) <= 12.5
+    assert 19 <= float(info["duration"]) <= 20.5  # the first 20 of its 30 s
     assert (int(info["width"]), int(info["height"])) == (1000, 562)  # 16:9 centred crop of 1000x1000
     assert probe(root / "publico" / c.video_webm)["codec_type"] == "video"
     assert (root / "publico" / c.poster).stat().st_size > 0
@@ -363,3 +365,117 @@ def test_upload_limits_and_missing_pieces(hero_client, monkeypatch):
 def test_only_hero_accounts_may_upload(hero_client):
     navidad = by_slug(state(hero_client), "navidad")
     assert upload(hero_client, navidad["id"], b"\x00\x00\x00\x18ftypmp42", email=EDITOR).status_code == 403
+
+
+def _spool_leftovers():
+    folder = Path(get_settings().media_root) / "originales" / "hero"
+    return list(folder.glob(".incoming-*.part")) if folder.exists() else []
+
+
+@needs_ffmpeg
+def test_the_start_second_skips_the_beginning(hero_client, db_session, tmp_path, monkeypatch):
+    monkeypatch.setattr(hero_service, "run_job", lambda *a: None)
+    c = campaign(db_session, "navidad")
+    data = sample_video(tmp_path / "in.mp4", seconds=25, size="640x360", audio=False)
+    r = hero_client.post(f"/api/admin/v1/hero/campaigns/{c.id}/video?start=10", content=data,
+                         headers={**H(), "Content-Type": "video/mp4"})
+    assert r.status_code == 202, r.text
+    root = Path(get_settings().media_root)
+    original = next((root / "originales" / "hero").glob("navidad-*.src"))
+    hero_service.finish(db_session, c.id, root / "publico", original, 10.0)
+    db_session.refresh(c)
+    assert c.processing_status == "ready", c.processing_error
+    # 25 s from second 10 leaves 15 s; without the start it would have been 20 s.
+    assert 14 <= float(probe(root / "publico" / c.video_mp4)["duration"]) <= 16
+    events = db_session.execute(select(AuditEvent).where(AuditEvent.entity_id == c.id,
+                                                         AuditEvent.action == "hero.video_uploaded")).scalars().all()
+    assert events[-1].event_metadata["start"] == 10.0
+
+
+@needs_ffmpeg
+def test_a_start_past_the_end_is_an_error_that_keeps_the_old_video(hero_client, db_session, tmp_path, monkeypatch):
+    monkeypatch.setattr(hero_service, "run_job", lambda *a: None)
+    c = make_ready(db_session, "navidad")
+    data = sample_video(tmp_path / "in.mp4", seconds=5, size="640x360", audio=False)
+    assert hero_client.post(f"/api/admin/v1/hero/campaigns/{c.id}/video?start=9", content=data,
+                            headers={**H(), "Content-Type": "video/mp4"}).status_code == 202
+    root = Path(get_settings().media_root)
+    hero_service.finish(db_session, c.id, root / "publico", next((root / "originales" / "hero").glob("navidad-*.src")), 9.0)
+    db_session.refresh(c)
+    assert c.processing_status == "error" and "Ese segundo" in c.processing_error
+    assert c.video_mp4 == "hero/navidad/aaaaaaaaaaaa.mp4"
+
+
+def test_the_start_second_is_validated(hero_client):
+    navidad = by_slug(state(hero_client), "navidad")
+    for bad in ("-1", "99999", "abc"):
+        r = hero_client.post(f"/api/admin/v1/hero/campaigns/{navidad['id']}/video?start={bad}",
+                             content=b"\x00\x00\x00\x18ftypmp42", headers={**H(), "Content-Type": "video/mp4"})
+        assert r.status_code == 422
+
+
+def test_a_rejected_upload_leaves_nothing_on_disk(hero_client, monkeypatch):
+    if not FFMPEG:
+        pytest.skip("ffmpeg is not installed")
+    navidad = by_slug(state(hero_client), "navidad")
+    assert upload(hero_client, navidad["id"], b"GIF89a" + b"\x00" * 50).status_code == 422  # not a video
+    monkeypatch.setattr(hero_service, "MAX_ORIGINAL_BYTES", 100)
+    assert upload(hero_client, navidad["id"], b"\x00\x00\x00\x18ftypmp42" + b"\x00" * 400).status_code == 413
+    root = Path(get_settings().media_root)
+    assert _spool_leftovers() == [] and list((root / "originales" / "hero").glob("*.src")) == []
+
+
+def test_an_upload_streamed_over_the_limit_is_cut_and_cleaned(hero_client, monkeypatch):
+    if not FFMPEG:
+        pytest.skip("ffmpeg is not installed")
+    navidad = by_slug(state(hero_client), "navidad")
+    monkeypatch.setattr(hero_service, "MAX_ORIGINAL_BYTES", 100)
+
+    def body():  # no Content-Length: the limit must hold while streaming
+        for _ in range(5):
+            yield b"\x00" * 60
+
+    r = hero_client.post(f"/api/admin/v1/hero/campaigns/{navidad['id']}/video", content=body(),
+                         headers={**H(), "Content-Type": "video/mp4"})
+    assert r.status_code == 413 and r.json()["error"]["code"] == "too_large"
+    assert _spool_leftovers() == []
+
+
+def test_finish_removes_the_original_when_the_campaign_is_gone(db_session, tmp_path):
+    original = tmp_path / "gone.src"
+    original.write_bytes(b"x")
+    import uuid as _uuid
+    hero_service.finish(db_session, _uuid.uuid4(), tmp_path, original)  # must not raise
+    assert not original.exists()
+
+
+def test_old_originals_and_half_uploads_are_swept(tmp_path):
+    folder = tmp_path / "originales" / "hero"
+    folder.mkdir(parents=True)
+    old_src, old_part = folder / "navidad-aaaa1111.src", folder / ".incoming-bbbb.part"
+    new_src, other = folder / "navidad-cccc2222.src", folder / "keep.txt"
+    for f in (old_src, old_part, new_src, other):
+        f.write_bytes(b"x")
+    two_days_ago = time.time() - 2 * 86400
+    for f in (old_src, old_part, other):
+        os.utime(f, (two_days_ago, two_days_ago))
+    assert hero_service.clean_orphans(tmp_path) == 2
+    assert not old_src.exists() and not old_part.exists() and new_src.exists() and other.exists()
+    assert hero_service.clean_orphans(tmp_path / "nope") == 0
+
+
+@needs_ffmpeg
+def test_a_spent_job_budget_is_recorded_as_too_slow(hero_client, db_session, tmp_path, monkeypatch):
+    monkeypatch.setattr(hero_service, "run_job", lambda *a: None)
+    c = make_ready(db_session, "navidad")
+    data = sample_video(tmp_path / "in.mp4", seconds=3, size="320x180", audio=False)
+    assert upload(hero_client, c.id, data).status_code == 202
+    monkeypatch.setattr(hero_service, "JOB_BUDGET", 0)
+    root = Path(get_settings().media_root)
+    hero_service.finish(db_session, c.id, root / "publico", next((root / "originales" / "hero").glob("navidad-*.src")))
+    db_session.refresh(c)
+    assert c.processing_status == "error" and "tardó demasiado" in c.processing_error
+
+
+def test_the_stale_threshold_is_longer_than_the_job_budget():
+    assert hero_service.STALE_AFTER.total_seconds() > hero_service.JOB_BUDGET

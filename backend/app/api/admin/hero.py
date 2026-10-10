@@ -7,11 +7,12 @@ content type, like the media upload. Only ``hero`` accounts and the owner pass
 """
 from __future__ import annotations
 
+import os
 import uuid
 from datetime import date, datetime
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -43,18 +44,26 @@ def require_upload_guard(request: Request) -> None:
 TOO_LARGE_ERROR = {"code": "too_large", "message": "El video pesa más de 200 MB."}
 
 
-async def _read_body(request: Request, limit: int) -> bytes:
+async def _spool_body(request: Request, folder: Path, limit: int) -> tuple[Path, int]:
+    """Writes the request body to a private file in ``folder`` as it arrives (0600), so a
+    200 MB video never sits in memory. Removes the file if anything goes wrong."""
     declared = request.headers.get("content-length")
     if declared and declared.isascii() and declared.isdigit() and int(declared) > limit:
         raise HTTPException(status_code=413, detail=TOO_LARGE_ERROR)
-    chunks: list[bytes] = []
+    path = folder / f".incoming-{uuid.uuid4().hex}.part"
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     received = 0
-    async for chunk in request.stream():
-        received += len(chunk)
-        if received > limit:
-            raise HTTPException(status_code=413, detail=TOO_LARGE_ERROR)
-        chunks.append(chunk)
-    return b"".join(chunks)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            async for chunk in request.stream():
+                received += len(chunk)
+                if received > limit:
+                    raise HTTPException(status_code=413, detail=TOO_LARGE_ERROR)
+                await run_in_threadpool(handle.write, chunk)
+    except BaseException:
+        path.unlink(missing_ok=True)
+        raise
+    return path, received
 
 
 class CampaignOut(BaseModel):
@@ -222,15 +231,26 @@ def unforce_campaign(who: Actor = Depends(actor), db: Session = Depends(get_db))
 
 @uploads.post("/campaigns/{campaign_id}/video", response_model=HeroState, status_code=202)
 async def upload_video(campaign_id: uuid.UUID, request: Request, background: BackgroundTasks,
+                       start: float = Query(default=0, ge=0, le=hero.MAX_START_SECONDS),
                        who: Actor = Depends(actor), db: Session = Depends(get_db)) -> HeroState:
     settings = get_settings()
     if not settings.media_enabled:
         raise HTTPException(status_code=503, detail={"code": "media_unavailable",
                                                      "message": "El servidor no tiene carpeta de medios configurada."})
-    data = await _read_body(request, hero.MAX_ORIGINAL_BYTES)
     try:
-        original = await run_in_threadpool(hero.begin_upload, db, who, Path(settings.media_root), campaign_id, data)
+        hero.ensure_ffmpeg()
     except ContentError as exc:
         raise _fail(exc) from None
-    background.add_task(hero.run_job, campaign_id, settings.media_public_dir, original)
+    media_root = Path(settings.media_root)
+    spooled, size = await _spool_body(request, await run_in_threadpool(hero.originals_dir, media_root),
+                                      hero.MAX_ORIGINAL_BYTES)
+    try:
+        original = await run_in_threadpool(hero.begin_upload, db, who, media_root, campaign_id, spooled, size, start)
+    except ContentError as exc:
+        spooled.unlink(missing_ok=True)
+        raise _fail(exc) from None
+    except BaseException:
+        spooled.unlink(missing_ok=True)
+        raise
+    background.add_task(hero.run_job, campaign_id, settings.media_public_dir, original, start)
     return _state(db)

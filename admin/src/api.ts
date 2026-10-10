@@ -660,8 +660,11 @@ export const adminApi = {
   forceHeroCampaign: (id: string, until: string | null) =>
     request<HeroState>('POST', '/hero/force', { body: { campaign_id: id, until } }),
   unforceHero: () => request<HeroState>('DELETE', '/hero/force', { body: {} }),
-  uploadHeroVideo: (id: string, file: Blob, contentType: string) =>
-    request<HeroState>('POST', `/hero/campaigns/${encodeURIComponent(id)}/video`, { file: { data: file, contentType } }),
+  uploadHeroVideo: (id: string, file: Blob, contentType: string, start = 0) =>
+    request<HeroState>('POST', `/hero/campaigns/${encodeURIComponent(id)}/video`, {
+      params: { start: start > 0 ? String(start) : undefined },
+      file: { data: file, contentType },
+    }),
 
   uploadMedia: (owner: 'artisans' | 'pieces', id: string, file: Blob, contentType: string, role: MediaRole, altText?: string) =>
     request<AdminMedia>('POST', `/${owner}/${encodeURIComponent(id)}/media`, {
