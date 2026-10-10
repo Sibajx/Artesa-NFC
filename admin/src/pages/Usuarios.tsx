@@ -18,10 +18,28 @@ const ROLES: { value: Account['role']; label: string; hint: string }[] = [
 ];
 const roleLabel = (r: string) => ROLES.find((x) => x.value === r)?.label ?? r;
 
+// The permission checkboxes (backend app/core/permissions.py), in the order of the matrix.
+const PERMISSIONS: Record<string, { label: string; hint: string }> = {
+  view: { label: 'Ver', hint: 'Ver artesanos, piezas, resumen y auditoría' },
+  edit: { label: 'Editar', hint: 'Crear y editar artesanos y piezas, fotos, paleta y papelera' },
+  publish: { label: 'Publicar', hint: 'Publicar, despublicar y archivar; disponibilidad de la pieza' },
+  authorization: { label: 'WhatsApp', hint: 'Autorización del artesano por WhatsApp' },
+  sales: { label: 'Ventas', hint: 'Registrar y cancelar ventas' },
+  logistics: { label: 'Logística', hint: 'Ubicación de la pieza y estados de envío' },
+  nfc: { label: 'NFC', hint: 'Certificación: chips, tarjetas y código al dueño' },
+  revocations: { label: 'Revocar', hint: 'Revocaciones, robos y bloqueo de tarjetas' },
+  design: { label: 'Diseño', hint: 'Diseño de certificados' },
+  hero: { label: 'Hero', hint: 'Hero por temporada e imágenes del sitio' },
+  training: { label: 'Capacitar', hint: 'Capacitaciones (módulo todavía sin construir)' },
+};
+
 const CONFLICTS: Record<string, string> = {
   account_exists: 'Esa persona ya tiene acceso.',
   fixed_account: 'Esta cuenta está fija en la configuración del servidor; no se cambia desde aquí.',
   invalid_email: 'Escribe un correo válido.',
+  owner_account: 'El dueño siempre tiene todos los permisos.',
+  not_imported: 'Importa primero las cuentas fijas a Gestión.',
+  view_required: 'Toda cuenta con acceso debe poder ver.',
 };
 
 function message(e: unknown): string {
@@ -50,6 +68,90 @@ function SyncNotice({ list, onRetry }: { list: AccountList; onRetry: () => void 
     );
   }
   return null;
+}
+
+type Run = (call: () => Promise<AccountList>, done: string) => Promise<boolean>;
+
+// Persons x permissions. The owner always has everything; a fixed account (server
+// config) has to be imported first so it can be edited. A role is a shortcut.
+function Matrix({ list, busy, run }: { list: AccountList; busy: boolean; run: Run }) {
+  const catalog = list.catalog;
+  const hasFixed = list.data.some((a) => a.source === 'configuracion' && !a.owner && !a.imported);
+
+  function toggle(a: Account, permission: string, on: boolean) {
+    const next = catalog.filter((p) => (p === permission ? on : a.permissions.includes(p)));
+    void run(() => adminApi.setAccountPermissions(a.email, next), 'Permisos actualizados');
+  }
+
+  return (
+    <section className="card-elevated overflow-hidden" aria-labelledby="matrix-heading">
+      <div className="p-5 sm:p-6 flex flex-col gap-2">
+        <h2 id="matrix-heading" className="text-xl font-serif text-botanica-negro">Permisos</h2>
+        <p className="text-sm text-botanica-grafito">
+          Marca lo que cada persona puede hacer. El rol es un atajo: al elegirlo se marcan sus casillas, y después puedes
+          ajustarlas una por una. Gestionar usuarios es solo del dueño.
+        </p>
+        {hasFixed && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-botanica-negro">
+            <span>Algunas cuentas están fijas en la configuración del servidor. Impórtalas para poder editar sus permisos; no cambia el acceso de nadie.</span>
+            <button type="button" className="btn-secondary" disabled={busy}
+              onClick={() => void run(() => adminApi.importFixedAccounts(), 'Cuentas importadas')}>Importar a Gestión</button>
+          </div>
+        )}
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-botanica-hueso/60 text-xs uppercase tracking-wide text-botanica-gris">
+            <tr>
+              <th className="px-4 py-3 text-left sticky left-0 bg-botanica-hueso">Persona</th>
+              <th className="px-3 py-3 text-left">Atajo</th>
+              {catalog.map((p) => <th key={p} scope="col" className="px-2 py-3 text-center font-medium" title={PERMISSIONS[p]?.hint}>{PERMISSIONS[p]?.label ?? p}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {list.data.map((a) => {
+              const editable = !a.owner && (a.source === 'gestion' || a.imported);
+              return (
+                <tr key={a.email} className="border-t border-botanica-gris/10">
+                  <td className="px-4 py-3 whitespace-nowrap sticky left-0 bg-white">
+                    {a.email}
+                    {a.owner && <span className="ml-2 rounded-full bg-botanica-jade/10 px-2 py-0.5 text-xs text-botanica-jade">Dueño</span>}
+                  </td>
+                  <td className="px-3 py-3 whitespace-nowrap">
+                    {a.source === 'gestion' && !a.owner ? (
+                      <select value={a.custom ? 'custom' : a.role} disabled={busy} aria-label={`Atajo de ${a.email}`}
+                        onChange={(e) => e.target.value !== 'custom' && void run(() => adminApi.changeAccountRole(a.email, e.target.value), 'Rol actualizado')}
+                        className="px-2 py-1 border border-botanica-gris/30 rounded-md bg-white">
+                        {a.custom && <option value="custom">A medida</option>}
+                        {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+                      </select>
+                    ) : (
+                      <span className="text-botanica-grafito">{a.owner ? 'Dueño' : a.custom ? 'A medida' : roleLabel(a.role)}{a.imported ? '' : a.owner ? '' : ' · fijo'}</span>
+                    )}
+                    {a.imported && a.custom && (
+                      <button type="button" className="ml-2 text-xs text-botanica-jade underline" disabled={busy}
+                        onClick={() => void run(() => adminApi.setAccountPermissions(a.email, null), 'Permisos restablecidos')}>Restablecer</button>
+                    )}
+                  </td>
+                  {catalog.map((p) => {
+                    const on = a.permissions.includes(p);
+                    return (
+                      <td key={p} className="px-2 py-3 text-center">
+                        <input type="checkbox" checked={on} disabled={!editable || busy || (p === 'view' && on)}
+                          aria-label={`${PERMISSIONS[p]?.label ?? p} para ${a.email}`}
+                          onChange={(e) => toggle(a, p, e.target.checked)}
+                          className="h-4 w-4 accent-botanica-jade disabled:opacity-50" />
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
 }
 
 export default function Usuarios() {
@@ -123,6 +225,8 @@ export default function Usuarios() {
         </form>
         <p className="text-xs text-botanica-gris">{ROLES.map((r) => `${r.label}: ${r.hint}`).join(' · ')}</p>
       </section>
+
+      <Matrix list={list} busy={busy} run={run} />
 
       <section className="card-elevated overflow-hidden" aria-label="Personas con acceso">
         <table className="w-full text-sm">

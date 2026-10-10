@@ -101,8 +101,85 @@ def test_custody_splits_nfc_from_revocations(owner_client, db_session):
     assert owner_client.post(f"{API}/custody/pieces/{pid}/issue", json={}, headers=h).status_code == 403
 
 
-def test_fixed_accounts_ignore_a_stray_explicit_list(owner_client, db_session):
-    # A row for an email that is also in ADMIN_EMAILS never narrows it.
+def test_a_fixed_account_with_a_row_is_narrowed_by_it(owner_client, db_session):
     db_session.add(AdminAccount(email=FIXED, role="editor", active=True, added_by=OWNER, permissions=["view"]))
     db_session.commit()
+    assert set(me(owner_client, FIXED)["permissions"]) == {"view"}
+    # ...but never the owner.
+    db_session.add(AdminAccount(email=OWNER, role="editor", active=True, added_by=OWNER, permissions=["view"]))
+    db_session.commit()
+    assert set(me(owner_client, OWNER)["permissions"]) == ALL
+
+
+# --- PR 2: the owner's matrix --------------------------------------------------------
+
+
+def post(client, path, body=None, email=OWNER):
+    return client.post(f"{API}{path}", json=body if body is not None else {}, headers=H(email))
+
+
+def listing(client):
+    return {a["email"]: a for a in client.get(f"{API}/accounts", headers=auth(make_token(email=OWNER))).json()["data"]}
+
+
+def test_the_list_shows_what_each_account_can_do(owner_client, db_session):
+    _managed(owner_client, db_session, "designer")
+    body = owner_client.get(f"{API}/accounts", headers=auth(make_token(email=OWNER))).json()
+    assert body["catalog"] == list(perms.ALL_PERMISSIONS)
+    assert set(body["presets"]["custodian"]) == perms.for_roles({"custodian"})
+    rows = {a["email"]: a for a in body["data"]}
+    assert set(rows[OWNER]["permissions"]) == ALL and rows[OWNER]["custom"] is False
+    assert set(rows[NEW]["permissions"]) == perms.for_roles({"designer"}) and rows[NEW]["custom"] is False
+    assert rows[FIXED]["imported"] is False
+
+
+def test_importing_the_fixed_accounts_changes_nobodys_access(owner_client, db_session):
+    before = {e: set(me(owner_client, e)["permissions"]) for e in (FIXED, OWNER)}
+    r = post(owner_client, "/accounts/import-fixed")
+    assert r.status_code == 200, r.text
+    rows = {a["email"]: a for a in r.json()["data"]}
+    assert rows[FIXED]["imported"] is True and rows[FIXED]["custom"] is True and rows[OWNER]["imported"] is False
+    assert {e: set(me(owner_client, e)["permissions"]) for e in (FIXED, OWNER)} == before
+    # The owner has no row, and doing it again creates nothing.
+    assert db_session.get(AdminAccount, OWNER) is None
+    assert post(owner_client, "/accounts/import-fixed").status_code == 200
+    assert db_session.query(AdminAccount).filter_by(email=FIXED).count() == 1
+
+
+def test_the_owner_edits_the_checkboxes(owner_client, db_session):
+    post(owner_client, "/accounts/import-fixed")
+    r = post(owner_client, f"/accounts/{FIXED}/permissions", {"permissions": ["view", "sales", "logistics"]})
+    assert r.status_code == 200, r.text
+    assert set(me(owner_client, FIXED)["permissions"]) == {"view", "sales", "logistics"}
+    h = {**auth(make_token(email=FIXED)), "X-Artesa-Admin": "1"}
+    assert owner_client.post(f"{API}/artisans", json={"full_name": "María López Ruiz"}, headers=h).status_code == 403
+    # Back to what the role gives.
+    r = post(owner_client, f"/accounts/{FIXED}/permissions", {"permissions": None})
+    assert {a["email"]: a for a in r.json()["data"]}[FIXED]["custom"] is False
     assert set(me(owner_client, FIXED)["permissions"]) == perms.for_roles({"editor"})
+
+
+def test_the_matrix_refuses_bad_input(owner_client, db_session):
+    _managed(owner_client, db_session, "editor")
+    path = f"/accounts/{NEW}/permissions"
+    assert post(owner_client, path, {"permissions": ["view", "bogus"]}).json()["error"]["code"] == "invalid_permission"
+    assert post(owner_client, path, {"permissions": ["sales"]}).json()["error"]["code"] == "view_required"
+    assert post(owner_client, f"/accounts/{OWNER}/permissions", {"permissions": ["view"]}).json()["error"]["code"] == "owner_account"
+    # A fixed account must be imported first; an unknown one does not exist.
+    assert post(owner_client, f"/accounts/{FIXED}/permissions", {"permissions": ["view"]}).json()["error"]["code"] == "not_imported"
+    assert post(owner_client, "/accounts/nadie@example.org/permissions", {"permissions": ["view"]}).status_code == 404
+    # Only the owner.
+    assert post(owner_client, path, {"permissions": ["view"]}, email=FIXED).status_code == 403
+    assert post(owner_client, "/accounts/import-fixed", email=FIXED).status_code == 403
+
+
+def test_picking_a_role_is_a_shortcut_that_drops_the_custom_list(owner_client, db_session):
+    _managed(owner_client, db_session, "editor")
+    post(owner_client, f"/accounts/{NEW}/permissions", {"permissions": ["view", "hero"]})
+    assert set(me(owner_client)["permissions"]) == {"view", "hero"}
+    post(owner_client, f"/accounts/{NEW}/role", {"role": "designer"})
+    assert set(me(owner_client)["permissions"]) == perms.for_roles({"designer"})
+    assert listing(owner_client)[NEW]["custom"] is False
+    # A fixed account's role is not changed from here, imported or not.
+    post(owner_client, "/accounts/import-fixed")
+    assert post(owner_client, f"/accounts/{FIXED}/role", {"role": "custodian"}).json()["error"]["code"] == "fixed_account"
