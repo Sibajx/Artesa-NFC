@@ -10,6 +10,12 @@ are no external references, scripts or fonts (the SVG is shown inside
 <img>, where a web font would not load anyway). The team's artwork (phase
 5b) is embedded as a data: URI built server-side from a stored, re-encoded
 PNG/JPEG (services/certificate_art.py); the params only carry its hash.
+
+Motion: a <style> inside the SVG animates the greca (drawing itself), the
+seal (NFC waves) and the title band (foil shine). It lives under
+``prefers-reduced-motion: no-preference`` and the resting state is the
+complete static drawing, so print, reduced motion and viewers without CSS
+animation see the same sheet. CSS animation runs inside <img>; scripts do not.
 """
 from __future__ import annotations
 
@@ -29,6 +35,20 @@ SERIF = "Georgia, 'Times New Roman', serif"
 SANS = "'Helvetica Neue', Arial, sans-serif"
 
 _FALLBACK = ["#1d1915", "#c9761c", "#efe4cf", "#5c3f28"]
+
+# Resting state = the finished drawing; everything below only plays when the
+# viewer allows motion. Rings and shine start invisible (opacity 0 attribute).
+_MOTION = (
+    "@media (prefers-reduced-motion:no-preference){"
+    ".m-greca{animation:m-draw .7s ease-out both}"
+    ".m-wave{transform-box:fill-box;transform-origin:center;animation:m-wave 3.6s ease-out infinite}"
+    ".m-wave2{animation-delay:1.2s}.m-wave3{animation-delay:2.4s}"
+    ".m-shine{animation:m-shine 7s ease-in-out infinite}"
+    "@keyframes m-draw{from{stroke-dasharray:1;stroke-dashoffset:1}to{stroke-dasharray:1;stroke-dashoffset:0}}"
+    "@keyframes m-wave{0%{opacity:.55;transform:scale(1)}100%{opacity:0;transform:scale(1.55)}}"
+    "@keyframes m-shine{0%{transform:translateX(-360px)}30%,100%{transform:translateX(1400px)}}"
+    "}"
+)
 
 
 def _palette(params: dict) -> list[str]:
@@ -61,6 +81,13 @@ def _t(text: object) -> str:
     return escape(str(text or ""))
 
 
+def _edition_label(edition: object) -> str:
+    """"PIEZA 3 DE 10" for a numbered edition, else the one-of-a-kind line."""
+    if isinstance(edition, dict) and isinstance(edition.get("number"), int) and isinstance(edition.get("total"), int):
+        return f"PIEZA {edition['number']} DE {edition['total']}"
+    return "PIEZA ÚNICA"
+
+
 def _lines(text: str, width: int, limit: int) -> list[str]:
     lines = textwrap.wrap(text or "", width=width)
     if len(lines) > limit:
@@ -84,7 +111,12 @@ def _band(colors: list[str], x: float, y: float, w: float, h: float, outline: st
     cells = "".join(f'<rect x="{x + i * step:.1f}" y="{y}" width="{step + 0.5:.1f}" height="{h}" fill="{c}"/>'
                     for i, c in enumerate(colors))
     # The outline keeps a colour equal to the paper visible.
-    return cells + f'<rect x="{x}" y="{y}" width="{w}" height="{h}" fill="none" stroke="{outline}" stroke-width="1.5"/>'
+    shine = (f'<clipPath id="band-clip"><rect x="{x}" y="{y}" width="{w}" height="{h}"/></clipPath>'
+             f'<linearGradient id="band-foil" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/>'
+             f'<stop offset=".5" stop-color="#fff" stop-opacity=".75"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>'
+             f'<g clip-path="url(#band-clip)"><rect class="m-shine" x="{x - 120}" y="{y}" width="120" height="{h}" '
+             f'fill="url(#band-foil)" opacity="0.0"/></g>')
+    return cells + shine + f'<rect x="{x}" y="{y}" width="{w}" height="{h}" fill="none" stroke="{outline}" stroke-width="1.5"/>'
 
 
 def _corners(color: str, rng: random.Random) -> str:
@@ -115,25 +147,31 @@ def _greca(colors: list[str], roles: dict[str, str], rng: random.Random, inset: 
     """A step-fret (greca, as in Mitla) running around the sheet."""
     unit = rng.choice((28, 32, 36))
     color = roles["accent"]
-    path = []
-
     def fret(x: float, y: float, horizontal: bool) -> str:
         u = unit / 4
         pts = [(0, 4), (0, 0), (4, 0), (4, 3), (2, 3), (2, 2)] if horizontal else [(4, 0), (0, 0), (0, 4), (3, 4), (3, 2), (2, 2)]
         return "M" + " L".join(f"{x + px * u:.1f},{y + py * u:.1f}" for px, py in pts)
 
+    # One <path> per fret, each drawing itself with a delay that follows its
+    # position, so the frame is traced around the sheet instead of fading in.
+    def draw(d: str, progress: float) -> str:
+        return (f'<path class="m-greca" pathLength="1" style="animation-delay:{progress * 2.6:.2f}s" d="{d}" '
+                f'fill="none" stroke="{color}" stroke-width="5" stroke-linejoin="miter" stroke-linecap="square"/>')
+
+    parts = []
     x = inset
     while x + unit <= W - inset:
-        path.append(fret(x, inset, True))
-        path.append(fret(x, H - inset - unit, True))
+        t = (x - inset) / (W - 2 * inset)
+        parts.append(draw(fret(x, inset, True), t * 0.35))
+        parts.append(draw(fret(x, H - inset - unit, True), 0.65 + (1 - t) * 0.35))
         x += unit
     y = inset + unit
     while y + unit <= H - inset - unit:
-        path.append(fret(inset, y, False))
-        path.append(fret(W - inset - unit, y, False))
+        t = (y - inset) / (H - 2 * inset)
+        parts.append(draw(fret(W - inset - unit, y, False), 0.35 + t * 0.3))
+        parts.append(draw(fret(inset, y, False), 0.65 + (1 - t) * 0.3))
         y += unit
-    return (f'<path d="{" ".join(path)}" fill="none" stroke="{color}" stroke-width="5" '
-            f'stroke-linejoin="miter" stroke-linecap="square"/>')
+    return "".join(parts)
 
 
 def _constellation(colors: list[str], rng: random.Random, area: tuple[float, float, float, float]) -> str:
@@ -177,6 +215,7 @@ def render(params: dict, *, version: int, approved_by: str | None = None, approv
 
     out = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}" '
            f'role="img" aria-label="Certificado original de {_t(params.get("piece_name"))}">',
+           f'<style>{_MOTION}</style>',
            f'<rect width="{W}" height="{H}" fill="{paper}"/>']
     art = params.get("art") if isinstance(params.get("art"), dict) and art_uri else None
     placement = art.get("placement") if art and art.get("placement") in ART_PLACEMENTS else "sello"
@@ -225,6 +264,11 @@ def render(params: dict, *, version: int, approved_by: str | None = None, approv
     else:
         out.append(_seal(W / 2, seal_y, seal_r, roles, rng))
 
+    # NFC waves leaving the seal: invisible at rest, they only exist in motion.
+    for n, extra in enumerate(("", " m-wave2", " m-wave3")):
+        out.append(f'<circle class="m-wave{extra}" cx="{W / 2}" cy="{seal_y}" r="{seal_r}" fill="none" '
+                   f'stroke="{roles["accent"]}" stroke-width="3" opacity="0"/>')
+
     facts = [("Código", params.get("public_code") or ""), ("Diseño", f"versión {version}")]
     if approved_by:
         facts.append(("Aprobado por", f"{approved_by}{' · ' + approved_on if approved_on else ''}"))
@@ -235,7 +279,7 @@ def render(params: dict, *, version: int, approved_by: str | None = None, approv
         out.append(f'<text x="{W / 2 + 20}" y="{fy}" font-family="{SANS}" font-size="26" fill="{ink}">{_t(value)}</text>')
         fy += 44
     out.append(f'<text x="{W / 2}" y="{H - 110}" text-anchor="middle" font-family="{SANS}" font-size="22" '
-               f'letter-spacing="4" fill="{ink}" fill-opacity="0.7">ARTESANFC.COM · PIEZA ÚNICA</text>')
+               f'letter-spacing="4" fill="{ink}" fill-opacity="0.7">ARTESANFC.COM · {_edition_label(params.get("edition"))}</text>')
 
     if watermark:
         out.append(f'<text x="{W / 2}" y="{H / 2}" text-anchor="middle" font-family="{SANS}" font-size="150" '
