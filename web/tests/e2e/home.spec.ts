@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { mockApi } from "./support";
+import { mockApi, reply } from "./support";
 
 test.describe("home", () => {
-  test("has at most four blocks and makes no API request", async ({ page }) => {
+  test("has at most four blocks and only asks for the hero campaign", async ({ page }) => {
     const api = await mockApi(page);
     await page.goto("/");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(
@@ -14,7 +14,43 @@ test.describe("home", () => {
       "href",
       "/piezas/",
     );
-    expect(api.requests).toEqual([]);
+    await page.waitForTimeout(500);
+    // The only request is the hero's (P-028); it answers 404 here, so the
+    // built-in hero stays.
+    expect(api.requests.filter((r) => r !== "GET /hero")).toEqual([]);
+    await expect(page.locator('[data-provisional="hero"]')).toBeVisible();
+  });
+
+  test("shows the season's poster and video when Gestión has one for today", async ({ page }) => {
+    const sources: string[] = [];
+    page.on("request", (r) => {
+      if (/\/media\/hero\//.test(r.url())) sources.push(new URL(r.url()).pathname);
+    });
+    await mockApi(page, {
+      "/hero": reply(200, {
+        data: {
+          slug: "dia-de-muertos",
+          name: "Día de Muertos",
+          reason: "date",
+          video: {
+            mp4: "/media/hero/dia-de-muertos/ab12.mp4",
+            webm: "/media/hero/dia-de-muertos/ab12.webm",
+          },
+          poster: "/media/hero/dia-de-muertos/ab12.jpg",
+        },
+      }),
+    });
+    await page.goto("/");
+    await expect(page.locator(".hero__poster img")).toHaveAttribute(
+      "src",
+      /\/media\/hero\/dia-de-muertos\/ab12\.jpg$/,
+    );
+    await expect(page.locator('[data-provisional="hero"]')).toHaveCount(0);
+    // The video asks for the season's file (the mock answers 404, so it
+    // is then dropped and the poster stays).
+    await expect
+      .poll(() => sources.some((p) => p.endsWith("/ab12.webm") || p.endsWith("/ab12.mp4")))
+      .toBe(true);
   });
 
   test("plays the muted hero video when motion is allowed, with a pause control", async ({

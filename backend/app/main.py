@@ -11,6 +11,9 @@ from app.api.admin.designs import reads as admin_designs_reads
 from app.api.admin.designs import writes as admin_designs_writes
 from app.api.admin.exports import router as admin_exports_router
 from app.api.admin.custody import writes_router as admin_custody_writes_router
+from app.api.admin.hero import reads as admin_hero_reads
+from app.api.admin.hero import uploads as admin_hero_uploads
+from app.api.admin.hero import writes as admin_hero_writes
 from app.api.admin.media import router as admin_media_router
 from app.api.admin.media import upload_router as admin_upload_router
 from app.api.admin.router import router as admin_router
@@ -209,6 +212,9 @@ app.include_router(admin_designs_writes)
 # Before the writes: POST /{owner}/{id}/media would otherwise match their
 # /{owner}/{id}/{action} transition route and fail as an unknown action.
 app.include_router(admin_upload_router)
+app.include_router(admin_hero_reads)
+app.include_router(admin_hero_writes)
+app.include_router(admin_hero_uploads)
 app.include_router(admin_writes_router)
 app.include_router(admin_media_router)
 

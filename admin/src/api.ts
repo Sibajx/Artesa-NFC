@@ -83,7 +83,7 @@ export interface ArtisanAuthorization {
 // P-026 G4: the owner's accounts page.
 export interface Account {
   email: string;
-  role: 'editor' | 'designer' | 'custodian';
+  role: 'editor' | 'designer' | 'custodian' | 'hero';
   source: 'configuracion' | 'gestion';
   owner: boolean;
   added_by: string | null;
@@ -95,6 +95,37 @@ export interface AccountList {
   data: Account[];
   cloudflare: string;
   sync_configured: boolean;
+}
+
+// P-028: the home hero by season.
+export interface HeroCampaign {
+  id: string;
+  slug: string;
+  name: string;
+  is_default: boolean;
+  start_month: number | null;
+  start_day: number | null;
+  end_month: number | null;
+  end_day: number | null;
+  status: 'no_video' | 'processing' | 'error' | 'draft' | 'live' | 'scheduled';
+  error: string | null;
+  published: boolean;
+  forced: boolean;
+  forced_until: string | null;
+  video_mp4: string | null;
+  video_webm: string | null;
+  poster: string | null;
+  updated_by: string | null;
+  updated_at: string;
+}
+
+export interface HeroState {
+  today: string;
+  ffmpeg_available: boolean;
+  media_enabled: boolean;
+  live_id: string | null;
+  live_reason: 'forced' | 'date' | 'default' | null;
+  campaigns: HeroCampaign[];
 }
 
 export interface ArtisanDetail {
@@ -579,6 +610,20 @@ export const adminApi = {
     request<PieceDetail>('POST', `/pieces/${encodeURIComponent(id)}/palette/generate`, { body: {}, version }),
   setPalette: (id: string, colors: string[], version: string) =>
     request<PieceDetail>('POST', `/pieces/${encodeURIComponent(id)}/palette`, { body: { colors }, version }),
+
+  hero: (signal?: AbortSignal) => get<HeroState>('/hero', undefined, signal),
+  createHeroCampaign: (body: { name: string; start_month: number; start_day: number; end_month: number; end_day: number }) =>
+    request<HeroState>('POST', '/hero/campaigns', { body }),
+  updateHeroCampaign: (id: string, body: { name?: string; start_month?: number; start_day?: number; end_month?: number; end_day?: number }) =>
+    request<HeroState>('PATCH', `/hero/campaigns/${encodeURIComponent(id)}`, { body }),
+  deleteHeroCampaign: (id: string) => request<HeroState>('DELETE', `/hero/campaigns/${encodeURIComponent(id)}`, { body: {} }),
+  publishHeroCampaign: (id: string, published: boolean) =>
+    request<HeroState>('POST', `/hero/campaigns/${encodeURIComponent(id)}/${published ? 'publish' : 'unpublish'}`, { body: {} }),
+  forceHeroCampaign: (id: string, until: string | null) =>
+    request<HeroState>('POST', '/hero/force', { body: { campaign_id: id, until } }),
+  unforceHero: () => request<HeroState>('DELETE', '/hero/force', { body: {} }),
+  uploadHeroVideo: (id: string, file: Blob, contentType: string) =>
+    request<HeroState>('POST', `/hero/campaigns/${encodeURIComponent(id)}/video`, { file: { data: file, contentType } }),
 
   uploadMedia: (owner: 'artisans' | 'pieces', id: string, file: Blob, contentType: string, role: MediaRole, altText?: string) =>
     request<AdminMedia>('POST', `/${owner}/${encodeURIComponent(id)}/media`, {

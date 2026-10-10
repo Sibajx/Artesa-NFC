@@ -168,3 +168,16 @@ export interface DesignReviewOpen {
   readonly expires_at: string;
   readonly svg: string;
 }
+
+// GET /hero (P-028): the campaign the home hero shows today, or null.
+export interface HeroCampaign {
+  readonly slug: string;
+  readonly name: string;
+  readonly reason: "forced" | "date" | "default" | null;
+  readonly video: { readonly mp4: string; readonly webm: string | null };
+  readonly poster: string;
+}
+
+export interface HeroEnvelope {
+  readonly data: HeroCampaign | null;
+}

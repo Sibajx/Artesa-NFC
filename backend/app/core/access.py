@@ -46,9 +46,11 @@ AUTH_UNAVAILABLE_ERROR = {
 }
 
 
-EDITOR, DESIGNER, CUSTODIAN, OWNER = "editor", "designer", "custodian", "owner"
+EDITOR, DESIGNER, CUSTODIAN, OWNER, HERO = "editor", "designer", "custodian", "owner", "hero"
 # Roles an account can be given from Gestión (the owner is fixed in .env).
-ASSIGNABLE_ROLES = (EDITOR, DESIGNER, CUSTODIAN)
+# HERO (P-028) is an editor who also manages the home hero's seasonal videos;
+# the owner always has it.
+ASSIGNABLE_ROLES = (EDITOR, DESIGNER, CUSTODIAN, HERO)
 
 
 @dataclass(frozen=True)
@@ -143,6 +145,7 @@ class AccessVerifier:
             roles.add(DESIGNER)
         if email in self.owners:
             roles.add(OWNER)
+            roles.add(HERO)
         return AdminIdentity(email=email, roles=frozenset(roles))
 
 

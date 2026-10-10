@@ -1011,6 +1011,24 @@ públicos: `<model-viewer>` pide el GLB con CORS, y Cloudflare guarda una sola
 copia por URL sin mirar `Vary: Origin`. La regla A de producción fue ampliada y
 verificada para `GET|HEAD /media/*` el 2026-09-30 (`OPERATIONS.md` §8).
 
+### 14.4 Hero por temporada (P-028, 2026-10-09)
+
+**Público.** `GET /api/v1/hero` → `{"data": null}` o `{"data": {"slug", "name", "reason": "forced"|"date"|"default", "video": {"mp4", "webm"|null}, "poster"}}`. Las URLs son rutas `/media/hero/{slug}/{hash}.{mp4|webm|jpg}` contra el origen de la API. `Cache-Control: public, max-age=300`. `data: null` = el sitio conserva su hero incluido. Elige, en orden: la temporada **forzada** (si no pasó su fecha de fin), una **publicada** cuyo rango anual cubre hoy en `America/Mexico_City` (si varias, la que empezó más tarde), el hero normal **publicado**.
+
+**Gestión** (`/api/admin/v1/hero`, solo rol `hero` y dueño; los demás reciben 403). Escrituras con `X-Artesa-Admin: 1` y JSON; sin `If-Match` (dos personas, cambios simples). Todas devuelven el estado completo.
+
+| Método y ruta | Qué hace |
+|---|---|
+| `GET /hero` | Estado: `today`, `ffmpeg_available`, `media_enabled`, `live_id`, `live_reason`, `campaigns[]` (`status`: `no_video`, `processing`, `error`, `draft`, `live`, `scheduled`). |
+| `POST /hero/campaigns` | Crea una temporada (`name`, `start_month/day`, `end_month/day`; se repite cada año). |
+| `PATCH /hero/campaigns/{id}` | Cambia nombre y/o fechas (el hero normal no tiene fechas). |
+| `DELETE /hero/campaigns/{id}` | Borra la temporada y sus archivos (no el hero normal ni la forzada). |
+| `POST /hero/campaigns/{id}/video` | Sube el video **como cuerpo** (`video/mp4`, `video/webm` o `video/quicktime`, hasta 200 MB). 202: se procesa en segundo plano con `ffmpeg` (16:9 centrado, 12 s, sin audio, ≤1080p, MP4 + WebM + portada). Mientras procesa o si falla, el video anterior sigue visible. |
+| `POST /hero/campaigns/{id}/publish` · `/unpublish` | Requiere un video listo. |
+| `POST /hero/force` `{campaign_id, until?}` · `DELETE /hero/force` | Muestra una temporada para todos ya, con fin opcional; solo una a la vez. |
+
+Errores: `no_video`, `already_processing`, `ffmpeg_unavailable`, `unsupported_media_type`, `too_large` (413), `not_a_video`, `encode_failed`, `too_heavy`, `invalid_date`, `invalid_name`, `default_campaign`, `forced_campaign`. Auditoría: `hero.*`.
+
 ## 15. Estado de las decisiones
 
 Todos los puntos que en la versión anterior de este documento estaban

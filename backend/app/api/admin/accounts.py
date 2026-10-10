@@ -22,7 +22,7 @@ def require_owner(identity: AdminIdentity = Depends(require_admin)) -> AdminIden
     return identity
 
 
-Role = Literal["editor", "designer", "custodian"]
+Role = Literal["editor", "designer", "custodian", "hero"]
 
 
 class Account(BaseModel):
