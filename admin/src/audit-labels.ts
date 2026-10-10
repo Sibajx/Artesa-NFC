@@ -29,6 +29,12 @@ const LABELS: Record<string, string> = {
   'piece.sold': 'Registró una venta',
   'piece.moved': 'Cambió la ubicación de la pieza',
   'piece.sale_cancelled': 'Canceló una venta',
+  'supply.created': 'Creó un insumo',
+  'supply.updated': 'Editó un insumo',
+  'supply.purchase': 'Registró una compra de insumo',
+  'supply.use': 'Registró el uso de un insumo',
+  'supply.loss': 'Registró una merma de insumo',
+  'supply.adjustment': 'Ajustó el stock de un insumo',
   'hero.created': 'Creó una temporada del hero',
   'hero.updated': 'Editó una temporada del hero',
   'hero.deleted': 'Borró una temporada del hero',
@@ -98,5 +104,6 @@ export const actorLabel = (email: string | null, actorType: string): string =>
 export function entityLink(entityType: string, entityId: string): string | null {
   if (entityType === 'piece') return `/piezas/${entityId}`;
   if (entityType === 'artisan') return `/artesanos/${entityId}`;
+  if (entityType === 'supply') return '/insumos';
   return null;
 }

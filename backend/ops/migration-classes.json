@@ -72,6 +72,10 @@
     "f4a8c2e6d1b3": {
       "class": "additive",
       "note": "Adds the nullable column admin_account.permissions (permission checkboxes per account). NULL means derive from the role, so nobody's access changes. Older code never reads it, so a code-only rollback is compatible; the downgrade drops the column and with it any explicit permissions already set."
+    },
+    "a7d3e1b5c9f2": {
+      "class": "additive",
+      "note": "Adds the supply and supply_movement tables (stock of consumables: chips, seals, scratch cards, epoxy). Nothing existing changes and no row is seeded; older code ignores them, so a code-only rollback is compatible. The downgrade drops both tables and every movement in them."
     }
   }
 }
