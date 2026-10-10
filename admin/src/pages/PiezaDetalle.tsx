@@ -10,6 +10,7 @@ import { UbicacionSection } from '../UbicacionSection';
 import { usePermissions } from '../roles-context';
 import { PublishChecklist } from '../PublishChecklist';
 import { RecordActions } from '../RecordActions';
+import { ProductionTimeline } from '../ProductionTimeline';
 import { Badge, ErrorState, Field, Gate, Loading, PublicationBadge } from '../ui';
 
 export default function PiezaDetalle() {
@@ -139,6 +140,11 @@ export default function PiezaDetalle() {
               <MediaSection kind="pieces" ownerId={p.id} media={p.media}
                 ownerArchived={p.publication_status === 'archived'} onChanged={() => setRevision((r) => r + 1)} />
             </Gate>
+
+            <section className="card-elevated p-5 sm:p-6" aria-labelledby="production-heading">
+              <h2 id="production-heading" className="text-xl font-serif text-botanica-negro mb-4">Seguimiento de producción</h2>
+              <ProductionTimeline pieceId={p.id} />
+            </section>
 
             <Gate permission="sales">
               <VentaSection key={`sale:${p.updated_at}`} piece={p} onChanged={() => setRevision((r) => r + 1)} />
