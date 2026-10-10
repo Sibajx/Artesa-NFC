@@ -10,7 +10,7 @@ import { UbicacionSection } from '../UbicacionSection';
 import { usePermissions } from '../roles-context';
 import { PublishChecklist } from '../PublishChecklist';
 import { RecordActions } from '../RecordActions';
-import { Badge, ErrorState, Field, Loading, PublicationBadge } from '../ui';
+import { Badge, ErrorState, Field, Gate, Loading, PublicationBadge } from '../ui';
 
 export default function PiezaDetalle() {
   const permissions = usePermissions();
@@ -32,7 +32,9 @@ export default function PiezaDetalle() {
         return (
           <div className="flex flex-col gap-8">
             <RecordActions kind="pieces" id={p.id} version={p.updated_at} status={p.publication_status} trashedAt={p.trashed_at} purgeBlocker={p.purge_blocker} name={p.name} availability={p.availability_status} onChanged={() => setRevision((r) => r + 1)} />
-            <PublishChecklist kind="pieces" record={p} onChanged={() => setRevision((r) => r + 1)} />
+            <Gate permission="publish">
+              <PublishChecklist kind="pieces" record={p} onChanged={() => setRevision((r) => r + 1)} />
+            </Gate>
             <article className="bg-white rounded-xl border border-botanica-gris/15 overflow-hidden shadow-sm">
               <header className="bg-[#FCFBF9] border-b border-botanica-gris/15 p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
@@ -133,14 +135,22 @@ export default function PiezaDetalle() {
               </section>
             )}
 
-            <MediaSection kind="pieces" ownerId={p.id} media={p.media}
-              ownerArchived={p.publication_status === 'archived'} onChanged={() => setRevision((r) => r + 1)} />
+            <Gate permission="edit">
+              <MediaSection kind="pieces" ownerId={p.id} media={p.media}
+                ownerArchived={p.publication_status === 'archived'} onChanged={() => setRevision((r) => r + 1)} />
+            </Gate>
 
-            <VentaSection key={`sale:${p.updated_at}`} piece={p} onChanged={() => setRevision((r) => r + 1)} />
+            <Gate permission="sales">
+              <VentaSection key={`sale:${p.updated_at}`} piece={p} onChanged={() => setRevision((r) => r + 1)} />
+            </Gate>
 
-            <UbicacionSection key={`location:${p.updated_at}`} piece={p} onChanged={() => setRevision((r) => r + 1)} />
+            <Gate permission="logistics">
+              <UbicacionSection key={`location:${p.updated_at}`} piece={p} onChanged={() => setRevision((r) => r + 1)} />
+            </Gate>
 
-            <PaletteSection key={p.updated_at} piece={p} onChanged={() => setRevision((r) => r + 1)} />
+            <Gate permission="edit">
+              <PaletteSection key={p.updated_at} piece={p} onChanged={() => setRevision((r) => r + 1)} />
+            </Gate>
 
             {permissions.includes('design') && (
               <section className="card-elevated p-5 sm:p-6 flex flex-wrap items-center justify-between gap-3">

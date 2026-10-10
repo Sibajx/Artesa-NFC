@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { LOGOUT_URL } from './api';
 import type { ApiError, PublicationStatus } from './api';
 import { labels } from './format';
+import { usePermissions } from './roles-context';
 
 const TONES = {
   jade: 'bg-botanica-jade/10 text-botanica-jade border-botanica-jade/20',
@@ -77,5 +78,24 @@ export function Field({ label, children }: { label: string; children: ReactNode 
       <dt className="text-sm font-medium text-botanica-gris mb-1">{label}</dt>
       <dd className="text-botanica-negro">{children ?? '—'}</dd>
     </div>
+  );
+}
+
+// What an account may do follows its permission checkboxes (/me). The API checks
+// each one again; these only keep the screen honest, so nobody clicks a button
+// that is going to answer 403.
+
+/** Shows ``children`` only to accounts that hold ``permission``. */
+export function Can({ permission, children }: { permission: string; children: ReactNode }) {
+  return usePermissions().includes(permission) ? <>{children}</> : null;
+}
+
+/** Keeps the content visible but greyed out and unclickable without ``permission``. */
+export function Gate({ permission, children }: { permission: string; children: ReactNode }) {
+  if (usePermissions().includes(permission)) return <>{children}</>;
+  return (
+    <fieldset disabled title="Tu cuenta no tiene permiso para esta acción" className="m-0 min-w-0 border-0 p-0 opacity-60">
+      {children}
+    </fieldset>
   );
 }

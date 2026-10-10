@@ -3,7 +3,7 @@ import { adminApi } from '../api';
 import { formatDate } from '../format';
 import { useListFilters, useLoad } from '../hooks';
 import { ListFilters } from '../ListFilters';
-import { ErrorState, Loading, PageHeader, PublicationBadge } from '../ui';
+import { Can, ErrorState, Loading, PageHeader, PublicationBadge } from '../ui';
 import { QuickPublish } from '../QuickPublish';
 import { useState } from 'react';
 
@@ -17,7 +17,9 @@ export default function Artesanos() {
   return (
     <div className="max-w-6xl mx-auto pb-12">
       <PageHeader title="Artesanos" subtitle="Todos los perfiles, publicados o no.">
+        <Can permission="edit">
         <Link to="/artesanos/nuevo" className="btn-primary"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Nuevo artesano</Link>
+        </Can>
       </PageHeader>
 
       <div className="bg-white rounded-xl border border-botanica-gris/20 overflow-hidden shadow-sm">

@@ -3,7 +3,7 @@ import { adminApi, PIECES_CSV_URL } from '../api';
 import { formatDate, labels } from '../format';
 import { useListFilters, useLoad } from '../hooks';
 import { ListFilters } from '../ListFilters';
-import { ErrorState, Loading, PageHeader, PublicationBadge } from '../ui';
+import { Can, ErrorState, Loading, PageHeader, PublicationBadge } from '../ui';
 import { QuickPublish } from '../QuickPublish';
 import { useState } from 'react';
 
@@ -24,7 +24,9 @@ export default function Piezas() {
       <PageHeader title="Piezas" subtitle="Inventario completo, con su estado de publicación y disponibilidad.">
         <div className="flex flex-wrap gap-3">
           <a href={PIECES_CSV_URL} download className="btn-secondary" title="Todas las piezas fuera de la papelera, sin filtros. Si tienes el rol de custodio incluye la certificación.">Exportar CSV</a>
+          <Can permission="edit">
           <Link to={artisanId ? `/piezas/nueva?artesano=${artisanId}` : '/piezas/nueva'} className="btn-primary"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Nueva pieza</Link>
+          </Can>
         </div>
       </PageHeader>
 
