@@ -128,6 +128,29 @@ export interface HeroState {
   campaigns: HeroCampaign[];
 }
 
+// P-029: the replaceable images of the public site.
+export interface SiteImage {
+  avif: string;
+  webp: string;
+  jpg: string;
+  width: number;
+  height: number;
+  updated_by: string | null;
+  updated_at: string;
+}
+
+export interface SiteSlot {
+  slot: string;
+  label: string;
+  ratio: string;
+  image: SiteImage | null;
+}
+
+export interface SiteImagesState {
+  media_enabled: boolean;
+  slots: SiteSlot[];
+}
+
 export interface ArtisanDetail {
   id: string;
   slug: string;
@@ -665,6 +688,12 @@ export const adminApi = {
       params: { start: start > 0 ? String(start) : undefined },
       file: { data: file, contentType },
     }),
+
+  siteImages: (signal?: AbortSignal) => get<SiteImagesState>('/hero/site-images', undefined, signal),
+  uploadSiteImage: (slot: string, file: Blob, contentType: string) =>
+    request<SiteImagesState>('POST', `/hero/site-images/${encodeURIComponent(slot)}`, { file: { data: file, contentType } }),
+  clearSiteImage: (slot: string) =>
+    request<SiteImagesState>('DELETE', `/hero/site-images/${encodeURIComponent(slot)}`, { body: {} }),
 
   uploadMedia: (owner: 'artisans' | 'pieces', id: string, file: Blob, contentType: string, role: MediaRole, altText?: string) =>
     request<AdminMedia>('POST', `/${owner}/${encodeURIComponent(id)}/media`, {

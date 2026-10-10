@@ -12,6 +12,7 @@ from app.api.admin.designs import art_router as admin_designs_art
 from app.api.admin.designs import writes as admin_designs_writes
 from app.api.admin.exports import router as admin_exports_router
 from app.api.admin.custody import writes_router as admin_custody_writes_router
+from app.api.admin.hero import images as admin_hero_images
 from app.api.admin.hero import reads as admin_hero_reads
 from app.api.admin.hero import uploads as admin_hero_uploads
 from app.api.admin.hero import writes as admin_hero_writes
@@ -217,6 +218,7 @@ app.include_router(admin_upload_router)
 app.include_router(admin_hero_reads)
 app.include_router(admin_hero_writes)
 app.include_router(admin_hero_uploads)
+app.include_router(admin_hero_images)
 app.include_router(admin_writes_router)
 app.include_router(admin_media_router)
 

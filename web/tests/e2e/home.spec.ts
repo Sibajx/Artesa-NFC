@@ -2,7 +2,9 @@ import { expect, test } from "@playwright/test";
 import { mockApi, reply } from "./support";
 
 test.describe("home", () => {
-  test("has at most four blocks and only asks for the hero campaign", async ({ page }) => {
+  test("has at most four blocks and only asks for the hero campaign and the site images", async ({
+    page,
+  }) => {
     const api = await mockApi(page);
     await page.goto("/");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(
@@ -15,10 +17,11 @@ test.describe("home", () => {
       "/piezas/",
     );
     await page.waitForTimeout(500);
-    // The only request is the hero's (P-028); it answers 404 here, so the
-    // built-in hero stays.
-    expect(api.requests.filter((r) => r !== "GET /hero")).toEqual([]);
+    // The only requests are the hero's (P-028) and the site images' (P-029);
+    // both answer 404 here, so the built-in hero and image stay.
+    expect(api.requests.filter((r) => r !== "GET /hero" && r !== "GET /site-images")).toEqual([]);
     await expect(page.locator('[data-provisional="hero"]')).toBeVisible();
+    await expect(page.locator(".collection__media .placeholder-note")).toBeVisible();
   });
 
   test("shows the season's poster and video when Gestión has one for today", async ({ page }) => {
@@ -51,6 +54,60 @@ test.describe("home", () => {
     await expect
       .poll(() => sources.some((p) => p.endsWith("/ab12.webm") || p.endsWith("/ab12.mp4")))
       .toBe(true);
+  });
+
+  test("replaces the collection photo when Gestión has one, and drops the provisional label", async ({
+    page,
+  }) => {
+    await mockApi(page, {
+      "/site-images": reply(200, {
+        data: {
+          "collection-entry": {
+            avif: "/media/sitio/collection-entry/ab12.avif",
+            webp: "/media/sitio/collection-entry/ab12.webp",
+            jpg: "/media/sitio/collection-entry/ab12.jpg",
+            width: 1200,
+            height: 1500,
+          },
+        },
+      }),
+    });
+    // A 1x1 PNG answers every format; the browser sniffs the bytes.
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "base64",
+    );
+    await page.route("http://127.0.0.1:8000/media/sitio/**", (route) =>
+      route.fulfill({
+        status: 200,
+        headers: { "Access-Control-Allow-Origin": "*" },
+        contentType: "image/png",
+        body: png,
+      }),
+    );
+    await page.goto("/");
+    const image = page.locator(".collection__media img");
+    await expect(image).toHaveAttribute("src", /\/media\/sitio\/collection-entry\/ab12\.jpg$/);
+    await expect(page.locator(".collection__media .placeholder-note")).toHaveCount(0);
+  });
+
+  test("keeps the provisional photo when the replacement file is missing", async ({ page }) => {
+    await mockApi(page, {
+      "/site-images": reply(200, {
+        data: {
+          "collection-entry": {
+            avif: "/media/sitio/collection-entry/gone.avif",
+            webp: "/media/sitio/collection-entry/gone.webp",
+            jpg: "/media/sitio/collection-entry/gone.jpg",
+            width: 1200,
+            height: 1500,
+          },
+        },
+      }),
+    });
+    await page.goto("/");
+    await page.waitForTimeout(800); // the mock answers 404 for the media
+    await expect(page.locator(".collection__media .placeholder-note")).toBeVisible();
   });
 
   test("plays the muted hero video when motion is allowed, with a pause control", async ({

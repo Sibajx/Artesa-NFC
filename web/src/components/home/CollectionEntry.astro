@@ -76,6 +76,49 @@ const { certificate } = collection;
 </section>
 
 <script>
+  // P-029: the photo of this block can be replaced from Gestión. The page ships
+  // with its provisional image; when the API has a photo for this slot it is
+  // swapped in, and the "Imagen provisional" label goes once it has loaded. Any
+  // failure (API down, file missing) leaves the provisional image untouched.
+  import { createApiClient } from "@/lib/api";
+  import { currentApiConfig, resolveMediaUrl } from "@/lib/api-config";
+
+  async function replaceCollectionImage(): Promise<void> {
+    const picture = document.querySelector<HTMLPictureElement>(".collection__media picture");
+    const img = picture?.querySelector("img");
+    if (!picture || !img) return;
+    const config = currentApiConfig();
+    const result = await createApiClient({ config, timeoutMs: 2500 }).getSiteImages();
+    if (result.kind !== "ok") return;
+    const files = result.data.data["collection-entry"];
+    if (!files) return;
+    const jpg = resolveMediaUrl(files.jpg, config);
+    const webp = resolveMediaUrl(files.webp, config);
+    const avif = resolveMediaUrl(files.avif, config);
+    if (!jpg) return;
+    // The current image stays on screen until the new one has loaded.
+    img.addEventListener(
+      "load",
+      () => document.querySelector(".collection__media .placeholder-note")?.remove(),
+      { once: true },
+    );
+    picture.querySelectorAll("source").forEach((source) => source.remove());
+    for (const [type, url] of [
+      ["image/avif", avif],
+      ["image/webp", webp],
+    ] as const) {
+      if (!url) continue;
+      const source = document.createElement("source");
+      source.type = type;
+      source.srcset = url;
+      picture.insertBefore(source, img);
+    }
+    img.width = files.width;
+    img.height = files.height;
+    img.src = jpg;
+  }
+  void replaceCollectionImage().catch(() => undefined);
+
   // Pointer-driven tilt + foil position, written as CSS custom properties
   // (CSSOM, allowed by the CSP). Only for a fine pointer and allowed motion.
   const card = document.querySelector<HTMLElement>("[data-holo]");

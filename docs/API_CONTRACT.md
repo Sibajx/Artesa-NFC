@@ -1049,6 +1049,22 @@ verificada para `GET|HEAD /media/*` el 2026-09-30 (`OPERATIONS.md` §8).
 
 Errores: `no_video`, `already_processing`, `ffmpeg_unavailable`, `unsupported_media_type`, `too_large` (413), `not_a_video`, `encode_failed`, `too_heavy`, `invalid_date`, `invalid_name`, `default_campaign`, `forced_campaign`. Auditoría: `hero.*`.
 
+### 14.5 Imágenes del sitio (P-029, 2026-10-10)
+
+Fotos fijas de la página pública que el dueño y el rol `hero` pueden cambiar desde Gestión → Hero → «Imágenes del sitio». Cada **ranura** es un lugar de la página; hoy solo existe `collection-entry` («Entrada a la colección», proporción 4:5, hasta 1200×1500). Una ranura sin foto conserva la imagen provisional incluida en el sitio.
+
+**Público.** `GET /api/v1/site-images` → `{"data": {"<ranura>": {"avif", "webp", "jpg", "width", "height"}}}`; solo aparecen las ranuras con foto. Las URLs son rutas `/media/sitio/{ranura}/{hash}.{avif|webp|jpg}` contra el origen de la API. `Cache-Control: public, max-age=300`.
+
+**Gestión** (`/api/admin/v1/hero/site-images`, mismo rol que las temporadas; los demás reciben 403):
+
+| Método y ruta | Qué hace |
+|---|---|
+| `GET /hero/site-images` | Estado: `media_enabled` y `slots[]` (`slot`, `label`, `ratio`, `image` o `null`). |
+| `POST /hero/site-images/{ranura}` | Sube la foto **como cuerpo** (`image/jpeg`, `image/png` o `image/webp`, hasta 25 MB, con `X-Artesa-Admin: 1`). Se recorta al centro a la proporción de la ranura, se limita a su ancho máximo y se guarda en AVIF + WebP + JPEG sin metadatos. Mínimo 600 px de ancho en esa proporción. 200 con el estado completo. |
+| `DELETE /hero/site-images/{ranura}` | Vuelve a la imagen provisional y borra los archivos. |
+
+Errores: `unsupported_type` (422), `empty_file` (422), `too_small` (422), `image_too_large` (422), `too_large` (413), `unsupported_media_type` (415), `avif_unavailable` (503), `media_unavailable` (503), `not_found` (404, ranura desconocida).
+
 ## 15. Estado de las decisiones
 
 Todos los puntos que en la versión anterior de este documento estaban
