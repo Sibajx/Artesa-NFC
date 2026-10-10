@@ -225,7 +225,7 @@ export const aboutCopy = {
         role: "CTO y Desarrollador",
         bio: "Entusiasta de la ciberseguridad y del desarrollo de software. Le apasionan el backend, las bases de datos, el desarrollo web y las aplicaciones. En ArtesaNFC lidera la tecnología y construye la plataforma que protege la autenticidad de cada pieza.",
         initials: "D",
-        photo: null,
+        photo: "/media/equipo/diego.jpg",
         channels: [
           { kind: "email", label: "Correo", href: "mailto:diego.sanchez.030604@gmail.com" },
           { kind: "instagram", label: "Instagram", href: "https://www.instagram.com/deigosd" },
@@ -237,9 +237,12 @@ export const aboutCopy = {
         name: "Mario Uriel Juárez Rosales",
         role: "CFO",
         bio: "Nacido en Oaxaca, Valles Centrales. Estudia Ingeniería en Innovación Tecnológica con especialidad en Energías Alternas. Experto en lógica y matemáticas avanzadas; en ArtesaNFC lleva el modelo financiero, las métricas y la contabilidad.",
+        quote:
+          "La ciencia y la vida es un gran error y ensaño, por eso estoy acostumbrado al fallo.",
         initials: "U",
         photo: "/media/equipo/uriel.jpg",
         channels: [
+          { kind: "email", label: "Correo", href: "mailto:mariourieljuarezrosales@gmail.com" },
           { kind: "instagram", label: "Instagram", href: "https://www.instagram.com/uriel_1826/" },
           { kind: "github", label: "GitHub", href: "https://github.com/uriel2R" },
         ],
