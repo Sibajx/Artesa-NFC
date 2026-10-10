@@ -156,9 +156,9 @@ export const homeCopy = {
   },
 } as const;
 
-// /nosotros — "Colectivo" (2026-10). PROVISIONAL: members and channels are
-// placeholders until the team sends the real data. A `null` link is shown
-// as "por confirmar"; nothing here is a real person or account yet.
+// /nosotros — "Colectivo" (2026-10). Team data given and authorised by each
+// member (see Artesa_Brain/02_Producto/Equipo.md). A `null` link is shown as
+// "por confirmar"; a member without photo shows initials.
 export type ChannelKind =
   "email" | "instagram" | "facebook" | "tiktok" | "whatsapp" | "linkedin" | "github" | "web";
 
@@ -207,29 +207,70 @@ export const aboutCopy = {
     title: "Las personas detrás del proyecto.",
     members: [
       {
-        name: "Integrante por confirmar",
-        role: "Rol por confirmar",
-        bio: "Breve presentación pendiente.",
+        name: "Alexis Ramírez Sibaja",
+        role: "CEO",
+        bio: "CEO de ArtesaNFC y estudiante de Ingeniería en Innovación Tecnológica (UABJO). Junto a su equipo convirtió una idea en plataforma real, diseñando y construyendo la web, la Gestión y las finanzas. Ingeniería inversa, persuasión, temple bajo presión y elocuencia al cerrar tratos.",
         initials: "A",
-        photo: null,
+        photo: "/media/equipo/alexis.jpg",
         channels: [
-          { kind: "email", label: "Correo", href: null },
-          { kind: "instagram", label: "Instagram", href: null },
-          { kind: "linkedin", label: "LinkedIn", href: null },
+          { kind: "email", label: "Correo", href: "mailto:armzsibaja@gmail.com" },
+          { kind: "github", label: "GitHub", href: "https://github.com/Sibajx" },
         ],
-        provisional: true,
+        provisional: false,
       },
       {
-        name: "Integrante por confirmar",
-        role: "Rol por confirmar",
-        bio: "Breve presentación pendiente.",
-        initials: "N",
+        name: "Diego Sánchez",
+        role: "CTO y Desarrollador",
+        bio: "Entusiasta de la ciberseguridad y del desarrollo de software. Le apasionan el backend, las bases de datos, el desarrollo web y las aplicaciones. En ArtesaNFC lidera la tecnología y construye la plataforma que protege la autenticidad de cada pieza.",
+        initials: "D",
         photo: null,
         channels: [
-          { kind: "email", label: "Correo", href: null },
-          { kind: "github", label: "GitHub", href: null },
+          { kind: "email", label: "Correo", href: "mailto:diego.sanchez.030604@gmail.com" },
+          { kind: "instagram", label: "Instagram", href: "https://www.instagram.com/deigosd" },
+          { kind: "github", label: "GitHub", href: "https://github.com/Diego1Sanchez" },
         ],
-        provisional: true,
+        provisional: false,
+      },
+      {
+        name: "Mario Uriel Juárez Rosales",
+        role: "CFO",
+        bio: "Nacido en Oaxaca, Valles Centrales. Estudia Ingeniería en Innovación Tecnológica con especialidad en Energías Alternas. Experto en lógica y matemáticas avanzadas; en ArtesaNFC lleva el modelo financiero, las métricas y la contabilidad.",
+        initials: "U",
+        photo: "/media/equipo/uriel.jpg",
+        channels: [
+          { kind: "instagram", label: "Instagram", href: "https://www.instagram.com/uriel_1826/" },
+          { kind: "github", label: "GitHub", href: "https://github.com/uriel2R" },
+        ],
+        provisional: false,
+      },
+      {
+        name: "María Soledad Cruz Martínez",
+        role: "Directora de Marketing (CMO)",
+        bio: "Originaria de la Sierra Norte de Oaxaca, estudia Ingeniería en Innovación Tecnológica con enfoque en Energías Alternas en la UABJO. Le interesan la energía fotovoltaica, la eólica y la automatización de sistemas. Perseverante y curiosa, aprende de cada error.",
+        initials: "S",
+        photo: "/media/equipo/sol.jpg",
+        channels: [
+          { kind: "email", label: "Correo", href: "mailto:solcruzmartinez19@gmail.com" },
+          { kind: "instagram", label: "Instagram", href: "https://www.instagram.com/kyr41906" },
+          {
+            kind: "linkedin",
+            label: "LinkedIn",
+            href: "https://www.linkedin.com/in/cruz-m%C3%A1rtinez-mar%C3%ADa-soledad-4423393b5",
+          },
+        ],
+        provisional: false,
+      },
+      {
+        name: "Hariel Davin Nicolás Bautista",
+        role: "COO",
+        bio: "Hábil en manufactura y herramientas, con certificaciones internacionales en infraestructura, hardware e instalaciones eléctricas y electrónicas. En ArtesaNFC cierra tratos, lleva la logística y las entregas, y capacita a los artesanos para preparar sus piezas para el NFC.",
+        initials: "H",
+        photo: null,
+        channels: [
+          { kind: "email", label: "Correo", href: "mailto:nicolashariel2103@gmail.com" },
+          { kind: "instagram", label: "Instagram", href: "https://www.instagram.com/hariel__03" },
+        ],
+        provisional: false,
       },
     ] satisfies Member[],
   },
