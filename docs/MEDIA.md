@@ -45,7 +45,7 @@ Fuera de `releases/` (un despliegue nunca las toca) y fuera de `shared/` (que es
     │   └── model-01.glb
 ```
 
-Los videos del hero por temporada (P-028) se suben desde Gestión → Hero: el original se guarda un momento en `originales/hero/` (0600) y se borra al terminar de procesarlo con `ffmpeg`; solo los derivados quedan en `publico/hero/`. Requiere `ffmpeg` y `ffprobe` en el servidor (`API_CONTRACT.md` §14.4).
+Los videos del hero por temporada (P-028) se suben desde Gestión → Hero: el original se escribe a disco por partes en `originales/hero/` (0600) y se borra al terminar de procesarlo con `ffmpeg` (también si la temporada se borra a mitad; los restos de más de un día, por ejemplo tras un reinicio, se limpian en la siguiente subida); solo los derivados quedan en `publico/hero/`. Requiere `ffmpeg` y `ffprobe` en el servidor (`API_CONTRACT.md` §14.4).
 
 Los assets de la home se preparan con `web/scripts/prepare-site-media.sh` y se
 publican con el build de `web/`; la carga de Gestión no acepta un owner `sitio`.

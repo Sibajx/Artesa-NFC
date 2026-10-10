@@ -1043,7 +1043,7 @@ verificada para `GET|HEAD /media/*` el 2026-09-30 (`OPERATIONS.md` §8).
 | `POST /hero/campaigns` | Crea una temporada (`name`, `start_month/day`, `end_month/day`; se repite cada año). |
 | `PATCH /hero/campaigns/{id}` | Cambia nombre y/o fechas (el hero normal no tiene fechas). |
 | `DELETE /hero/campaigns/{id}` | Borra la temporada y sus archivos (no el hero normal ni la forzada). |
-| `POST /hero/campaigns/{id}/video` | Sube el video **como cuerpo** (`video/mp4`, `video/webm` o `video/quicktime`, hasta 200 MB). 202: se procesa en segundo plano con `ffmpeg` (16:9 centrado, 12 s, sin audio, ≤1080p, MP4 + WebM + portada). Mientras procesa o si falla, el video anterior sigue visible. |
+| `POST /hero/campaigns/{id}/video` | Sube el video **como cuerpo** (`video/mp4`, `video/webm` o `video/quicktime`, hasta 200 MB), con `?start=<segundos>` opcional (0–3600, por defecto 0). 202: se procesa en segundo plano con `ffmpeg` (16:9 centrado, 20 s desde `start`, sin audio, ≤1080p, MP4 + WebM + portada; el MP4 no pasa de 14 MB). Si `start` cae al final del video o fuera de él, la campaña queda en `error` («Ese segundo…»). Mientras procesa o si falla, el video anterior sigue visible. El cuerpo se escribe a disco por partes. |
 | `POST /hero/campaigns/{id}/publish` · `/unpublish` | Requiere un video listo. |
 | `POST /hero/force` `{campaign_id, until?}` · `DELETE /hero/force` | Muestra una temporada para todos ya, con fin opcional; solo una a la vez. |
 

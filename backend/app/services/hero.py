@@ -11,7 +11,7 @@ Which campaign shows today (America/Mexico_City, UTC-6 with no DST since
 
 Only a campaign whose video is ``ready`` can show. A video goes through
 ``ffmpeg`` (never a shell, never a network protocol): cropped to 16:9, at most
-12 s, no audio, 1080p at most, MP4 + WebM + a poster frame. That runs in the
+20 s from a start the operator may choose, no audio, 1080p at most, MP4 + WebM + a poster frame. That runs in the
 background (``run_job``) so Gestión never waits. Public files are named by
 content hash and are never rewritten; a replaced video's files are removed
 only after the new ones are stored.
@@ -23,6 +23,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
@@ -38,10 +39,16 @@ from app.services.content import Actor, ContentConflict, ContentError, ContentNo
 
 MEXICO = timezone(timedelta(hours=-6))
 MAX_ORIGINAL_BYTES = 200 * 1024 * 1024
-MAX_SECONDS = 12
-MAX_OUTPUT_BYTES = 12 * 1024 * 1024
-STALE_AFTER = timedelta(minutes=20)
+MAX_SECONDS = 20
+MAX_START_SECONDS = 3600
+MAX_OUTPUT_BYTES = 14 * 1024 * 1024
+# A job that outlives STALE_AFTER is shown as interrupted, so the whole render
+# gets a shorter budget: a live job is never mistaken for a dead one.
+STALE_AFTER = timedelta(minutes=30)
+JOB_BUDGET = 25 * 60
 _FFMPEG_TIMEOUT = 600
+# Originals and half-received uploads older than this belong to a job that died.
+ORPHAN_AFTER = timedelta(days=1)
 _FILTER = ("crop=w='trunc(min(iw,ih*16/9)/2)*2':h='trunc(min(ih,iw*9/16)/2)*2',"
            "scale='min(1920,iw)':-2,fps=30,format=yuv420p")
 _NAME_MAX = 60
@@ -276,28 +283,63 @@ def _looks_like_video(data: bytes) -> bool:
     return data[4:8] == b"ftyp" or data[:4] == b"\x1a\x45\xdf\xa3"
 
 
-def begin_upload(db: Session, actor: Actor, media_root: Path, campaign_id: uuid.UUID, data: bytes) -> Path:
-    """Validates and stores the original, and marks the campaign as processing.
-    Returns the original's path for ``run_job``."""
+def ensure_ffmpeg() -> None:
     if not ffmpeg_available():
         raise HeroUnavailable("ffmpeg_unavailable", "El servidor no tiene ffmpeg instalado.")
-    if len(data) > MAX_ORIGINAL_BYTES:
+
+
+def originals_dir(media_root: Path) -> Path:
+    """The private folder (0700) that holds uploads until they are processed."""
+    folder = media_root / "originales" / "hero"
+    folder.mkdir(mode=0o700, parents=True, exist_ok=True)
+    return folder
+
+
+def clean_orphans(media_root: Path, now: datetime | None = None) -> int:
+    """Removes originals and half-received uploads whose job died (the server
+    restarted, the campaign was deleted mid-way). Returns how many it removed."""
+    folder = media_root / "originales" / "hero"
+    cutoff = (now or datetime.now(timezone.utc)).timestamp() - ORPHAN_AFTER.total_seconds()
+    removed = 0
+    if not folder.is_dir():
+        return removed
+    for path in list(folder.glob("*.src")) + list(folder.glob(".incoming-*.part")):
+        try:
+            if path.is_file() and not path.is_symlink() and path.stat().st_mtime < cutoff:
+                path.unlink()
+                removed += 1
+        except OSError:
+            continue
+    return removed
+
+
+def begin_upload(db: Session, actor: Actor, media_root: Path, campaign_id: uuid.UUID, spooled: Path,
+                 size: int, start: float = 0.0) -> Path:
+    """Validates the received file (already on disk, see ``spool``), keeps it as the
+    campaign's original and marks the campaign as processing. Returns the original's
+    path for ``run_job``. The caller removes ``spooled`` if this raises."""
+    ensure_ffmpeg()
+    if size > MAX_ORIGINAL_BYTES:
         raise HeroTooLarge("too_large", "El video pesa más de 200 MB.")
-    if not _looks_like_video(data):
+    if not 0 <= start <= MAX_START_SECONDS:
+        raise HeroInvalid("invalid_start", "Indica un segundo de inicio válido.", "start")
+    with open(spooled, "rb") as handle:
+        head = handle.read(12)
+    if not _looks_like_video(head):
         raise HeroInvalid("unsupported_media_type", "El archivo no parece un video MP4, MOV o WebM.")
     c = _get(db, campaign_id, lock=True)
     now = datetime.now(timezone.utc)
     if c.processing_status == "processing" and c.processing_started_at and now - c.processing_started_at < STALE_AFTER:
         raise ContentConflict("already_processing", "Esta temporada ya está procesando un video.")
-    folder = media_root / "originales" / "hero"
-    folder.mkdir(mode=0o700, parents=True, exist_ok=True)
-    original = folder / f"{c.slug}-{uuid.uuid4().hex[:8]}.src"
-    fd = os.open(original, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, "wb") as handle:
-        handle.write(data)
+    try:
+        clean_orphans(media_root, now)
+    except OSError:
+        pass  # housekeeping only; never blocks an upload
+    original = spooled.with_name(f"{c.slug}-{uuid.uuid4().hex[:8]}.src")
+    os.replace(spooled, original)
     c.processing_status, c.processing_error, c.processing_started_at = "processing", None, now
     c.updated_by = actor.identity.email
-    _audit(db, actor, c, "video_uploaded", {"bytes": len(data)})
+    _audit(db, actor, c, "video_uploaded", {"bytes": size, "start": start})
     db.commit()
     return original
 
@@ -309,13 +351,17 @@ class Rendered:
     poster: Path
 
 
-def _run(args: list[str]) -> subprocess.CompletedProcess[bytes]:
-    return subprocess.run(args, capture_output=True, timeout=_FFMPEG_TIMEOUT, check=False, stdin=subprocess.DEVNULL)
+def _run(args: list[str], deadline: float) -> subprocess.CompletedProcess[bytes]:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise subprocess.TimeoutExpired(args[0], JOB_BUDGET)
+    return subprocess.run(args, capture_output=True, timeout=min(_FFMPEG_TIMEOUT, remaining), check=False,
+                          stdin=subprocess.DEVNULL)
 
 
-def _probe(original: Path) -> float:
+def _probe(original: Path, deadline: float) -> float:
     done = _run(["ffprobe", "-v", "error", "-protocol_whitelist", "file", "-select_streams", "v:0",
-                 "-show_entries", "stream=codec_type:format=duration", "-of", "default=nw=1", str(original)])
+                 "-show_entries", "stream=codec_type:format=duration", "-of", "default=nw=1", str(original)], deadline)
     text = done.stdout.decode("utf-8", "replace")
     if done.returncode != 0 or "codec_type=video" not in text:
         raise HeroInvalid("not_a_video", "No se pudo leer un video en ese archivo.")
@@ -325,35 +371,42 @@ def _probe(original: Path) -> float:
         return 0.0
 
 
-def _ffmpeg(original: Path, out: Path, *options: str, seek: float = 0.0) -> None:
+def _ffmpeg(original: Path, out: Path, *options: str, deadline: float, seek: float = 0.0) -> None:
     args = ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-protocol_whitelist", "file"]
     if seek:
         args += ["-ss", str(seek)]
     args += ["-i", str(original), *options, str(out)]
-    done = _run(args)
+    done = _run(args, deadline)
     if done.returncode != 0 or not out.exists() or out.stat().st_size == 0:
         raise HeroInvalid("encode_failed", "No se pudo convertir ese video. Prueba con otro archivo.")
 
 
-def render(original: Path, workdir: Path) -> Rendered:
-    """ffmpeg: 16:9, <= 12 s, no audio, <= 1080p, MP4 + WebM + poster. Raises HeroInvalid."""
-    _probe(original)
+def render(original: Path, workdir: Path, start: float = 0.0) -> Rendered:
+    """ffmpeg: 16:9, <= 20 s from ``start``, no audio, <= 1080p, MP4 + WebM + poster.
+    Raises HeroInvalid (or TimeoutExpired once the job budget is spent)."""
+    deadline = time.monotonic() + JOB_BUDGET
+    duration = _probe(original, deadline)
+    if start and duration and start >= duration - 1:
+        raise HeroInvalid("invalid_start", "Ese segundo queda al final del video o fuera de él. Elige uno anterior.",
+                          "start")
     base = ("-t", str(MAX_SECONDS), "-an", "-vf", _FILTER)
     mp4 = workdir / "out.mp4"
     for crf in ("28", "34"):
         mp4.unlink(missing_ok=True)
-        _ffmpeg(original, mp4, *base, "-c:v", "libx264", "-crf", crf, "-preset", "slow", "-movflags", "+faststart")
+        _ffmpeg(original, mp4, *base, "-c:v", "libx264", "-crf", crf, "-preset", "slow", "-movflags", "+faststart",
+                deadline=deadline, seek=start)
         if mp4.stat().st_size <= MAX_OUTPUT_BYTES:
             break
     else:
         raise HeroInvalid("too_heavy", "El video queda demasiado pesado aun comprimido. Usa uno más corto o sencillo.")
     webm = workdir / "out.webm"
-    _ffmpeg(original, webm, *base, "-c:v", "libvpx-vp9", "-crf", "36", "-b:v", "0", "-row-mt", "1")
+    _ffmpeg(original, webm, *base, "-c:v", "libvpx-vp9", "-crf", "36", "-b:v", "0", "-row-mt", "1",
+            deadline=deadline, seek=start)
     poster = workdir / "out.jpg"
     try:
-        _ffmpeg(original, poster, "-frames:v", "1", "-vf", _FILTER, "-q:v", "3", seek=1.0)
-    except HeroInvalid:  # shorter than a second: take the first frame
-        _ffmpeg(original, poster, "-frames:v", "1", "-vf", _FILTER, "-q:v", "3")
+        _ffmpeg(original, poster, "-frames:v", "1", "-vf", _FILTER, "-q:v", "3", deadline=deadline, seek=start + 1.0)
+    except HeroInvalid:  # shorter than a second from there: take the first frame
+        _ffmpeg(original, poster, "-frames:v", "1", "-vf", _FILTER, "-q:v", "3", deadline=deadline, seek=start)
     return Rendered(mp4, webm, poster)
 
 
@@ -375,48 +428,54 @@ def _remove_files(public_root: Path, paths: list[str]) -> None:
         (public_root / path).unlink(missing_ok=True)
 
 
-def finish(db: Session, campaign_id: uuid.UUID, public_root: Path, original: Path) -> None:
+def finish(db: Session, campaign_id: uuid.UUID, public_root: Path, original: Path, start: float = 0.0) -> None:
     """Renders the original and stores the result; never raises (the failure is
-    recorded on the campaign so Gestión shows it)."""
-    c = _get(db, campaign_id)
-    failure: str | None = None
-    stored: tuple[str, str, str] | None = None
+    recorded on the campaign so Gestión shows it). The original is always removed,
+    also when the campaign was deleted while it was processing."""
     try:
-        with tempfile.TemporaryDirectory(prefix="hero-") as tmp:
-            stored = _store(public_root, c.slug, render(original, Path(tmp)))
-    except ContentError as exc:
-        failure = exc.message
-    except subprocess.TimeoutExpired:
-        failure = "El video tardó demasiado en procesarse. Usa uno más corto."
-    except Exception:  # noqa: BLE001 - recorded on the campaign, never raised in the background
-        failure = "No se pudo procesar el video."
-    db.refresh(c)
-    if failure and c.video_mp4:
-        failure += " Se conserva el video anterior."
-    old = [p for p in (c.video_mp4, c.video_webm, c.poster) if p]
-    if stored is None:
-        c.processing_status, c.processing_error = "error", failure
-    else:
-        c.video_mp4, c.video_webm, c.poster = stored
-        c.processing_status, c.processing_error = "ready", None
-    c.processing_started_at = None
-    db.add(AuditEvent(occurred_at=func.clock_timestamp(), actor_type=AuditActorType.system,
-                      entity_type="hero_campaign", entity_id=c.id,
-                      action="hero.video_ready" if stored else "hero.video_failed",
-                      result=AuditResult.success if stored else AuditResult.failure,
-                      event_metadata={"slug": c.slug, **({"error": failure} if failure else {})}))
-    db.commit()
-    if stored is not None:
-        _remove_files(public_root, [p for p in old if p not in stored])
-    original.unlink(missing_ok=True)
+        try:
+            c = _get(db, campaign_id)
+        except ContentNotFound:
+            return
+        failure: str | None = None
+        stored: tuple[str, str, str] | None = None
+        try:
+            with tempfile.TemporaryDirectory(prefix="hero-") as tmp:
+                stored = _store(public_root, c.slug, render(original, Path(tmp), start))
+        except ContentError as exc:
+            failure = exc.message
+        except subprocess.TimeoutExpired:
+            failure = "El video tardó demasiado en procesarse. Usa uno más corto."
+        except Exception:  # noqa: BLE001 - recorded on the campaign, never raised in the background
+            failure = "No se pudo procesar el video."
+        db.refresh(c)
+        if failure and c.video_mp4:
+            failure += " Se conserva el video anterior."
+        old = [p for p in (c.video_mp4, c.video_webm, c.poster) if p]
+        if stored is None:
+            c.processing_status, c.processing_error = "error", failure
+        else:
+            c.video_mp4, c.video_webm, c.poster = stored
+            c.processing_status, c.processing_error = "ready", None
+        c.processing_started_at = None
+        db.add(AuditEvent(occurred_at=func.clock_timestamp(), actor_type=AuditActorType.system,
+                          entity_type="hero_campaign", entity_id=c.id,
+                          action="hero.video_ready" if stored else "hero.video_failed",
+                          result=AuditResult.success if stored else AuditResult.failure,
+                          event_metadata={"slug": c.slug, **({"error": failure} if failure else {})}))
+        db.commit()
+        if stored is not None:
+            _remove_files(public_root, [p for p in old if p not in stored])
+    finally:
+        original.unlink(missing_ok=True)
 
 
-def run_job(campaign_id: uuid.UUID, public_root: Path, original: Path) -> None:
+def run_job(campaign_id: uuid.UUID, public_root: Path, original: Path, start: float = 0.0) -> None:
     """Background entry point: its own database session."""
     from app.db.base import SessionLocal
 
     with SessionLocal() as db:
-        finish(db, campaign_id, public_root, original)
+        finish(db, campaign_id, public_root, original, start)
 
 
 # --- public ---------------------------------------------------------------------------------
