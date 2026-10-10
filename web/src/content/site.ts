@@ -173,6 +173,8 @@ export interface Member {
   readonly name: string;
   readonly role: string;
   readonly bio: string;
+  /** Optional personal motto, shown under the bio. */
+  readonly quote?: string;
   /** Initials for the avatar while there is no authorised photo. */
   readonly initials: string;
   readonly photo: string | null;
@@ -264,6 +266,7 @@ export const aboutCopy = {
         name: "Hariel Davin Nicolás Bautista",
         role: "COO",
         bio: "Hábil en manufactura y herramientas, con certificaciones internacionales en infraestructura, hardware e instalaciones eléctricas y electrónicas. En ArtesaNFC cierra tratos, lleva la logística y las entregas, y capacita a los artesanos para preparar sus piezas para el NFC.",
+        quote: "Avanzar no es llegar a la meta, sino hacer que cada paso valga.",
         initials: "H",
         photo: null,
         channels: [
