@@ -59,6 +59,7 @@ assert len(PRIVATE_TOKEN) == 43
 CANARY_DB_USER = f"canary_dbuser_{_RUN_ID}"
 CANARY_DB_PASSWORD = f"CanaryDbPw_{_RUN_ID}"
 
+UNAVAILABLE_503 = {"error": {"code": "service_unavailable", "message": "The service is temporarily unavailable. Try again later."}}
 GENERIC_500 = {"error": {"code": "internal_error", "message": "An unexpected error occurred."}}
 
 _DB_ERROR_LINE = re.compile(
@@ -309,13 +310,14 @@ def test_premise_the_raw_connection_error_contains_the_database_username():
     assert CANARY_DB_USER in str(raw.value)
 
 
-def test_connection_failure_returns_generic_500_and_logs_only_the_safe_line(connection_failure_run):
+def test_connection_failure_returns_the_generic_503_and_logs_only_the_safe_line(connection_failure_run):
     run = connection_failure_run
     assert run.killed is False and run.returncode == 0
 
+    # N-02: the database cannot be reached -> 503 (a monitor can tell an outage from a bug).
     for name in ("artisans", "resolve"):
-        assert run.responses[name].status_code == 500, name
-        assert run.responses[name].json() == GENERIC_500, name
+        assert run.responses[name].status_code == 503, name
+        assert run.responses[name].json() == UNAVAILABLE_503, name
 
     lines = run.db_error_lines()
     assert [(m["category"], m["method"], m["route"]) for m in lines] == [

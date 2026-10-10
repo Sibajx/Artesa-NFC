@@ -159,6 +159,9 @@ def test_cors_must_allow_the_frontend_and_never_star(sc):
     assert deploy(sc, "--dry-run") == rc.Exit.CONFIG and "must include" in sc.sink.text
     p.write_text(text.replace("https://artesanfc.com,", "https://artesanfc.com,*,"))
     assert deploy(sc, "--dry-run") == rc.Exit.CONFIG and "'*'" in sc.sink.text
+    # N-01: an extra origin stops the deploy before any restart, as the API itself would refuse to start.
+    p.write_text(text.replace("https://artesanfc.com,", "https://artesanfc.com,http://localhost:5500,"))
+    assert deploy(sc, "--dry-run") == rc.Exit.CONFIG and "remove http://localhost:5500" in sc.sink.text
 
 
 # --- database / alembic --------------------------------------------------------------------------------------------

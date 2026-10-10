@@ -208,10 +208,33 @@ def _route_template(request: Request) -> str:
     return _UNMATCHED_ROUTE
 
 
+# N-02: failures that mean "the database cannot be reached right now" answer
+# 503 instead of 500, so a monitor can tell an outage from a bug. /health
+# already says so publicly; the body still carries no database text.
+_UNAVAILABLE_SQLSTATE_CLASSES = ("08", "28", "53")  # connection, authorization, resources
+_UNAVAILABLE_SQLSTATES = frozenset({"57P01", "57P02", "57P03"})  # server shutting down / starting
+UNAVAILABLE_503 = {"error": {"code": "service_unavailable",
+                             "message": "The service is temporarily unavailable. Try again later."}}
+RETRY_AFTER_SECONDS = "30"
+
+
+def is_unavailable(exc: BaseException) -> bool:
+    """True for a connection-level failure (no SQLSTATE, or an unavailable
+    class); a failing query (lock timeout, cancel, constraint) is not."""
+    try:
+        if not isinstance(exc, (OperationalError, InterfaceError, psycopg.OperationalError, psycopg.InterfaceError)):
+            return False
+        state = _sqlstate(exc)
+        return state == _UNKNOWN or state[:2] in _UNAVAILABLE_SQLSTATE_CLASSES or state in _UNAVAILABLE_SQLSTATES
+    except Exception:
+        return False
+
+
 async def database_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """Log one sanitized line and return the standard generic 500 envelope
     (API_CONTRACT.md section 10; identical to the body of
-    ``app.core.errors.unhandled_exception_handler``). Never raises."""
+    ``app.core.errors.unhandled_exception_handler``), or the generic 503 when
+    the database is unreachable (N-02). Never raises."""
     try:
         logger.error(
             _LOG_FORMAT,
@@ -224,6 +247,8 @@ async def database_exception_handler(request: Request, exc: Exception) -> JSONRe
     except Exception:
         # Logging must never be able to bring the leak path back.
         pass
+    if is_unavailable(exc):
+        return JSONResponse(status_code=503, content=UNAVAILABLE_503, headers={"Retry-After": RETRY_AFTER_SECONDS})
     return JSONResponse(
         status_code=500,
         content={"error": {"code": "internal_error", "message": "An unexpected error occurred."}},

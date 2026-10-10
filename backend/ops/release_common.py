@@ -21,7 +21,7 @@ from enum import IntEnum
 from pathlib import PurePosixPath
 
 PROJECT = "artesa-nfc"
-TOOL_VERSION = "1.9.0"
+TOOL_VERSION = "1.10.0"
 BUILDER_VERSION = "3"  # 3: git.tag removed from RELEASE.json (reproducibility)
 RELEASE_SCHEMA_VERSION = 1
 # built_at_utc follows the SOURCE_DATE_EPOCH convention so the same commit
@@ -33,6 +33,8 @@ DEFAULT_ROOT = "/home/energias/artesa-nfc"
 PRODUCTION_REF = "origin/main"
 PRODUCTION_REF_FULL = "refs/remotes/origin/main"
 PRODUCTION_FRONTEND_ORIGIN = "https://artesanfc.com"
+# Same rule as app/core/config.py (N-01): nothing but these may be allowed.
+PRODUCTION_ALLOWED_ORIGINS = frozenset({PRODUCTION_FRONTEND_ORIGIN, "https://www.artesanfc.com"})
 PUBLIC_API_BASE = "https://api.artesanfc.com"
 PRODUCTION_PORT = 8000
 CANDIDATE_PORT = 8001

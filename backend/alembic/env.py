@@ -6,6 +6,7 @@ from sqlalchemy import pool
 from alembic import context
 
 from app.core.config import get_settings
+from app.core.db_safety import assert_safe_for_migrations
 from app.db.base import normalize_database_url
 from app.models import Base
 
@@ -68,6 +69,9 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
+    # PEND-011: refuse a target that does not match APP_ENV before connecting.
+    settings = get_settings()
+    assert_safe_for_migrations(settings.app_env, settings.database_url)
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
