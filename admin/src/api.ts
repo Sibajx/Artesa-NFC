@@ -210,6 +210,37 @@ export interface ProductionBoard {
   counts: Record<ProductionBucket, number>;
 }
 
+// Visit log (artisans and galleries). Only for people with the Visits permission.
+export type VisitKind = 'artesano' | 'galeria' | 'otro';
+
+export interface Visit {
+  id: string;
+  visited_on: string;
+  kind: VisitKind;
+  artisan_id: string | null;
+  artisan_name: string | null;
+  place: string | null;
+  attendees: string | null;
+  summary: string;
+  agreements: string | null;
+  consent_to_publish: boolean;
+  photo: string | null;
+  recorded_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VisitInput {
+  visited_on: string;
+  kind: VisitKind;
+  artisan_id: string | null;
+  place: string | null;
+  attendees: string | null;
+  summary: string;
+  agreements: string | null;
+  consent_to_publish: boolean;
+}
+
 // P-028: the home hero by season.
 export interface HeroCampaign {
   id: string;
@@ -770,6 +801,14 @@ export const adminApi = {
   removeAccount: (email: string) => request<AccountList>('POST', `/accounts/${encodeURIComponent(email)}/remove`, { body: {} }),
   syncAccounts: () => request<AccountList>('POST', '/accounts/sync', { body: {} }),
   inventory: (signal?: AbortSignal) => get<Inventory>('/inventory', undefined, signal),
+  visits: (artisanId: string | undefined, signal?: AbortSignal) =>
+    get<{ data: Visit[] }>('/visits', artisanId ? { artisan_id: artisanId } : undefined, signal),
+  createVisit: (body: VisitInput) => request<Visit>('POST', '/visits', { body }),
+  updateVisit: (id: string, body: Partial<VisitInput>) => request<Visit>('PATCH', `/visits/${encodeURIComponent(id)}`, { body }),
+  uploadVisitPhoto: (id: string, file: Blob, contentType: string) =>
+    request<Visit>('POST', `/visits/${encodeURIComponent(id)}/photo`, { file: { data: file, contentType } }),
+  deleteVisitPhoto: (id: string) => request<Visit>('POST', `/visits/${encodeURIComponent(id)}/photo/delete`, { body: {} }),
+  deleteVisit: (id: string) => request<void>('POST', `/visits/${encodeURIComponent(id)}/delete`, { body: {} }),
   productionBoard: (signal?: AbortSignal) => get<ProductionBoard>('/production/board', undefined, signal),
   productionPiece: (id: string, signal?: AbortSignal) =>
     get<ProductionTimeline>(`/production/pieces/${encodeURIComponent(id)}`, undefined, signal),
