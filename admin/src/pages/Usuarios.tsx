@@ -27,7 +27,7 @@ const PERMISSIONS: Record<string, { label: string; hint: string }> = {
   revocations: { label: 'Revocar', hint: 'Revocaciones, robos y bloqueo de tarjetas' },
   design: { label: 'Diseño', hint: 'Diseño de certificados' },
   hero: { label: 'Hero', hint: 'Hero por temporada e imágenes del sitio' },
-  training: { label: 'Capacitar', hint: 'Capacitaciones (módulo todavía sin construir)' },
+  training: { label: 'Capacitar', hint: 'Manuales de capacitación por oficio; el dueño los revisa' },
   visits: { label: 'Visitas', hint: 'Bitácora de visitas a artesanos y galerías' },
   production: { label: 'Producción', hint: 'Tablero de producción: marcar pasos y subir fotos de cada pieza' },
 };

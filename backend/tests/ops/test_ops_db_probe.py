@@ -22,7 +22,7 @@ def test_db_state_reports_revision_tables_and_counts_and_writes_nothing():
     result = run_probe()
     assert result.returncode == 0, result.stderr
     state = json.loads(result.stdout)
-    assert state["alembic_versions"] == ["d3a9b6e2f814"]
+    assert state["alembic_versions"] == ["e5c2a8f1b7d3"]
     assert {"alembic_version", "artisan", "piece", "certificate", "nfc_tag", "media_asset"} <= set(state["row_counts"])
     assert state["server_version_num"] >= 160000
     assert _fingerprint() == before
