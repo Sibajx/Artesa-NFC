@@ -35,7 +35,8 @@ from app.models.enums import PublicationStatus
 from app.models.media_asset import MediaAsset
 from app.models.nfc_tag import NfcTag
 from app.models.piece import Piece
-from app.services import media
+from app.models.production import ProductionPhoto, ProductionStep
+from app.services import media, private_photos
 from app.services.content import Actor, ContentConflict, _audit, _finish, _locked, _touch
 
 _MODEL = {"artisan": Artisan, "piece": Piece}
@@ -144,7 +145,15 @@ def purge(db: Session, actor: Actor, media_root: Path | None, kind: str, entity_
         for design in db.execute(select(CertificateDesign).where(CertificateDesign.piece_id == row.id)).scalars():
             db.delete(design)
             designs_deleted += 1
+    # Production photos are private files; their rows go with the piece (ON DELETE
+    # CASCADE) but the files would stay in privado/ forever, so note them now.
+    photo_paths: list[str] = []
+    if kind == "piece":
+        photo_paths = list(db.execute(select(ProductionPhoto.path).join(
+            ProductionStep, ProductionStep.id == ProductionPhoto.step_id).where(ProductionStep.piece_id == row.id)).scalars())
     snapshot = {"slug": row.slug, "media_deleted": len(assets)}
+    if photo_paths:
+        snapshot["production_photos_deleted"] = len(photo_paths)
     if designs_deleted:
         snapshot["designs_deleted"] = designs_deleted
     snapshot["name" if kind == "piece" else "full_name"] = row.name if kind == "piece" else row.full_name
@@ -158,3 +167,6 @@ def purge(db: Session, actor: Actor, media_root: Path | None, kind: str, entity_
     # Files after the commit (same rule as media uploads and deletes).
     for f in files:
         media.remove_files(media_root / "publico", f.published, f.original)
+    if media_root is not None:
+        for path in photo_paths:
+            private_photos.remove(media_root, path)

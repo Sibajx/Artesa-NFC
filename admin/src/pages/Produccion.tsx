@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { adminApi } from '../api';
 import type { ProductionBucket, ProductionCard } from '../api';
-import { formatDateTime } from '../format';
+import { formatDate, formatDateTime } from '../format';
 import { useLoad } from '../hooks';
 import { ProductionTimeline } from '../ProductionTimeline';
 import { ErrorState, Loading, PageHeader } from '../ui';
@@ -18,6 +18,8 @@ const TABS: { key: ProductionBucket; label: string; hint: string }[] = [
   { key: 'delivered', label: 'Entregadas', hint: 'Ya la tiene el comprador' },
 ];
 
+const CHANNEL: Record<string, string> = { taller: 'Taller', tienda: 'Tienda', en_linea: 'En línea', feria: 'Feria', otro: 'Otro' };
+
 const STEP_LABEL: Record<string, string> = {
   received: 'Recibida', chip_placed: 'Chip colocado', chip_programmed: 'Chip programado', packed: 'Embalada', shipped: 'Enviada', delivered: 'Entregada',
 };
@@ -27,13 +29,14 @@ export default function Produccion() {
   const state = useLoad(`production-board:${revision}`, (signal) => adminApi.productionBoard(signal));
   const [tab, setTab] = useState<ProductionBucket>('in_process');
   const [q, setQ] = useState('');
+  const [soldOnly, setSoldOnly] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
 
   const cards = useMemo(() => {
     const all = state.status === 'ready' ? state.data.data : [];
     const needle = q.trim().toLowerCase();
-    return all.filter((c: ProductionCard) => c.bucket === tab && (!needle || `${c.name} ${c.public_code} ${c.artisan_name}`.toLowerCase().includes(needle)));
-  }, [state, tab, q]);
+    return all.filter((c: ProductionCard) => c.bucket === tab && (!soldOnly || c.sold_on !== null) && (!needle || `${c.name} ${c.public_code} ${c.artisan_name}`.toLowerCase().includes(needle)));
+  }, [state, tab, q, soldOnly]);
 
   if (state.status === 'loading') return <Loading label="Cargando producción..." />;
   if (state.status === 'error') return <div className="card-elevated"><ErrorState error={state.error} /></div>;
@@ -62,6 +65,10 @@ export default function Produccion() {
             <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar pieza, código o artesano"
               aria-label="Buscar pieza, código o artesano"
               className="min-w-[12rem] flex-1 text-sm border border-botanica-gris/30 rounded-md px-3 py-1.5 bg-white text-botanica-negro" />
+            <label className="flex items-center gap-2 text-xs text-botanica-grafito">
+              <input type="checkbox" checked={soldOnly} onChange={(e) => setSoldOnly(e.target.checked)} className="accent-botanica-jade" />
+              Solo vendidas
+            </label>
             <span className="text-xs text-botanica-gris" role="status">{cards.length} {cards.length === 1 ? 'pieza' : 'piezas'}</span>
           </div>
           {cards.length === 0 ? (
@@ -80,6 +87,8 @@ export default function Produccion() {
                     <span className="h-1.5 w-full overflow-hidden rounded-full bg-botanica-gris/20" aria-hidden="true">
                       <span className="block h-full rounded-full bg-botanica-jade" style={{ width: `${(c.done / c.total) * 100}%` }} />
                     </span>
+                    {c.sold_on && <span className="text-xs text-botanica-grafito">Vendida el {formatDate(c.sold_on)}{c.sale_channel && <> · {CHANNEL[c.sale_channel] ?? c.sale_channel}</>}</span>}
+                    {(c.carrier || c.tracking) && <span className="text-xs text-botanica-grafito">Envío: {[c.carrier, c.tracking && `guía ${c.tracking}`].filter(Boolean).join(' · ')}</span>}
                     {c.last_step && <span className="text-xs text-botanica-grafito">Último: {STEP_LABEL[c.last_step]}{c.last_done_at && <> · {formatDateTime(c.last_done_at)}</>}</span>}
                   </button>
                 </li>

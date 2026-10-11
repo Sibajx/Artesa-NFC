@@ -34,6 +34,8 @@ _REHEARSAL_REVIEW_BASE = "http://127.0.0.1:5500" + _REVIEW_PATH
 _LOCAL = timezone(timedelta(hours=-6), "CST")
 _SHA_RE = re.compile(r"[0-9a-f]{64}")
 TEXT_LIMITS = {"title": 60, "piece_name": 120, "artisan_name": 120, "quote": 240, "public_code": 32}
+# "Historia y oficio" block (P-027): off unless the team turns it on.
+STORY_LIMITS = {"technique": 60, "materials": 90, "place": 80}
 
 
 def _hash(token: str) -> str:
@@ -95,6 +97,20 @@ def clean_params(raw: dict[str, Any], db: Session | None = None) -> dict[str, An
                 or not 1 <= number <= total <= 9999:
             raise ContentConflict("invalid_design", "The edition is a number from 1 to the total (at most 9999).", "edition")
         params["edition"] = {"number": number, "total": total}
+    story = raw.get("story")
+    if story:
+        if not isinstance(story, dict):
+            raise ContentConflict("invalid_design", "The story block is not valid.", "story")
+        clean: dict[str, Any] = {"enabled": story.get("enabled") is True}
+        for key, limit in STORY_LIMITS.items():
+            value = story.get(key)
+            if value is not None and not isinstance(value, str):
+                raise ContentConflict("invalid_design", f"story.{key} must be text.", "story")
+            value = (value or "").strip()
+            if len(value) > limit:
+                raise ContentConflict("invalid_design", f"story.{key} has at most {limit} characters.", "story")
+            clean[key] = value
+        params["story"] = clean
     art = raw.get("art")
     if art:
         if not isinstance(art, dict) or not isinstance(art.get("id"), str) or not _SHA_RE.fullmatch(art["id"]):
@@ -118,6 +134,9 @@ def defaults(db: Session, piece: Piece) -> dict[str, Any]:
         "template": "clasico", "variant": "claro", "title": "Certificado original",
         "piece_name": piece.name, "artisan_name": (artisan.artistic_name or artisan.full_name) if artisan else "",
         "public_code": piece.public_code, "quote": "", "palette": palette, "seed": secrets.randbelow(2**31),
+        "story": {"enabled": False, "technique": piece.technique or "",
+                  "materials": ", ".join(str(m) for m in piece.materials or [])[:STORY_LIMITS["materials"]],
+                  "place": ", ".join(p for p in ((artisan.locality, artisan.municipality) if artisan else ()) if p)[:STORY_LIMITS["place"]]},
     })
 
 
