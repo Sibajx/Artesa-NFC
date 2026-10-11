@@ -704,3 +704,20 @@
     font-size: 5.5pt;
   }
 }
+
+/* Inicio: seasonal paper flags. Still by default; they only sway when motion is allowed. */
+.season-flag {
+  transform-box: fill-box;
+  transform-origin: 50% 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .season-flag {
+    animation: season-sway 3.2s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes season-sway {
+  from { transform: rotate(-3deg); }
+  to { transform: rotate(3deg); }
+}

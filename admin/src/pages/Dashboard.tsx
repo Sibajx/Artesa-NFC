@@ -5,6 +5,8 @@ import type { PieceSummary, ProductionBoard, PublicationStatus, Summary, Summary
 import { actionLabel, actorLabel } from '../audit-labels';
 import { formatDateTime } from '../format';
 import { greetingFor } from '../greeting';
+import { seasonOf } from '../season';
+import type { Season } from '../season';
 import { useLoad } from '../hooks';
 import { useEmail, usePermissions, useRoles } from '../roles-context';
 import { ErrorState, Loading, PageHeader } from '../ui';
@@ -29,6 +31,7 @@ export default function Dashboard() {
   const permissions = usePermissions();
   const roles = useRoles();
   const greeting = useMemo(() => greetingFor(email), [email]);
+  const season = useMemo(() => seasonOf(), []);
   const state = useLoad('dashboard', async (signal) => {
     // The extra reads are optional: if one fails, Inicio just shows less.
     const reviewer = roles.includes('owner') && permissions.includes('training');
@@ -52,6 +55,7 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-6xl mx-auto pb-12">
+      {season && <SeasonBanner season={season} />}
       <PageHeader title={greeting} subtitle={state.status === 'ready' ? attentionLine(state.data.summary, state.data.extras) : 'Lo que hay y lo que falta en ArtesaNFC.'} />
 
       {state.status === 'loading' && <Loading label="Cargando inicio..." />}
@@ -111,6 +115,38 @@ export default function Dashboard() {
         );
       })()}
     </div>
+  );
+}
+
+// A row of little paper flags (papel picado) over the greeting while a season
+// lasts: marigold and earth tones for Día de Muertos, green and red for Navidad.
+// Pure decoration (hidden from screen readers) with the colors of the theme, so it
+// reads in light and dark; it only sways when the person allows motion.
+const FLAG_COLORS: Record<Season, string[]> = {
+  muertos: ['var(--marigold)', 'var(--accent)', 'var(--danger-solid)'],
+  navidad: ['var(--ok)', 'var(--danger-solid)', 'var(--marigold)'],
+};
+
+function SeasonBanner({ season }: { season: Season }) {
+  const colors = FLAG_COLORS[season];
+  return (
+    <svg viewBox="0 0 420 40" role="presentation" aria-hidden="true" className="season-banner mb-4 w-full max-w-md h-auto">
+      <line x1="0" y1="4" x2="420" y2="4" stroke="var(--rule)" strokeWidth="1" />
+      {Array.from({ length: 14 }, (_, i) => {
+        const x = 6 + i * 29;
+        return (
+          <path
+            key={i}
+            className="season-flag"
+            style={{ animationDelay: `${(i % 5) * 160}ms` }}
+            fill={colors[i % colors.length]}
+            fillRule="evenodd"
+            opacity="0.9"
+            d={`M${x} 4H${x + 24}V28L${x + 20} 34L${x + 16} 28L${x + 12} 34L${x + 8} 28L${x + 4} 34L${x} 28ZM${x + 12} 10l4 5l-4 5l-4 -5z`}
+          />
+        );
+      })}
+    </svg>
   );
 }
 
