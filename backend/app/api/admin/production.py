@@ -24,9 +24,9 @@ from app.services.content import Actor, ContentError
 
 reads = APIRouter(prefix="/api/admin/v1/production", tags=["admin", "production"], dependencies=[Depends(require_admin)])
 writes = APIRouter(prefix="/api/admin/v1/production", tags=["admin", "production"],
-                   dependencies=[Depends(require_permission(perms.LOGISTICS)), Depends(require_write_guard)])
+                   dependencies=[Depends(require_permission(perms.PRODUCTION)), Depends(require_write_guard)])
 uploads = APIRouter(prefix="/api/admin/v1/production", tags=["admin", "production"],
-                    dependencies=[Depends(require_permission(perms.LOGISTICS)), Depends(require_upload_guard)])
+                    dependencies=[Depends(require_permission(perms.PRODUCTION)), Depends(require_upload_guard)])
 
 
 class StepOut(BaseModel):

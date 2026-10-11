@@ -20,7 +20,7 @@ ALL = set(perms.ALL_PERMISSIONS)
 
 
 def test_roles_map_to_what_they_could_always_do():
-    editor = {"view", "edit", "publish", "authorization", "sales", "logistics"}
+    editor = {"view", "edit", "publish", "authorization", "sales", "logistics", "production"}
     assert perms.for_roles({"editor"}) == editor
     assert perms.for_roles({"editor", "designer"}) == editor | {"design"}
     assert perms.for_roles({"editor", "designer", "custodian"}) == editor | {"design", "nfc", "revocations"}

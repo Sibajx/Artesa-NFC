@@ -20,7 +20,7 @@ from app.core import permissions
 from app.core.config import get_settings
 from app.models.admin_account import AdminAccount
 from app.models.audit_event import AuditActorType, AuditEvent, AuditResult
-from app.services import cloudflare_access
+from app.services import admin_roles, cloudflare_access
 from app.services.content import Actor, ContentConflict, ContentNotFound
 
 EMAIL_RE = re.compile(r"[^@\s]{1,64}@[^@\s]{1,255}\.[^@\s]{2,63}")
@@ -60,6 +60,8 @@ class AccountView:
     # A fixed account (shared/.env) that already has a row in Gestión, so the
     # owner can narrow its permissions. Not removable from here.
     imported: bool = False
+    # The name of the role profile whose checkboxes are exactly these ("Dueño" for the owner), or None = "A medida".
+    profile: str | None = None
 
 
 def _env_role(email: str) -> str:
@@ -92,19 +94,23 @@ def listing(db: Session) -> list[AccountView]:
     s = get_settings()
     rows = {a.email: a for a in db.execute(select(AdminAccount).where(AdminAccount.active.is_(True))
                                            .order_by(AdminAccount.added_at)).scalars()}
+    profiles = admin_roles.listing(db)
     fixed = []
     for e in s.admin_emails_list:
         perms, custom = _effective(_env_roles(e), rows[e].permissions if e in rows else None)
-        fixed.append(AccountView(email=e, role=_env_role(e), source="configuracion", owner=e in s.owner_emails_list,
+        is_owner = e in s.owner_emails_list
+        fixed.append(AccountView(email=e, role=_env_role(e), source="configuracion", owner=is_owner,
                                  added_by=None, added_at=None, note=None, permissions=perms, custom=custom,
-                                 imported=e in rows and e not in s.owner_emails_list))
+                                 imported=e in rows and not is_owner,
+                                 profile="Dueño" if is_owner else admin_roles.matching(profiles, set(perms))))
     managed = []
     for a in rows.values():
         if a.email in s.admin_emails_list:
             continue
         perms, custom = _effective(_ROLE_SETS.get(a.role, frozenset({EDITOR})), a.permissions)
         managed.append(AccountView(email=a.email, role=a.role, source="gestion", owner=False, added_by=a.added_by,
-                                   added_at=a.added_at, note=a.note, permissions=perms, custom=custom))
+                                   added_at=a.added_at, note=a.note, permissions=perms, custom=custom,
+                                   profile=admin_roles.matching(profiles, set(perms))))
     return sorted(fixed, key=lambda a: (not a.owner, a.email)) + managed
 
 

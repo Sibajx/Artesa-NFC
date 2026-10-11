@@ -13,7 +13,7 @@ from app.api.deps import get_db
 from app.core import permissions as perms
 from app.core.access import FORBIDDEN_ERROR, OWNER, AdminIdentity, require_admin
 from app.core.config import get_settings
-from app.services import admin_accounts
+from app.services import admin_accounts, admin_roles
 from app.services.content import Actor, ContentError
 
 
@@ -40,6 +40,15 @@ class Account(BaseModel):
     custom: bool
     # A fixed account that already has a row here, so its permissions can be edited.
     imported: bool
+    # The role profile with exactly these checkboxes ("Dueño" for the owner); None = "A medida".
+    profile: str | None = None
+
+
+class RoleProfile(BaseModel):
+    slug: str
+    name: str
+    description: str | None
+    permissions: list[str]
 
 
 class AccountList(BaseModel):
@@ -47,6 +56,8 @@ class AccountList(BaseModel):
     # The checkboxes in order, and what each role (a shortcut) gives.
     catalog: list[str]
     presets: dict[str, list[str]]
+    # The role profiles the owner edits (shortcuts that copy their checkboxes to an account).
+    profiles: list[RoleProfile]
     # "synced" | "not_configured" | an error text, for the last change;
     # "unchanged" on a plain read.
     cloudflare: str
@@ -73,11 +84,19 @@ writes = APIRouter(prefix="/api/admin/v1", tags=["admin", "accounts"],
                    dependencies=[Depends(require_owner), Depends(require_write_guard)])
 
 
+def permissions_clean(raw: list[str]) -> list[str]:
+    granted = perms.clean(raw)
+    return [p for p in perms.ALL_PERMISSIONS if p in granted]
+
+
 def _list(db: Session, cloudflare: str) -> AccountList:
     return AccountList(data=[Account(**{**vars(a), "permissions": list(a.permissions)}) for a in admin_accounts.listing(db)],
                        catalog=list(perms.ALL_PERMISSIONS),
                        presets={r: [p for p in perms.ALL_PERMISSIONS if p in perms.for_roles({r})]
                                 for r in ("editor", "designer", "custodian", "hero", "designer_hero")},
+                       profiles=[RoleProfile(slug=r.slug, name=r.name, description=r.description,
+                                             permissions=list(permissions_clean(r.permissions)))
+                                 for r in admin_roles.listing(db)],
                        cloudflare=cloudflare, sync_configured=get_settings().access_sync_enabled)
 
 
@@ -128,6 +147,39 @@ def set_permissions(email: str, body: PermissionsBody, who: Actor = Depends(acto
                     db: Session = Depends(get_db)) -> AccountList:
     try:
         admin_accounts.set_permissions(db, who, email, body.permissions)
+    except ContentError as exc:
+        raise _fail(exc) from None
+    return _list(db, "unchanged")
+
+
+class ProfileBody(BaseModel):
+    name: str = Field(max_length=80)
+    description: str | None = Field(default=None, max_length=400)
+    permissions: list[str] = Field(max_length=40)
+
+
+@writes.post("/roles", response_model=AccountList)
+def create_role(body: ProfileBody, who: Actor = Depends(actor), db: Session = Depends(get_db)) -> AccountList:
+    try:
+        admin_roles.create(db, who, body.name, body.description, body.permissions)
+    except ContentError as exc:
+        raise _fail(exc) from None
+    return _list(db, "unchanged")
+
+
+@writes.post("/roles/{slug}", response_model=AccountList)
+def update_role(slug: str, body: ProfileBody, who: Actor = Depends(actor), db: Session = Depends(get_db)) -> AccountList:
+    try:
+        admin_roles.update(db, who, slug, body.name, body.description, body.permissions)
+    except ContentError as exc:
+        raise _fail(exc) from None
+    return _list(db, "unchanged")
+
+
+@writes.post("/roles/{slug}/delete", response_model=AccountList)
+def delete_role(slug: str, who: Actor = Depends(actor), db: Session = Depends(get_db)) -> AccountList:
+    try:
+        admin_roles.delete(db, who, slug)
     except ContentError as exc:
         raise _fail(exc) from None
     return _list(db, "unchanged")
