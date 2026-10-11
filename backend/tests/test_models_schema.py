@@ -13,7 +13,7 @@ from app.models.nfc_tag import NfcTagStatus
 # audit_event was deferred until the Gestión admin API (ADR-029, revision
 # 904d7f9d6509).
 EXPECTED_TABLES = {"artisan", "piece", "media_asset", "certificate", "nfc_tag", "audit_event", "ownership_card",
-                   "piece_claim", "owner_verification", "certificate_design", "sale", "piece_location", "certificate_art", "site_image",
+                   "piece_claim", "owner_verification", "certificate_design", "sale", "piece_location", "certificate_art", "site_image", "supply", "supply_movement",
                    "admin_account", "artisan_authorization", "hero_campaign", "alembic_version"}
 
 
