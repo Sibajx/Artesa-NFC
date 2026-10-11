@@ -81,6 +81,10 @@
       "class": "additive",
       "note": "Adds the production_step and production_photo tables (production follow-up of a piece, with private photos on disk). Nothing existing changes and no row is seeded; older code ignores them, so a code-only rollback is compatible. The downgrade drops both tables; the photo files under privado/ stay on disk."
     },
+    "d3a9b6e2f814": {
+      "class": "additive",
+      "note": "Adds the admin_role_profile table (named sets of permission checkboxes the owner edits) and seeds five profiles (Administración, Certificador, Diseño y Marca, Operaciones, Consulta). It also adds the new 'production' checkbox to every account whose explicit list already has 'logistics', so nobody loses access to the production board. Older code ignores the table and drops the unknown 'production' name, so a code-only rollback is compatible. The downgrade drops the table and removes 'production' from every explicit list; the old routes then need 'logistics' again."
+    },
     "c1f7a3d9e5b2": {
       "class": "additive",
       "note": "Adds the visit table (visit log of artisans and galleries, with one private photo on disk). Nothing existing changes and no row is seeded; older code ignores it, so a code-only rollback is compatible. The downgrade drops the table; the photo files under privado/ stay on disk."

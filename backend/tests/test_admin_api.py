@@ -113,7 +113,7 @@ def test_valid_token_for_an_allowlisted_email(client):
     response = client.get("/api/admin/v1/me", headers=auth(make_token(email="OPS@Example.org")))
     assert response.status_code == 200
     assert response.json() == {"email": ADMIN_EMAIL, "roles": ["editor"],
-                               "permissions": ["authorization", "edit", "logistics", "publish", "sales", "view"]}
+                               "permissions": ["authorization", "edit", "logistics", "production", "publish", "sales", "view"]}
     assert response.headers["cache-control"] == "no-store"
 
 

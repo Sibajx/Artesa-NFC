@@ -94,6 +94,16 @@ export interface Account {
   custom: boolean;
   // A fixed account (server config) that already has a row here, so it can be edited.
   imported: boolean;
+  // The role profile with exactly these checkboxes ("Dueño" for the owner); null = "A medida".
+  profile: string | null;
+}
+
+// A named set of checkboxes the owner edits; picking one copies its checkboxes to an account.
+export interface RoleProfile {
+  slug: string;
+  name: string;
+  description: string | null;
+  permissions: string[];
 }
 
 export interface AccountList {
@@ -101,6 +111,7 @@ export interface AccountList {
   // The checkboxes in order, and what each role (a shortcut) gives.
   catalog: string[];
   presets: Record<string, string[]>;
+  profiles: RoleProfile[];
   cloudflare: string;
   sync_configured: boolean;
 }
@@ -833,6 +844,11 @@ export const adminApi = {
     request<SupplyDetail>('POST', `/supplies/${encodeURIComponent(id)}/movements`, { body }),
   setAccountPermissions: (email: string, permissions: string[] | null) =>
     request<AccountList>('POST', `/accounts/${encodeURIComponent(email)}/permissions`, { body: { permissions } }),
+  createRole: (body: { name: string; description: string | null; permissions: string[] }) =>
+    request<AccountList>('POST', '/roles', { body }),
+  updateRole: (slug: string, body: { name: string; description: string | null; permissions: string[] }) =>
+    request<AccountList>('POST', `/roles/${encodeURIComponent(slug)}`, { body }),
+  deleteRole: (slug: string) => request<AccountList>('POST', `/roles/${encodeURIComponent(slug)}/delete`, { body: {} }),
   importFixedAccounts: () => request<AccountList>('POST', '/accounts/import-fixed', { body: {} }),
   requestAuthorization: (id: string) =>
     request<{ url: string; whatsapp: string | null; contact_name: string | null; artisan_name: string }>(

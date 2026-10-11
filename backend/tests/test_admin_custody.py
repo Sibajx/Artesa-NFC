@@ -15,7 +15,7 @@ from tests.test_admin_api import (  # noqa: F401  (fixtures)
 def test_roles_are_reported_by_me(client):
     me = client.get("/api/admin/v1/me", headers=auth(make_token(email=CUSTODIAN_EMAIL))).json()
     assert me == {"email": CUSTODIAN_EMAIL, "roles": ["custodian", "designer", "editor"],
-                  "permissions": ["authorization", "design", "edit", "logistics", "nfc", "publish", "revocations",
+                  "permissions": ["authorization", "design", "edit", "logistics", "nfc", "production", "publish", "revocations",
                                   "sales", "view"]}
 
 
