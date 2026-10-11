@@ -33,6 +33,11 @@ const LABELS: Record<string, string> = {
   'piece.production_step_undone': 'Quitó un paso de producción',
   'piece.production_photo': 'Agregó una foto de producción',
   'piece.production_photo_deleted': 'Borró una foto de producción',
+  'visit.created': 'Registró una visita',
+  'visit.updated': 'Editó una visita',
+  'visit.photo_set': 'Subió la foto de una visita',
+  'visit.photo_removed': 'Quitó la foto de una visita',
+  'visit.deleted': 'Eliminó una visita',
   'supply.created': 'Creó un insumo',
   'supply.updated': 'Editó un insumo',
   'supply.purchase': 'Registró una compra de insumo',
@@ -109,5 +114,6 @@ export function entityLink(entityType: string, entityId: string): string | null 
   if (entityType === 'piece') return `/piezas/${entityId}`;
   if (entityType === 'artisan') return `/artesanos/${entityId}`;
   if (entityType === 'supply') return '/insumos';
+  if (entityType === 'visit') return '/visitas';
   return null;
 }

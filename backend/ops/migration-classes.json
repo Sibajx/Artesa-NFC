@@ -80,6 +80,10 @@
     "b9e4f2a6d8c1": {
       "class": "additive",
       "note": "Adds the production_step and production_photo tables (production follow-up of a piece, with private photos on disk). Nothing existing changes and no row is seeded; older code ignores them, so a code-only rollback is compatible. The downgrade drops both tables; the photo files under privado/ stay on disk."
+    },
+    "c1f7a3d9e5b2": {
+      "class": "additive",
+      "note": "Adds the visit table (visit log of artisans and galleries, with one private photo on disk). Nothing existing changes and no row is seeded; older code ignores it, so a code-only rollback is compatible. The downgrade drops the table; the photo files under privado/ stay on disk."
     }
   }
 }

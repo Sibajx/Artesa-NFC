@@ -31,6 +31,7 @@ const PERMISSIONS: Record<string, { label: string; hint: string }> = {
   design: { label: 'Diseño', hint: 'Diseño de certificados' },
   hero: { label: 'Hero', hint: 'Hero por temporada e imágenes del sitio' },
   training: { label: 'Capacitar', hint: 'Capacitaciones (módulo todavía sin construir)' },
+  visits: { label: 'Visitas', hint: 'Bitácora de visitas a artesanos y galerías (se da a mano: Sol y Hariel)' },
 };
 
 const CONFLICTS: Record<string, string> = {
