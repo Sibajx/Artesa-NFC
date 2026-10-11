@@ -40,8 +40,9 @@ const WEEKDAYS: Record<string, string[]> = {
   Fri: ['Ya es viernes, {n}'],
 };
 
-const LAST_KEY = 'artesa.greeting.last';
-const SESSION_KEY = 'artesa.greeting.session';
+// Kept in memory only (the admin does not use browser storage): the greeting stays
+// the same while the page is open and a new load can bring another one.
+let current: string | null = null;
 
 function mexicoParts(now: Date): { hour: number; monthDay: string; weekday: string } {
   const get = (options: Intl.DateTimeFormatOptions) =>
@@ -63,42 +64,18 @@ export function slotOf(hour: number): Slot {
 
 export const namesOf = (email: string): string[] => NAMES[email.trim().toLowerCase()] ?? [FALLBACK_NAME];
 
-function read(storage: 'session' | 'local', key: string): string | null {
-  try {
-    return (storage === 'session' ? sessionStorage : localStorage).getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function write(storage: 'session' | 'local', key: string, value: string) {
-  try {
-    (storage === 'session' ? sessionStorage : localStorage).setItem(key, value);
-  } catch {
-    /* private window or blocked storage: the greeting just is not remembered */
-  }
-}
-
 /** Every greeting this person could get right now (before choosing the name). */
 export function candidates(now: Date): string[] {
   const { hour, monthDay, weekday } = mexicoParts(now);
   return [...(DATES[monthDay] ?? []), ...(WEEKDAYS[weekday] ?? []), ...PHRASES[slotOf(hour)]];
 }
 
-/**
- * One greeting per visit: it stays the same while the tab is open and avoids
- * repeating the last one this browser showed. `random` is injectable for tests.
- */
+/** One greeting per page load. `random` is injectable for tests. */
 export function greetingFor(email: string, now: Date = new Date(), random: () => number = Math.random): string {
-  const kept = read('session', SESSION_KEY);
-  if (kept) return kept;
+  if (current) return current;
   const names = namesOf(email);
-  const last = read('local', LAST_KEY);
-  const pool = candidates(now).map((phrase) => phrase.replace('{n}', names[Math.floor(random() * names.length)]));
-  const fresh = pool.filter((text) => text !== last);
-  const options = fresh.length > 0 ? fresh : pool;
-  const chosen = options[Math.floor(random() * options.length)];
-  write('session', SESSION_KEY, chosen);
-  write('local', LAST_KEY, chosen);
-  return chosen;
+  const pool = candidates(now);
+  const phrase = pool[Math.floor(random() * pool.length)];
+  current = phrase.replace('{n}', names[Math.floor(random() * names.length)]);
+  return current;
 }
