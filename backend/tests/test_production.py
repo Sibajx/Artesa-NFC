@@ -185,3 +185,21 @@ def test_steps_are_audited(owner_client, piece, db_session):
     actions = [a for (a,) in db_session.execute(select(AuditEvent.action).where(
         AuditEvent.entity_id == uuid.UUID(piece["id"]), AuditEvent.action.like("piece.production%")).order_by(AuditEvent.occurred_at))]
     assert actions == ["piece.production_step", "piece.production_step", "piece.production_step_undone"]
+
+
+def test_the_board_shows_the_sale_and_the_shipment(owner_client, piece, db_session):
+    from datetime import date
+
+    from app.models.sale import Sale, SaleStatus
+
+    card = lambda: next(c for c in get(owner_client, "/board").json()["data"] if c["piece_id"] == piece["id"])  # noqa: E731
+    assert card()["sold_on"] is None and card()["carrier"] is None
+    db_session.add(Sale(piece_id=uuid.UUID(piece["id"]), status=SaleStatus.active, sold_on=date(2026, 10, 9), price_cents=150000,
+                        channel="feria", sold_by=OWNER, recorded_by=OWNER, buyer_name="Ana López"))
+    db_session.commit()
+    mark(owner_client, piece, "shipped", carrier="Estafeta", tracking="1234567890")
+    c = card()
+    assert c["sold_on"] == "2026-10-09" and c["sale_channel"] == "feria"
+    assert c["carrier"] == "Estafeta" and c["tracking"] == "1234567890"
+    # The buyer and the price never go on the board.
+    assert "Ana" not in str(c) and "price" not in str(c)

@@ -214,6 +214,10 @@ export interface ProductionCard {
   total: number;
   last_step: ProductionStepKey | null;
   last_done_at: string | null;
+  sold_on: string | null;
+  sale_channel: string | null;
+  carrier: string | null;
+  tracking: string | null;
 }
 
 export interface ProductionBoard {

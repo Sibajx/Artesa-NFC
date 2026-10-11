@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from sqlalchemy import func, select
@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.models.artisan import Artisan
 from app.models.nfc_tag import NfcTag, NfcTagStatus
 from app.models.piece import Piece
+from app.models.sale import Sale, SaleStatus
 from app.models.production import MANUAL_STEPS, PRODUCTION_STEPS, ProductionPhoto, ProductionStep
 from app.services import locations as locations_service
 from app.services import private_photos
@@ -49,6 +50,11 @@ class BoardCard:
     total: int
     last_step: str | None
     last_done_at: datetime | None
+    # The active sale and the shipment, so the board also answers "what is sold and not delivered yet".
+    sold_on: date | None = None
+    sale_channel: str | None = None
+    carrier: str | None = None
+    tracking: str | None = None
 
 
 def _piece(db: Session, piece_id: uuid.UUID) -> Piece:
@@ -112,14 +118,20 @@ def board(db: Session) -> list[BoardCard]:
     rows = db.execute(select(Piece, Artisan.full_name).join(Artisan, Artisan.id == Piece.artisan_id)
                       .where(Piece.trashed_at.is_(None)).order_by(Artisan.full_name, Piece.public_code)).all()
     views = _views(db, [p.id for p, _ in rows])
+    sales = {sale.piece_id: sale for sale in db.execute(
+        select(Sale).where(Sale.status == SaleStatus.active, Sale.piece_id.in_([p.id for p, _ in rows]))).scalars()} if rows else {}
     cards = []
     for piece, artisan in rows:
         steps = views[piece.id]
         done = [s for s in steps if s.done]
         # The furthest step along the pipeline (the order is the story: chip, pack, ship, deliver).
         last = done[-1] if done else None
+        shipped = next((x for x in steps if x.step == "shipped" and x.done), None)
+        sale = sales.get(piece.id)
         cards.append(BoardCard(piece.id, piece.name, piece.public_code, artisan, _bucket(steps), len(done), len(steps),
-                               last.step if last else None, last.done_at if last else None))
+                               last.step if last else None, last.done_at if last else None,
+                               sale.sold_on if sale else None, sale.channel if sale else None,
+                               shipped.carrier if shipped else None, shipped.tracking if shipped else None))
     return cards
 
 

@@ -4,7 +4,7 @@ photos. Reading needs "Ver"; marking steps and uploading photos, "Logística".""
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request
@@ -60,6 +60,10 @@ class CardOut(BaseModel):
     total: int
     last_step: str | None
     last_done_at: datetime | None
+    sold_on: date | None = None
+    sale_channel: str | None = None
+    carrier: str | None = None
+    tracking: str | None = None
 
 
 class Board(BaseModel):
