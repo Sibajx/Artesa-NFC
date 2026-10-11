@@ -1,9 +1,12 @@
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { adminApi } from '../api';
 import type { PublicationStatus, Summary, SummaryBucket } from '../api';
 import { actionLabel, actorLabel } from '../audit-labels';
 import { formatDateTime } from '../format';
+import { greetingFor } from '../greeting';
 import { useLoad } from '../hooks';
+import { useEmail } from '../roles-context';
 import { ErrorState, Loading, PageHeader } from '../ui';
 
 function countBy(items: { publication_status: PublicationStatus }[]) {
@@ -13,6 +16,8 @@ function countBy(items: { publication_status: PublicationStatus }[]) {
 }
 
 export default function Dashboard() {
+  const email = useEmail();
+  const greeting = useMemo(() => greetingFor(email), [email]);
   const state = useLoad('dashboard', async (signal) => {
     const [artisans, pieces, events, summary] = await Promise.all([
       adminApi.artisans({}, signal),
@@ -25,7 +30,7 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-6xl mx-auto pb-12">
-      <PageHeader title="Inicio" subtitle="Lo que hay y lo que falta en ArtesaNFC." />
+      <PageHeader title={greeting} subtitle={state.status === 'ready' ? attentionLine(state.data.summary) : 'Lo que hay y lo que falta en ArtesaNFC.'} />
 
       {state.status === 'loading' && <Loading label="Cargando inicio..." />}
       {state.status === 'error' && <div className="card-elevated"><ErrorState error={state.error} /></div>}
@@ -103,6 +108,16 @@ const CARDS: { key: keyof Summary; title: string; hint: string; to: (id: string)
   { key: 'cards_blocked_or_locked', title: 'Tarjetas bloqueadas', hint: 'Revisar con el dueño', to: (id) => `/certificacion/${id}` },
   { key: 'reported_stolen', title: 'Piezas reportadas como robadas', hint: '', to: (id) => `/certificacion/${id}` },
 ];
+
+// One sentence under the greeting with what asks for attention first, from the
+// same cards listed in Pendientes (the API only returns the ones for this account).
+function attentionLine(summary: Summary): string {
+  const open = CARDS.map((c) => ({ title: c.title, count: (summary[c.key] as SummaryBucket | undefined)?.count ?? 0 })).filter((c) => c.count > 0);
+  if (open.length === 0) return 'Todo al día ✓ Lo que hay y lo que falta en ArtesaNFC.';
+  const total = open.reduce((sum, c) => sum + c.count, 0);
+  const top = open.slice(0, 2).map((c) => `${c.title.toLowerCase()} (${c.count})`).join(' y ');
+  return `${total === 1 ? 'Hay 1 cosa' : `Hay ${total} cosas`} por atender: ${top}${open.length > 2 ? ' y más' : ''}.`;
+}
 
 function Pending({ summary }: { summary: Summary }) {
   const cards = CARDS.filter((c) => {
