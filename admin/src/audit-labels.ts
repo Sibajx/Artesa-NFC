@@ -38,6 +38,14 @@ const LABELS: Record<string, string> = {
   'visit.photo_set': 'Subió la foto de una visita',
   'visit.photo_removed': 'Quitó la foto de una visita',
   'visit.deleted': 'Eliminó una visita',
+  'training.created': 'Creó un manual de capacitación',
+  'training.updated': 'Editó un manual de capacitación',
+  'training.submitted': 'Pidió la revisión de un manual',
+  'training.approved': 'Aprobó un manual de capacitación',
+  'training.changes_requested': 'Pidió cambios a un manual',
+  'training.image_added': 'Agregó un dibujo a un manual',
+  'training.image_removed': 'Quitó un dibujo de un manual',
+  'training.deleted': 'Eliminó un manual de capacitación',
   'supply.created': 'Creó un insumo',
   'supply.updated': 'Editó un insumo',
   'supply.purchase': 'Registró una compra de insumo',
@@ -106,6 +114,7 @@ export const AUDIT_CATEGORIES: { value: string; label: string }[] = [
   { value: 'custody.', label: 'Certificación y chips' },
   { value: 'ownership.', label: 'Certificado original (público)' },
   { value: 'design.', label: 'Diseños de certificado' },
+  { value: 'training.', label: 'Capacitaciones' },
   { value: 'account.', label: 'Usuarios' },
   { value: 'role.', label: 'Roles' },
   { value: 'export.', label: 'Exportaciones' },
@@ -121,5 +130,6 @@ export function entityLink(entityType: string, entityId: string): string | null 
   if (entityType === 'artisan') return `/artesanos/${entityId}`;
   if (entityType === 'supply') return '/insumos';
   if (entityType === 'visit') return '/visitas';
+  if (entityType === 'training_manual') return '/capacitaciones';
   return null;
 }

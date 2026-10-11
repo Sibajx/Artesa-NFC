@@ -19,7 +19,7 @@ import Produccion from './pages/Produccion';
 import Capacitaciones from './pages/Capacitaciones';
 import Visitas from './pages/Visitas';
 import Hero from './pages/Hero';
-import { PermissionsContext, RolesContext } from './roles-context';
+import { EmailContext, PermissionsContext, RolesContext } from './roles-context';
 import ArtesanoForm from './pages/ArtesanoForm';
 import PiezaForm from './pages/PiezaForm';
 
@@ -253,6 +253,7 @@ export default function App() {
       </aside>
 
       <main className="flex-1 p-6 md:p-10 overflow-auto">
+        <EmailContext.Provider value={email}>
         <RolesContext.Provider value={roles}>
         <PermissionsContext.Provider value={permissions}>
         <Routes>
@@ -284,6 +285,7 @@ export default function App() {
         </Routes>
         </PermissionsContext.Provider>
         </RolesContext.Provider>
+        </EmailContext.Provider>
       </main>
     </div>
   );
