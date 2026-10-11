@@ -76,6 +76,10 @@
     "a7d3e1b5c9f2": {
       "class": "additive",
       "note": "Adds the supply and supply_movement tables (stock of consumables: chips, seals, scratch cards, epoxy). Nothing existing changes and no row is seeded; older code ignores them, so a code-only rollback is compatible. The downgrade drops both tables and every movement in them."
+    },
+    "b9e4f2a6d8c1": {
+      "class": "additive",
+      "note": "Adds the production_step and production_photo tables (production follow-up of a piece, with private photos on disk). Nothing existing changes and no row is seeded; older code ignores them, so a code-only rollback is compatible. The downgrade drops both tables; the photo files under privado/ stay on disk."
     }
   }
 }

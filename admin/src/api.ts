@@ -169,6 +169,47 @@ export interface Inventory {
   data: InventoryRow[];
 }
 
+// Production follow-up of a piece (chip, packing, shipping) with private photos.
+export type ProductionStepKey = 'received' | 'chip_placed' | 'chip_programmed' | 'packed' | 'shipped' | 'delivered';
+export type ProductionBucket = 'pending' | 'in_process' | 'ready_to_ship' | 'in_transit' | 'delivered';
+
+export interface ProductionStep {
+  step: ProductionStepKey;
+  done: boolean;
+  source: 'manual' | 'auto' | null;
+  done_at: string | null;
+  done_by: string | null;
+  note: string | null;
+  carrier: string | null;
+  tracking: string | null;
+  photos: string[];
+}
+
+export interface ProductionTimeline {
+  piece_id: string;
+  name: string;
+  public_code: string;
+  steps: ProductionStep[];
+  photos_enabled: boolean;
+}
+
+export interface ProductionCard {
+  piece_id: string;
+  name: string;
+  public_code: string;
+  artisan_name: string;
+  bucket: ProductionBucket;
+  done: number;
+  total: number;
+  last_step: ProductionStepKey | null;
+  last_done_at: string | null;
+}
+
+export interface ProductionBoard {
+  data: ProductionCard[];
+  counts: Record<ProductionBucket, number>;
+}
+
 // P-028: the home hero by season.
 export interface HeroCampaign {
   id: string;
@@ -729,6 +770,19 @@ export const adminApi = {
   removeAccount: (email: string) => request<AccountList>('POST', `/accounts/${encodeURIComponent(email)}/remove`, { body: {} }),
   syncAccounts: () => request<AccountList>('POST', '/accounts/sync', { body: {} }),
   inventory: (signal?: AbortSignal) => get<Inventory>('/inventory', undefined, signal),
+  productionBoard: (signal?: AbortSignal) => get<ProductionBoard>('/production/board', undefined, signal),
+  productionPiece: (id: string, signal?: AbortSignal) =>
+    get<ProductionTimeline>(`/production/pieces/${encodeURIComponent(id)}`, undefined, signal),
+  markProductionStep: (id: string, step: ProductionStepKey, body: { note?: string | null; carrier?: string | null; tracking?: string | null }) =>
+    request<ProductionTimeline>('POST', `/production/pieces/${encodeURIComponent(id)}/steps/${step}`, { body }),
+  undoProductionStep: (id: string, step: ProductionStepKey) =>
+    request<ProductionTimeline>('POST', `/production/pieces/${encodeURIComponent(id)}/steps/${step}/undo`, { body: {} }),
+  uploadProductionPhoto: (id: string, step: ProductionStepKey, file: Blob, contentType: string) =>
+    request<ProductionTimeline>('POST', `/production/pieces/${encodeURIComponent(id)}/steps/${step}/photos`, {
+      file: { data: file, contentType },
+    }),
+  deleteProductionPhoto: (photoUrl: string) =>
+    request<ProductionTimeline>('POST', `${photoUrl.replace(BASE, '')}/delete`, { body: {} }),
   supplies: (includeInactive: boolean, signal?: AbortSignal) =>
     get<SupplyList>('/supplies', includeInactive ? { include_inactive: 'true' } : undefined, signal),
   supply: (id: string, signal?: AbortSignal) => get<SupplyDetail>(`/supplies/${encodeURIComponent(id)}`, undefined, signal),
