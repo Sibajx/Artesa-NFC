@@ -225,7 +225,8 @@
     padding: 0.625rem 1.25rem;
     background-color: var(--accent);
     color: var(--on-accent);
-    border-radius: 10px;
+    border: 1px solid var(--accent);
+    border-radius: 999px;
     font-weight: 500;
     font-size: 0.875rem;
     transition: all 0.15s ease;
@@ -251,7 +252,7 @@
     background-color: var(--surface-2);
     color: var(--ink);
     border: 1px solid color-mix(in srgb, var(--rule) 80%, transparent);
-    border-radius: 10px;
+    border-radius: 999px;
     font-weight: 500;
     font-size: 0.875rem;
     transition: all 0.15s ease;
@@ -322,7 +323,8 @@
   padding: 0.625rem 1.25rem;
   background-color: var(--danger-solid);
   color: #fff;
-  border-radius: 10px;
+  border: 1px solid var(--danger-solid);
+  border-radius: 999px;
   font-weight: 500;
   font-size: 0.875rem;
 }
@@ -368,6 +370,16 @@
     transform: scale(0.96);
     transition-duration: 100ms;
   }
+}
+
+/* Se iluminan al pasar el cursor, como los botones del sitio y de Finanzas
+   (cempasúchil con brillo). Los botones de peligro conservan su rojo. */
+.btn-primary:hover:not(:disabled),
+.btn-secondary:hover:not(:disabled) {
+  background-color: var(--marigold);
+  border-color: var(--marigold);
+  color: #1a0f05;
+  box-shadow: 0 0 22px -4px color-mix(in srgb, var(--marigold) 65%, transparent);
 }
 
 /* Confirm dialog */
