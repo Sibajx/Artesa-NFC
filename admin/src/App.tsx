@@ -17,6 +17,7 @@ import Usuarios from './pages/Usuarios';
 import Inventario from './pages/Inventario';
 import Insumos from './pages/Insumos';
 import Produccion from './pages/Produccion';
+import Capacitaciones from './pages/Capacitaciones';
 import Visitas from './pages/Visitas';
 import Hero from './pages/Hero';
 import { PermissionsContext, RolesContext } from './roles-context';
@@ -62,6 +63,13 @@ const icons: Record<string, ReactElement> = {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/>
       <circle cx="12" cy="10" r="2.5"/>
+    </svg>
+  ),
+  Capacitaciones: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/>
+      <path d="M4 19V5"/>
+      <path d="M9 8h6"/>
     </svg>
   ),
   Insumos: (
@@ -126,6 +134,7 @@ const menuItems: { name: string; path: string; any?: string[]; role?: string }[]
   { name: 'Producción', path: '/produccion' },
   { name: 'Insumos', path: '/insumos' },
   { name: 'Visitas', path: '/visitas', any: ['visits'] },
+  { name: 'Capacitaciones', path: '/capacitaciones', any: ['training'] },
   { name: 'Certificación', path: '/certificacion', any: ['nfc', 'revocations'] },
   { name: 'Archivados', path: '/archivados' },
   { name: 'Papelera', path: '/papelera' },
@@ -237,6 +246,7 @@ export default function App() {
           <Route path="/insumos" element={<Insumos />} />
           <Route path="/produccion" element={<Produccion />} />
           {can('visits') && <Route path="/visitas" element={<Visitas />} />}
+          {can('training') && <Route path="/capacitaciones" element={<Capacitaciones />} />}
           {can('nfc', 'revocations') && <Route path="/certificacion" element={<Certificacion />} />}
           {can('nfc', 'revocations') && <Route path="/certificacion/:id" element={<CertificarPieza />} />}
           {can('design') && <Route path="/diseno/:id" element={<DisenoCertificado />} />}
