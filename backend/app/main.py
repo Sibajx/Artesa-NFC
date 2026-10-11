@@ -18,7 +18,15 @@ from app.api.admin.hero import uploads as admin_hero_uploads
 from app.api.admin.hero import writes as admin_hero_writes
 from app.api.admin.media import router as admin_media_router
 from app.api.admin.media import upload_router as admin_upload_router
+from app.api.admin.production import reads as admin_production_reads
+from app.api.admin.production import uploads as admin_production_uploads
+from app.api.admin.production import writes as admin_production_writes
 from app.api.admin.router import router as admin_router
+from app.api.admin.supplies import reads as admin_supplies_reads
+from app.api.admin.visits import reads as admin_visits_reads
+from app.api.admin.visits import uploads as admin_visits_uploads
+from app.api.admin.visits import writes as admin_visits_writes
+from app.api.admin.supplies import writes as admin_supplies_writes
 from app.api.admin.writes import router as admin_writes_router
 from app.api.v1.router import router as api_v1_router
 from app.core.config import get_settings
@@ -239,6 +247,14 @@ app.include_router(admin_router)
 app.include_router(admin_custody_router)
 app.include_router(admin_custody_writes_router)
 app.include_router(admin_exports_router)
+app.include_router(admin_supplies_reads)
+app.include_router(admin_supplies_writes)
+app.include_router(admin_production_reads)
+app.include_router(admin_production_writes)
+app.include_router(admin_production_uploads)
+app.include_router(admin_visits_reads)
+app.include_router(admin_visits_writes)
+app.include_router(admin_visits_uploads)
 # ADR-030 phase 5. Before the content writes: POST /pieces/{id}/designs would
 # otherwise match their /pieces/{id}/{action} transition route.
 app.include_router(admin_accounts_reads)

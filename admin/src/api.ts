@@ -105,6 +105,142 @@ export interface AccountList {
   sync_configured: boolean;
 }
 
+// Insumos (stock of chips, seals, scratch cards, epoxy...) and the inventory of pieces.
+export interface Supply {
+  id: string;
+  name: string;
+  unit: string;
+  min_stock: string;
+  stock: string;
+  low: boolean;
+  note: string | null;
+  active: boolean;
+}
+
+export interface SupplyList {
+  data: Supply[];
+  low_count: number;
+}
+
+export interface SupplyMovement {
+  id: string;
+  kind: 'purchase' | 'use' | 'loss' | 'adjustment';
+  delta: string;
+  unit_cost_cents: number | null;
+  piece_id: string | null;
+  piece_name: string | null;
+  note: string | null;
+  recorded_by: string;
+  created_at: string;
+}
+
+export interface SupplyDetail {
+  supply: Supply;
+  movements: SupplyMovement[];
+}
+
+export interface SupplyMovementInput {
+  kind: SupplyMovement['kind'];
+  quantity: number;
+  direction?: 'up' | 'down';
+  unit_cost_cents?: number | null;
+  piece_id?: string | null;
+  note?: string | null;
+}
+
+export interface InventoryRow {
+  id: string;
+  public_code: string;
+  name: string;
+  artisan_id: string;
+  artisan_name: string;
+  publication_status: PublicationStatus;
+  availability_status: string;
+  price_cents: number | null;
+  price_currency: string;
+  location: string | null;
+  place: string | null;
+  sold_on: string | null;
+  updated_at: string;
+}
+
+export interface Inventory {
+  summary: { total: number; by_availability: Record<string, number>; available_value_cents: number; currency: string };
+  data: InventoryRow[];
+}
+
+// Production follow-up of a piece (chip, packing, shipping) with private photos.
+export type ProductionStepKey = 'received' | 'chip_placed' | 'chip_programmed' | 'packed' | 'shipped' | 'delivered';
+export type ProductionBucket = 'pending' | 'in_process' | 'ready_to_ship' | 'in_transit' | 'delivered';
+
+export interface ProductionStep {
+  step: ProductionStepKey;
+  done: boolean;
+  source: 'manual' | 'auto' | null;
+  done_at: string | null;
+  done_by: string | null;
+  note: string | null;
+  carrier: string | null;
+  tracking: string | null;
+  photos: string[];
+}
+
+export interface ProductionTimeline {
+  piece_id: string;
+  name: string;
+  public_code: string;
+  steps: ProductionStep[];
+  photos_enabled: boolean;
+}
+
+export interface ProductionCard {
+  piece_id: string;
+  name: string;
+  public_code: string;
+  artisan_name: string;
+  bucket: ProductionBucket;
+  done: number;
+  total: number;
+  last_step: ProductionStepKey | null;
+  last_done_at: string | null;
+}
+
+export interface ProductionBoard {
+  data: ProductionCard[];
+  counts: Record<ProductionBucket, number>;
+}
+
+// Visit log (artisans and galleries). Only for people with the Visits permission.
+export type VisitKind = 'artesano' | 'galeria' | 'otro';
+
+export interface Visit {
+  id: string;
+  visited_on: string;
+  kind: VisitKind;
+  artisan_id: string | null;
+  artisan_name: string | null;
+  place: string | null;
+  attendees: string | null;
+  summary: string;
+  agreements: string | null;
+  consent_to_publish: boolean;
+  photo: string | null;
+  recorded_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VisitInput {
+  visited_on: string;
+  kind: VisitKind;
+  artisan_id: string | null;
+  place: string | null;
+  attendees: string | null;
+  summary: string;
+  agreements: string | null;
+  consent_to_publish: boolean;
+}
+
 // P-028: the home hero by season.
 export interface HeroCampaign {
   id: string;
@@ -664,6 +800,37 @@ export const adminApi = {
     request<AccountList>('POST', `/accounts/${encodeURIComponent(email)}/role`, { body: { role } }),
   removeAccount: (email: string) => request<AccountList>('POST', `/accounts/${encodeURIComponent(email)}/remove`, { body: {} }),
   syncAccounts: () => request<AccountList>('POST', '/accounts/sync', { body: {} }),
+  inventory: (signal?: AbortSignal) => get<Inventory>('/inventory', undefined, signal),
+  visits: (artisanId: string | undefined, signal?: AbortSignal) =>
+    get<{ data: Visit[] }>('/visits', artisanId ? { artisan_id: artisanId } : undefined, signal),
+  createVisit: (body: VisitInput) => request<Visit>('POST', '/visits', { body }),
+  updateVisit: (id: string, body: Partial<VisitInput>) => request<Visit>('PATCH', `/visits/${encodeURIComponent(id)}`, { body }),
+  uploadVisitPhoto: (id: string, file: Blob, contentType: string) =>
+    request<Visit>('POST', `/visits/${encodeURIComponent(id)}/photo`, { file: { data: file, contentType } }),
+  deleteVisitPhoto: (id: string) => request<Visit>('POST', `/visits/${encodeURIComponent(id)}/photo/delete`, { body: {} }),
+  deleteVisit: (id: string) => request<void>('POST', `/visits/${encodeURIComponent(id)}/delete`, { body: {} }),
+  productionBoard: (signal?: AbortSignal) => get<ProductionBoard>('/production/board', undefined, signal),
+  productionPiece: (id: string, signal?: AbortSignal) =>
+    get<ProductionTimeline>(`/production/pieces/${encodeURIComponent(id)}`, undefined, signal),
+  markProductionStep: (id: string, step: ProductionStepKey, body: { note?: string | null; carrier?: string | null; tracking?: string | null }) =>
+    request<ProductionTimeline>('POST', `/production/pieces/${encodeURIComponent(id)}/steps/${step}`, { body }),
+  undoProductionStep: (id: string, step: ProductionStepKey) =>
+    request<ProductionTimeline>('POST', `/production/pieces/${encodeURIComponent(id)}/steps/${step}/undo`, { body: {} }),
+  uploadProductionPhoto: (id: string, step: ProductionStepKey, file: Blob, contentType: string) =>
+    request<ProductionTimeline>('POST', `/production/pieces/${encodeURIComponent(id)}/steps/${step}/photos`, {
+      file: { data: file, contentType },
+    }),
+  deleteProductionPhoto: (photoUrl: string) =>
+    request<ProductionTimeline>('POST', `${photoUrl.replace(BASE, '')}/delete`, { body: {} }),
+  supplies: (includeInactive: boolean, signal?: AbortSignal) =>
+    get<SupplyList>('/supplies', includeInactive ? { include_inactive: 'true' } : undefined, signal),
+  supply: (id: string, signal?: AbortSignal) => get<SupplyDetail>(`/supplies/${encodeURIComponent(id)}`, undefined, signal),
+  createSupply: (body: { name: string; unit: string; min_stock: number; note: string | null }) =>
+    request<SupplyDetail>('POST', '/supplies', { body }),
+  updateSupply: (id: string, body: Partial<{ name: string; unit: string; min_stock: number; note: string | null; active: boolean }>) =>
+    request<SupplyDetail>('PATCH', `/supplies/${encodeURIComponent(id)}`, { body }),
+  recordSupplyMovement: (id: string, body: SupplyMovementInput) =>
+    request<SupplyDetail>('POST', `/supplies/${encodeURIComponent(id)}/movements`, { body }),
   setAccountPermissions: (email: string, permissions: string[] | null) =>
     request<AccountList>('POST', `/accounts/${encodeURIComponent(email)}/permissions`, { body: { permissions } }),
   importFixedAccounts: () => request<AccountList>('POST', '/accounts/import-fixed', { body: {} }),

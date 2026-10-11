@@ -29,6 +29,21 @@ const LABELS: Record<string, string> = {
   'piece.sold': 'Registró una venta',
   'piece.moved': 'Cambió la ubicación de la pieza',
   'piece.sale_cancelled': 'Canceló una venta',
+  'piece.production_step': 'Marcó un paso de producción',
+  'piece.production_step_undone': 'Quitó un paso de producción',
+  'piece.production_photo': 'Agregó una foto de producción',
+  'piece.production_photo_deleted': 'Borró una foto de producción',
+  'visit.created': 'Registró una visita',
+  'visit.updated': 'Editó una visita',
+  'visit.photo_set': 'Subió la foto de una visita',
+  'visit.photo_removed': 'Quitó la foto de una visita',
+  'visit.deleted': 'Eliminó una visita',
+  'supply.created': 'Creó un insumo',
+  'supply.updated': 'Editó un insumo',
+  'supply.purchase': 'Registró una compra de insumo',
+  'supply.use': 'Registró el uso de un insumo',
+  'supply.loss': 'Registró una merma de insumo',
+  'supply.adjustment': 'Ajustó el stock de un insumo',
   'hero.created': 'Creó una temporada del hero',
   'hero.updated': 'Editó una temporada del hero',
   'hero.deleted': 'Borró una temporada del hero',
@@ -98,5 +113,7 @@ export const actorLabel = (email: string | null, actorType: string): string =>
 export function entityLink(entityType: string, entityId: string): string | null {
   if (entityType === 'piece') return `/piezas/${entityId}`;
   if (entityType === 'artisan') return `/artesanos/${entityId}`;
+  if (entityType === 'supply') return '/insumos';
+  if (entityType === 'visit') return '/visitas';
   return null;
 }

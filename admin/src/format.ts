@@ -7,8 +7,15 @@ const DATE_TIME = new Intl.DateTimeFormat('es-MX', {
   timeZone: 'America/Mexico_City',
 });
 
+// A date-only value ("2026-10-09": a sale day, a visit day) is a calendar day, not
+// an instant: parsing it as UTC midnight shows the day before in Mexico (UTC-6),
+// so it is read at noon UTC, which is the same calendar day in Mexico City.
+const DAY_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
+
 export function formatDate(value: string | null | undefined): string {
-  return value ? DATE.format(new Date(value)) : '—';
+  if (!value) return '—';
+  const day = DAY_ONLY.exec(value);
+  return DATE.format(day ? new Date(Date.UTC(Number(day[1]), Number(day[2]) - 1, Number(day[3]), 12)) : new Date(value));
 }
 
 export function formatDateTime(value: string | null | undefined): string {

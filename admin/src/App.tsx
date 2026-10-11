@@ -14,6 +14,10 @@ import Certificacion from './pages/Certificacion';
 import CertificarPieza from './pages/CertificarPieza';
 import DisenoCertificado from './pages/DisenoCertificado';
 import Usuarios from './pages/Usuarios';
+import Inventario from './pages/Inventario';
+import Insumos from './pages/Insumos';
+import Produccion from './pages/Produccion';
+import Visitas from './pages/Visitas';
 import Hero from './pages/Hero';
 import { PermissionsContext, RolesContext } from './roles-context';
 import ArtesanoForm from './pages/ArtesanoForm';
@@ -38,6 +42,33 @@ const icons: Record<string, ReactElement> = {
       <polygon points="12 2 2 7 12 12 22 7 12 2"/>
       <polyline points="2 17 12 22 22 17"/>
       <polyline points="2 12 12 17 22 12"/>
+    </svg>
+  ),
+  Inventario: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 8l-9-5-9 5v8l9 5 9-5z"/>
+      <path d="M3 8l9 5 9-5"/>
+      <path d="M12 13v8"/>
+    </svg>
+  ),
+  Producción: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M1 3h15v13H1z"/>
+      <path d="M16 8h4l3 3v5h-7z"/>
+      <circle cx="5.5" cy="18.5" r="2"/><circle cx="18.5" cy="18.5" r="2"/>
+    </svg>
+  ),
+  Visitas: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/>
+      <circle cx="12" cy="10" r="2.5"/>
+    </svg>
+  ),
+  Insumos: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 7h16"/>
+      <path d="M6 7l1 13h10l1-13"/>
+      <path d="M9 7V4h6v3"/>
     </svg>
   ),
   Certificación: (
@@ -91,6 +122,10 @@ const menuItems: { name: string; path: string; any?: string[]; role?: string }[]
   { name: 'Resumen', path: '/resumen' },
   { name: 'Artesanos', path: '/artesanos' },
   { name: 'Piezas', path: '/piezas' },
+  { name: 'Inventario', path: '/inventario' },
+  { name: 'Producción', path: '/produccion' },
+  { name: 'Insumos', path: '/insumos' },
+  { name: 'Visitas', path: '/visitas', any: ['visits'] },
   { name: 'Certificación', path: '/certificacion', any: ['nfc', 'revocations'] },
   { name: 'Archivados', path: '/archivados' },
   { name: 'Papelera', path: '/papelera' },
@@ -198,6 +233,10 @@ export default function App() {
           <Route path="/piezas/:id/editar" element={<PiezaForm />} />
           <Route path="/piezas/:id" element={<PiezaDetalle />} />
           <Route path="/piezas" element={<Piezas />} />
+          <Route path="/inventario" element={<Inventario />} />
+          <Route path="/insumos" element={<Insumos />} />
+          <Route path="/produccion" element={<Produccion />} />
+          {can('visits') && <Route path="/visitas" element={<Visitas />} />}
           {can('nfc', 'revocations') && <Route path="/certificacion" element={<Certificacion />} />}
           {can('nfc', 'revocations') && <Route path="/certificacion/:id" element={<CertificarPieza />} />}
           {can('design') && <Route path="/diseno/:id" element={<DisenoCertificado />} />}
