@@ -25,9 +25,9 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-6xl mx-auto pb-12">
-      <PageHeader title="Resumen" subtitle="Lo que hay y lo que falta en ArtesaNFC." />
+      <PageHeader title="Inicio" subtitle="Lo que hay y lo que falta en ArtesaNFC." />
 
-      {state.status === 'loading' && <Loading label="Cargando resumen..." />}
+      {state.status === 'loading' && <Loading label="Cargando inicio..." />}
       {state.status === 'error' && <div className="card-elevated"><ErrorState error={state.error} /></div>}
       {state.status === 'ready' && (() => {
         const artisans = countBy(state.data.artisans);
@@ -35,7 +35,7 @@ export default function Dashboard() {
         const metrics = [
           { label: 'Artesanos', value: state.data.artisans.length, detail: `${artisans.published} publicados · ${artisans.draft} borradores`, to: '/artesanos' },
           { label: 'Piezas', value: state.data.pieces.length, detail: `${pieces.published} publicadas · ${pieces.draft} borradores`, to: '/piezas' },
-          { label: 'Archivados', value: artisans.archived + pieces.archived, detail: `${artisans.archived} artesanos · ${pieces.archived} piezas`, to: '/piezas' },
+          { label: 'Archivados', value: artisans.archived + pieces.archived, detail: `${artisans.archived} artesanos · ${pieces.archived} piezas`, to: '/archivo' },
         ];
         return (
           <>
