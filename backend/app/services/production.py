@@ -4,6 +4,7 @@ as the piece's location) come from data that already exists, so they are shown
 as done without anyone typing them twice."""
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -17,10 +18,12 @@ from app.models.artisan import Artisan
 from app.models.nfc_tag import NfcTag, NfcTagStatus
 from app.models.piece import Piece
 from app.models.production import MANUAL_STEPS, PRODUCTION_STEPS, ProductionPhoto, ProductionStep
-from app.services import locations as locations_service
+from app.core.config import get_settings
+from app.services import locations as locations_service, mailer
 from app.services import private_photos
 from app.services.content import Actor, ContentConflict, ContentNotFound, _audit
 
+logger = logging.getLogger(__name__)
 MAX_PHOTOS_PER_STEP = 5
 BUCKETS = ("pending", "in_process", "ready_to_ship", "in_transit", "delivered")
 
@@ -124,7 +127,7 @@ def board(db: Session) -> list[BoardCard]:
 
 
 def mark(db: Session, actor: Actor, piece_id: uuid.UUID, step: str, note: str | None, carrier: str | None,
-         tracking: str | None) -> None:
+         tracking: str | None) -> Piece:
     piece = _piece(db, piece_id)
     if step == "chip_programmed":
         raise ContentConflict("automatic_step", "Este paso se marca solo cuando el chip se programa en Certificación.")
@@ -142,6 +145,32 @@ def mark(db: Session, actor: Actor, piece_id: uuid.UUID, step: str, note: str | 
         raise ContentConflict("already_done", "Ese paso ya está marcado.") from None
     _audit(db, actor, "piece", piece.id, "piece.production_step", {"step": step, "carrier": carrier, "tracking": tracking})
     db.commit()
+    return piece
+
+
+_NOTICE_STEPS = {"shipped": "salió en envío", "delivered": "se entregó"}
+
+
+def notify_step(name: str, code: str, step: str, who: str, carrier: str | None, tracking: str | None) -> None:
+    """Tells the owner(s) by email that a piece shipped or was delivered. Best effort:
+    without mail settings, or if the relay fails, nothing is sent and the step stays
+    marked. Only the piece's name and code, who marked it and the carrier data go in
+    the message; nothing here logs a recipient."""
+    settings = get_settings()
+    if step not in _NOTICE_STEPS or not settings.mail_configured:
+        return
+    lines = [f"La pieza «{name}» ({code}) {_NOTICE_STEPS[step]}.", f"Lo marcó: {who}."]
+    if carrier:
+        lines.append(f"Paquetería: {carrier}.")
+    if tracking:
+        lines.append(f"Guía: {tracking}.")
+    lines.append("Puedes verla en Gestión → Producción: https://gestion.artesanfc.com/")
+    subject = f"ArtesaNFC: {name} {_NOTICE_STEPS[step]}"
+    for to in settings.owner_emails_list:
+        try:
+            mailer.send_email(to, subject, "\n".join(lines) + "\n")
+        except (mailer.MailUnavailable, mailer.MailError, ValueError) as exc:
+            logger.warning("production notice not sent: %s", type(exc).__name__)
 
 
 def _step_row(db: Session, piece_id: uuid.UUID, step: str) -> ProductionStep:

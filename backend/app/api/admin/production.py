@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
@@ -116,10 +116,12 @@ def photo(photo_id: uuid.UUID, db: Session = Depends(get_db)) -> FileResponse:
 
 
 @writes.post("/pieces/{piece_id}/steps/{step}", status_code=201, response_model=Timeline)
-def mark_step(piece_id: uuid.UUID, step: str, body: StepBody, who: Actor = Depends(actor),
-              db: Session = Depends(get_db)) -> Timeline:
+def mark_step(piece_id: uuid.UUID, step: str, body: StepBody, background: BackgroundTasks,
+              who: Actor = Depends(actor), db: Session = Depends(get_db)) -> Timeline:
     try:
-        production.mark(db, who, piece_id, step, body.note, body.carrier, body.tracking)
+        piece = production.mark(db, who, piece_id, step, body.note, body.carrier, body.tracking)
+        background.add_task(production.notify_step, piece.name, piece.public_code, step, who.identity.email,
+                            (body.carrier or "").strip() or None, (body.tracking or "").strip() or None)
         return _timeline(db, piece_id)
     except ContentError as exc:
         raise _fail(exc) from None
