@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ApiError, adminApi } from '../api';
-import type { ArtPlacement, Design, DesignParams } from '../api';
+import type { ArtPlacement, Design, DesignParams, DesignStory } from '../api';
 import { formatDateTime, writeErrorMessage } from '../format';
 import { useConfirm, useToast } from '../feedback-context';
 import { useLoad } from '../hooks';
@@ -24,7 +24,35 @@ const TEMPLATES: { value: DesignParams['template']; label: string; hint: string 
   { value: 'clasico', label: 'Clásico', hint: 'Papel, marco doble y sello' },
   { value: 'greca', label: 'Greca', hint: 'Marco de grecas con el color de la pieza' },
   { value: 'constelacion', label: 'Constelación', hint: 'Fondo oscuro con patrón generativo' },
+  { value: 'telar', label: 'Telar', hint: 'Bandas bordadas como las de un huipil' },
 ];
+
+// A tiny drawing of each template, so the choice is seen and not only read.
+function TemplateThumb({ template }: { template: DesignParams['template'] }) {
+  const dark = template === 'constelacion';
+  const paper = dark ? '#1d1915' : '#f6efe2';
+  const ink = dark ? '#efe4cf' : '#1d1915';
+  const accent = '#c9761c';
+  return (
+    <svg viewBox="0 0 60 80" className="h-20 w-[3.75rem] shrink-0 rounded-sm border border-botanica-gris/30" aria-hidden="true" focusable="false">
+      <rect width="60" height="80" fill={paper} />
+      {template !== 'greca' && <rect x="4" y="4" width="52" height="72" fill="none" stroke={ink} strokeWidth="1" />}
+      {template === 'clasico' && <rect x="6" y="6" width="48" height="68" fill="none" stroke={accent} strokeWidth="0.6" />}
+      {template === 'greca' && <rect x="4" y="4" width="52" height="72" fill="none" stroke={accent} strokeWidth="2.4" strokeDasharray="3 1.5" />}
+      {template === 'constelacion' && [[12, 12], [26, 9], [40, 14], [48, 10], [18, 22], [34, 20]].map(([x, y]) => <circle key={`${x}${y}`} cx={x} cy={y} r="1.2" fill={accent} />)}
+      {template === 'telar' && [9, 62].map((y) => (
+        <g key={y}>
+          <rect x="8" y={y} width="44" height="1" fill={accent} /><rect x="8" y={y + 7} width="44" height="1" fill={accent} />
+          {[12, 20, 28, 36, 44].map((x, i) => <path key={x} d={`M${x},${y + 1.6} l2.4,2.4 l-2.4,2.4 l-2.4,-2.4 Z`} fill={i % 2 ? ink : accent} />)}
+        </g>
+      ))}
+      <rect x="20" y="22" width="20" height="2" fill={ink} opacity="0.7" />
+      <rect x="14" y="28" width="32" height="5" fill={ink} opacity="0.85" />
+      <circle cx="30" cy="52" r="7" fill="none" stroke={accent} strokeWidth="1.4" />
+      <circle cx="30" cy="52" r="3" fill={accent} />
+    </svg>
+  );
+}
 
 const PLACEMENTS: { value: ArtPlacement; label: string; hint: string }[] = [
   { value: 'sello', label: 'En el sello', hint: 'Dentro del círculo, en lugar del sello generado' },
@@ -188,6 +216,9 @@ function EditorForm({ design, onChanged, setError, piecePalette, contact }: {
 
   const set = <K extends keyof DesignParams>(key: K, value: DesignParams[K]) => setParams((p) => ({ ...p, [key]: value }));
 
+  const story = params.story ?? { enabled: false, technique: '', materials: '', place: '' };
+  const setStory = (change: Partial<DesignStory>) => set('story', { ...story, ...change });
+
   // Both numbers valid (1 ≤ X ≤ N ≤ 9999) → "Pieza X de N"; both empty → "Pieza única".
   function setEdition(next: { number: string; total: string }) {
     setEditionText(next);
@@ -316,12 +347,15 @@ function EditorForm({ design, onChanged, setError, piecePalette, contact }: {
           <section className="card-elevated p-5 flex flex-col gap-4" aria-label="Diseño">
             <fieldset className="flex flex-col gap-2">
               <legend className="text-xs font-medium text-botanica-grafito mb-1">Plantilla</legend>
-              <div className="grid gap-2 sm:grid-cols-3">
+              <div className="grid gap-2 sm:grid-cols-2">
                 {TEMPLATES.map((t) => (
-                  <label key={t.value} className={`cursor-pointer rounded-xl border p-3 text-sm ${params.template === t.value ? 'border-botanica-jade bg-botanica-jade/5' : 'border-botanica-gris/25'}`}>
+                  <label key={t.value} className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm focus-within:ring-2 focus-within:ring-botanica-jade ${params.template === t.value ? 'border-botanica-jade bg-botanica-jade/5' : 'border-botanica-gris/25'}`}>
                     <input type="radio" name="template" className="sr-only" checked={params.template === t.value} onChange={() => set('template', t.value)} />
-                    <span className="block font-medium text-botanica-negro">{t.label}</span>
-                    <span className="block text-xs text-botanica-gris">{t.hint}</span>
+                    <TemplateThumb template={t.value} />
+                    <span>
+                      <span className="block font-medium text-botanica-negro">{t.label}</span>
+                      <span className="block text-xs text-botanica-gris">{t.hint}</span>
+                    </span>
                   </label>
                 ))}
               </div>
@@ -341,6 +375,21 @@ function EditorForm({ design, onChanged, setError, piecePalette, contact }: {
             </div>
             <TextArea id="d-quote" label="Frase del artesano" value={params.quote} onChange={(v) => set('quote', v.slice(0, 240))}
               hint={`${params.quote.length}/240 · Opcional. Sus palabras sobre la pieza.`} />
+            <fieldset className="flex flex-col gap-3">
+              <legend className="text-xs font-medium text-botanica-grafito mb-1">Historia y oficio</legend>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={story.enabled} onChange={(e) => setStory({ enabled: e.target.checked })} className="accent-botanica-jade" />
+                Mostrar el oficio, los materiales y el lugar en el certificado
+              </label>
+              {story.enabled && (
+                <>
+                  <TextInput id="d-st-technique" label="Oficio o técnica" value={story.technique} onChange={(v) => setStory({ technique: v.slice(0, 60) })} hint="Por ejemplo: Barro negro bruñido" />
+                  <TextInput id="d-st-materials" label="Materiales" value={story.materials} onChange={(v) => setStory({ materials: v.slice(0, 90) })} hint="Por ejemplo: barro de San Bartolo, cuarzo" />
+                  <TextInput id="d-st-place" label="Lugar" value={story.place} onChange={(v) => setStory({ place: v.slice(0, 80) })} hint="Comunidad y estado" />
+                  <p className="text-xs text-botanica-grafito">Cada dato va en una línea. Si el nombre o la frase son muy largos, las últimas líneas pueden no caber; la vista previa te lo muestra.</p>
+                </>
+              )}
+            </fieldset>
             <fieldset className="flex flex-col gap-2">
               <legend className="text-xs font-medium text-botanica-grafito mb-1">Edición</legend>
               <div className="grid gap-4 sm:grid-cols-2">
@@ -406,7 +455,7 @@ function EditorForm({ design, onChanged, setError, piecePalette, contact }: {
             </fieldset>
             <div className="flex flex-wrap items-center gap-3">
               <button type="button" className="btn-secondary" onClick={() => set('seed', Math.floor(Math.random() * 2 ** 31))}>Otro patrón</button>
-              <span className="text-xs text-botanica-gris">Cambia el sello{params.template === 'constelacion' ? ' y la constelación' : params.template === 'greca' ? ' y la greca' : ' y las esquinas'}.</span>
+              <span className="text-xs text-botanica-gris">Cambia el sello{params.template === 'constelacion' ? ' y la constelación' : params.template === 'greca' ? ' y la greca' : params.template === 'telar' ? ' y las bandas bordadas' : ' y las esquinas'}.</span>
             </div>
             <div className="flex flex-wrap gap-2 border-t border-botanica-gris/15 pt-4">
               <button type="button" className="btn-primary" disabled={!dirty || busy}

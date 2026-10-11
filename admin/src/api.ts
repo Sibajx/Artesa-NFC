@@ -466,7 +466,7 @@ export interface PieceDetail {
 
 // ADR-030 phase 5: the designed original certificate.
 export interface DesignParams {
-  template: 'clasico' | 'greca' | 'constelacion';
+  template: 'clasico' | 'greca' | 'constelacion' | 'telar';
   variant: 'claro' | 'oscuro';
   title: string;
   piece_name: string;
@@ -479,6 +479,15 @@ export interface DesignParams {
   art?: DesignArt | null;
   // "Pieza X de N" in the footer; absent or null prints "Pieza única".
   edition?: { number: number; total: number } | null;
+  // "Historia y oficio": a few lines under the quote, only printed when `enabled`.
+  story?: DesignStory | null;
+}
+
+export interface DesignStory {
+  enabled: boolean;
+  technique: string;
+  materials: string;
+  place: string;
 }
 
 export type ArtPlacement = 'sello' | 'encabezado' | 'fondo';
