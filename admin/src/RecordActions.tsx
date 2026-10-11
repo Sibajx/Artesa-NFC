@@ -101,7 +101,7 @@ export function RecordActions({ kind, id, version, status, availability, trashed
     if (answer === null) return;
     void run(async () => {
       await adminApi.purge(kind, id, version);
-      navigate('/papelera');
+      navigate('/archivo?vista=papelera');
     }, `«${name}» eliminado`);
   }
 

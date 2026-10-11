@@ -732,13 +732,13 @@ servidor de estáticos no tenga que redirigir.
 
 | Página | Ruta | Rol | Qué se hace |
 |---|---|---|---|
-| Resumen | `#/resumen` | Todos | Lo que requiere atención: pendientes de publicar, autorizaciones, diseños, huecos de certificación |
+| Inicio | `#/inicio` (antes `#/resumen`, que redirige) | Todos | Lo que requiere atención: pendientes de publicar, autorizaciones, diseños, huecos de certificación |
 | Artesanos | `#/artesanos`, `/nuevo`, `/:id`, `/:id/editar` | Editor | Lista con filtros, ficha, formulario, autorización por WhatsApp |
-| Piezas | `#/piezas`, `/nueva`, `/:id`, `/:id/editar` | Editor | Ficha, media, paleta, venta, checklist de publicación |
+| Piezas | `#/piezas`, `/nueva`, `/:id`, `/:id/editar` | Editor | Ficha, media, paleta, venta, checklist de publicación. Pestaña Inventario: `#/piezas?vista=inventario` (antes `#/inventario`, que redirige) |
 | Certificación | `#/certificacion`, `/:id` | Custodio | Emitir, grabar y leer de vuelta, bloquear, tarjeta, reclamo, robo, liberar chip |
 | Diseño del certificado | `#/diseno/:id` | Diseñador | Vista previa en vivo, enviar a revisión, aprobar, publicar |
 | Usuarios | `#/usuarios` | Dueño | Agregar, quitar y cambiar roles; sincronizar Access |
-| Archivados y Papelera | `#/archivados`, `#/papelera` | Editor | Restaurar o purgar |
+| Archivo | `#/archivo`, pestaña Papelera: `#/archivo?vista=papelera` (antes `#/archivados` y `#/papelera`, que redirigen) | Editor | Restaurar o purgar |
 | Auditoría | `#/auditoria` | Todos | La bitácora, con filtros y etiquetas en español |
 
 **Componentes clave:** `api.ts` (el cliente: `If-Match`, `X-Artesa-Admin`,

@@ -11,3 +11,8 @@ export const useRoles = (): readonly string[] => useContext(RolesContext);
 export const PermissionsContext = createContext<readonly string[]>([]);
 
 export const usePermissions = (): readonly string[] => useContext(PermissionsContext);
+
+// The email of the signed-in account (/me), only to greet the person in Inicio.
+export const EmailContext = createContext<string>('');
+
+export const useEmail = (): string => useContext(EmailContext);

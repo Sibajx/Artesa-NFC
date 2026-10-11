@@ -9,23 +9,22 @@ import ArtesanoDetalle from './pages/ArtesanoDetalle';
 import Piezas from './pages/Piezas';
 import PiezaDetalle from './pages/PiezaDetalle';
 import Auditoria from './pages/Auditoria';
-import Apartado from './pages/Apartado';
+import Archivo from './pages/Archivo';
 import Certificacion from './pages/Certificacion';
 import CertificarPieza from './pages/CertificarPieza';
 import DisenoCertificado from './pages/DisenoCertificado';
 import Usuarios from './pages/Usuarios';
-import Inventario from './pages/Inventario';
 import Insumos from './pages/Insumos';
 import Produccion from './pages/Produccion';
 import Capacitaciones from './pages/Capacitaciones';
 import Visitas from './pages/Visitas';
 import Hero from './pages/Hero';
-import { PermissionsContext, RolesContext } from './roles-context';
+import { EmailContext, PermissionsContext, RolesContext } from './roles-context';
 import ArtesanoForm from './pages/ArtesanoForm';
 import PiezaForm from './pages/PiezaForm';
 
 const icons: Record<string, ReactElement> = {
-  Resumen: (
+  Inicio: (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
       <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
@@ -43,13 +42,6 @@ const icons: Record<string, ReactElement> = {
       <polygon points="12 2 2 7 12 12 22 7 12 2"/>
       <polyline points="2 17 12 22 22 17"/>
       <polyline points="2 12 12 17 22 12"/>
-    </svg>
-  ),
-  Inventario: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M21 8l-9-5-9 5v8l9 5 9-5z"/>
-      <path d="M3 8l9 5 9-5"/>
-      <path d="M12 13v8"/>
     </svg>
   ),
   Producción: (
@@ -85,19 +77,11 @@ const icons: Record<string, ReactElement> = {
       <path d="M9 12l2 2 4-4"/>
     </svg>
   ),
-  Archivados: (
+  Archivo: (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <rect x="2" y="3" width="20" height="5" rx="1"/>
       <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/>
       <line x1="10" y1="12" x2="14" y2="12"/>
-    </svg>
-  ),
-  Papelera: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <polyline points="3 6 5 6 21 6"/>
-      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-      <path d="M10 11v6"/><path d="M14 11v6"/>
-      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
     </svg>
   ),
   Usuarios: (
@@ -126,21 +110,48 @@ const icons: Record<string, ReactElement> = {
 };
 
 // `any` = the account needs at least one of these permissions; `role` = a role (the owner's page).
-const menuItems: { name: string; path: string; any?: string[]; role?: string }[] = [
-  { name: 'Resumen', path: '/resumen' },
-  { name: 'Artesanos', path: '/artesanos' },
-  { name: 'Piezas', path: '/piezas' },
-  { name: 'Inventario', path: '/inventario' },
-  { name: 'Producción', path: '/produccion' },
-  { name: 'Insumos', path: '/insumos' },
-  { name: 'Visitas', path: '/visitas', any: ['visits'] },
-  { name: 'Capacitaciones', path: '/capacitaciones', any: ['training'] },
-  { name: 'Certificación', path: '/certificacion', any: ['nfc', 'revocations'] },
-  { name: 'Archivados', path: '/archivados' },
-  { name: 'Papelera', path: '/papelera' },
-  { name: 'Hero', path: '/hero', any: ['hero'] },
-  { name: 'Auditoría', path: '/auditoria' },
-  { name: 'Usuarios', path: '/usuarios', role: 'owner' },
+type MenuItem = { name: string; path: string; any?: string[]; role?: string };
+
+// The menu is grouped by what each page is for; a group with nothing the account
+// can open is not shown. Only the order and the headings live here: permissions
+// are decided per item, and the old addresses redirect (see the routes).
+const menuGroups: { title?: string; items: MenuItem[] }[] = [
+  {
+    items: [
+      { name: 'Inicio', path: '/inicio' },
+      { name: 'Certificación', path: '/certificacion', any: ['nfc', 'revocations'] },
+    ],
+  },
+  {
+    title: 'Catálogo',
+    items: [
+      { name: 'Artesanos', path: '/artesanos' },
+      { name: 'Piezas', path: '/piezas' },
+    ],
+  },
+  { items: [{ name: 'Archivo', path: '/archivo' }] },
+  {
+    title: 'Logística',
+    items: [
+      { name: 'Producción', path: '/produccion' },
+      { name: 'Insumos', path: '/insumos' },
+    ],
+  },
+  {
+    title: 'Equipo',
+    items: [
+      { name: 'Visitas', path: '/visitas', any: ['visits'] },
+      { name: 'Capacitaciones', path: '/capacitaciones', any: ['training'] },
+    ],
+  },
+  { title: 'Sitio', items: [{ name: 'Hero', path: '/hero', any: ['hero'] }] },
+  {
+    title: 'Administración',
+    items: [
+      { name: 'Auditoría', path: '/auditoria' },
+      { name: 'Usuarios', path: '/usuarios', role: 'owner' },
+    ],
+  },
 ];
 
 export default function App() {
@@ -163,7 +174,12 @@ export default function App() {
   const roles = me.data.roles ?? ['editor'];
   const permissions = me.data.permissions ?? [];
   const can = (...wanted: string[]) => wanted.some((p) => permissions.includes(p));
-  const visibleItems = menuItems.filter((item) => (!item.role || roles.includes(item.role)) && (!item.any || can(...item.any)));
+  const visibleGroups = menuGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => (!item.role || roles.includes(item.role)) && (!item.any || can(...item.any))),
+    }))
+    .filter((group) => group.items.length > 0);
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-botanica-hueso">
@@ -183,21 +199,28 @@ export default function App() {
         </div>
 
         <nav aria-label="Principal" className="side-nav flex-1 px-3 py-4 flex flex-col gap-0.5">
-          {visibleItems.map((item) => (
-            <NavLink
-              key={item.name}
-              to={item.path}
-              className={({ isActive }) =>
-                `side-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm ${
-                  isActive
-                    ? 'bg-botanica-jade/10 text-botanica-jade font-medium'
-                    : 'text-botanica-grafito hover:bg-botanica-hueso hover:text-botanica-negro'
-                }`
-              }
-            >
-              <span className="side-link__icon shrink-0 opacity-70">{icons[item.name]}</span>
-              {item.name}
-            </NavLink>
+          {visibleGroups.map((group, index) => (
+            <div key={group.title ?? group.items[0].name} role="group" aria-label={group.title} className={`flex flex-col gap-0.5 ${index > 0 ? 'mt-3' : ''}`}>
+              {group.title && (
+                <p className="side-group px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-botanica-gris">{group.title}</p>
+              )}
+              {group.items.map((item) => (
+                <NavLink
+                  key={item.name}
+                  to={item.path}
+                  className={({ isActive }) =>
+                    `side-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm ${
+                      isActive
+                        ? 'bg-botanica-jade/10 text-botanica-jade font-medium'
+                        : 'text-botanica-grafito hover:bg-botanica-hueso hover:text-botanica-negro'
+                    }`
+                  }
+                >
+                  <span className="side-link__icon shrink-0 opacity-70">{icons[item.name]}</span>
+                  {item.name}
+                </NavLink>
+              ))}
+            </div>
           ))}
         </nav>
 
@@ -230,10 +253,12 @@ export default function App() {
       </aside>
 
       <main className="flex-1 p-6 md:p-10 overflow-auto">
+        <EmailContext.Provider value={email}>
         <RolesContext.Provider value={roles}>
         <PermissionsContext.Provider value={permissions}>
         <Routes>
-          <Route path="/resumen" element={<Dashboard />} />
+          <Route path="/inicio" element={<Dashboard />} />
+          <Route path="/resumen" element={<Navigate to="/inicio" replace />} />
           <Route path="/artesanos/nuevo" element={<ArtesanoForm />} />
           <Route path="/artesanos/:id/editar" element={<ArtesanoForm />} />
           <Route path="/artesanos/:id" element={<ArtesanoDetalle />} />
@@ -242,7 +267,7 @@ export default function App() {
           <Route path="/piezas/:id/editar" element={<PiezaForm />} />
           <Route path="/piezas/:id" element={<PiezaDetalle />} />
           <Route path="/piezas" element={<Piezas />} />
-          <Route path="/inventario" element={<Inventario />} />
+          <Route path="/inventario" element={<Navigate to="/piezas?vista=inventario" replace />} />
           <Route path="/insumos" element={<Insumos />} />
           <Route path="/produccion" element={<Produccion />} />
           {can('visits') && <Route path="/visitas" element={<Visitas />} />}
@@ -252,13 +277,15 @@ export default function App() {
           {can('design') && <Route path="/diseno/:id" element={<DisenoCertificado />} />}
           {roles.includes('owner') && <Route path="/usuarios" element={<Usuarios />} />}
           {can('hero') && <Route path="/hero" element={<Hero />} />}
-          <Route path="/archivados" element={<Apartado key="archivados" mode="archivados" />} />
-          <Route path="/papelera" element={<Apartado key="papelera" mode="papelera" />} />
+          <Route path="/archivo" element={<Archivo />} />
+          <Route path="/archivados" element={<Navigate to="/archivo" replace />} />
+          <Route path="/papelera" element={<Navigate to="/archivo?vista=papelera" replace />} />
           <Route path="/auditoria" element={<Auditoria />} />
-          <Route path="*" element={<Navigate to="/resumen" replace />} />
+          <Route path="*" element={<Navigate to="/inicio" replace />} />
         </Routes>
         </PermissionsContext.Provider>
         </RolesContext.Provider>
+        </EmailContext.Provider>
       </main>
     </div>
   );
