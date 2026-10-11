@@ -256,6 +256,43 @@ export interface VisitInput {
   consent_to_publish: boolean;
 }
 
+// Capacitaciones: training manuals per craft, with the owner's review. Only for people with the Training permission.
+export type ManualStatus = 'draft' | 'in_review' | 'changes_requested' | 'approved';
+
+export interface ManualImage {
+  id: string;
+  url: string;
+  caption: string | null;
+  width: number;
+  height: number;
+}
+
+export interface Manual {
+  id: string;
+  title: string;
+  craft: string;
+  written: string | null;
+  visual: string | null;
+  next_steps: string | null;
+  status: ManualStatus;
+  review_note: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  submitted_at: string | null;
+  images: ManualImage[];
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ManualInput {
+  title: string;
+  craft: string;
+  written: string | null;
+  visual: string | null;
+  next_steps: string | null;
+}
+
 // P-028: the home hero by season.
 export interface HeroCampaign {
   id: string;
@@ -825,6 +862,17 @@ export const adminApi = {
   removeAccount: (email: string) => request<AccountList>('POST', `/accounts/${encodeURIComponent(email)}/remove`, { body: {} }),
   syncAccounts: () => request<AccountList>('POST', '/accounts/sync', { body: {} }),
   inventory: (signal?: AbortSignal) => get<Inventory>('/inventory', undefined, signal),
+  manuals: (signal?: AbortSignal) => get<{ data: Manual[] }>('/training', undefined, signal),
+  createManual: (body: ManualInput) => request<Manual>('POST', '/training', { body }),
+  updateManual: (id: string, body: Partial<ManualInput>) => request<Manual>('PATCH', `/training/${encodeURIComponent(id)}`, { body }),
+  submitManual: (id: string) => request<Manual>('POST', `/training/${encodeURIComponent(id)}/submit`, { body: {} }),
+  reviewManual: (id: string, decision: 'approve' | 'changes', note: string | null) =>
+    request<Manual>('POST', `/training/${encodeURIComponent(id)}/review`, { body: { decision, note } }),
+  uploadManualImage: (id: string, file: Blob, contentType: string, caption: string | null) =>
+    request<Manual>('POST', `/training/${encodeURIComponent(id)}/images${caption ? `?caption=${encodeURIComponent(caption)}` : ''}`,
+      { file: { data: file, contentType } }),
+  deleteManualImage: (imageId: string) => request<Manual>('POST', `/training/images/${encodeURIComponent(imageId)}/delete`, { body: {} }),
+  deleteManual: (id: string) => request<void>('POST', `/training/${encodeURIComponent(id)}/delete`, { body: {} }),
   visits: (artisanId: string | undefined, signal?: AbortSignal) =>
     get<{ data: Visit[] }>('/visits', artisanId ? { artisan_id: artisanId } : undefined, signal),
   createVisit: (body: VisitInput) => request<Visit>('POST', '/visits', { body }),
