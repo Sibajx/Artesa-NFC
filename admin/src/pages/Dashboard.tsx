@@ -1,12 +1,12 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { adminApi } from '../api';
-import type { PublicationStatus, Summary, SummaryBucket } from '../api';
+import type { PieceSummary, ProductionBoard, PublicationStatus, Summary, SummaryBucket } from '../api';
 import { actionLabel, actorLabel } from '../audit-labels';
 import { formatDateTime } from '../format';
 import { greetingFor } from '../greeting';
 import { useLoad } from '../hooks';
-import { useEmail } from '../roles-context';
+import { useEmail, usePermissions, useRoles } from '../roles-context';
 import { ErrorState, Loading, PageHeader } from '../ui';
 
 function countBy(items: { publication_status: PublicationStatus }[]) {
@@ -15,54 +15,75 @@ function countBy(items: { publication_status: PublicationStatus }[]) {
   return counts;
 }
 
+// Something that asks for attention and is not one of the API's summary cards:
+// it comes from a page this account can already read.
+interface Extra {
+  title: string;
+  count: number;
+  hint: string;
+  to: string;
+}
+
 export default function Dashboard() {
   const email = useEmail();
+  const permissions = usePermissions();
+  const roles = useRoles();
   const greeting = useMemo(() => greetingFor(email), [email]);
   const state = useLoad('dashboard', async (signal) => {
-    const [artisans, pieces, events, summary] = await Promise.all([
+    // The extra reads are optional: if one fails, Inicio just shows less.
+    const reviewer = roles.includes('owner') && permissions.includes('training');
+    const [artisans, pieces, events, summary, board, supplies, manuals] = await Promise.all([
       adminApi.artisans({}, signal),
       adminApi.pieces({}, signal),
-      adminApi.auditEvents({ limit: '8' }, signal),
+      adminApi.auditEvents({ limit: '5' }, signal),
       adminApi.summary(signal),
+      adminApi.productionBoard(signal).catch(() => null),
+      adminApi.supplies(false, signal).catch(() => null),
+      reviewer ? adminApi.manuals(signal).catch(() => null) : Promise.resolve(null),
     ]);
-    return { artisans: artisans.data, pieces: pieces.data, events: events.data, summary };
+    const extras: Extra[] = [];
+    const ready = board?.counts.ready_to_ship ?? 0;
+    if (ready > 0) extras.push({ title: 'Piezas listas para enviar', count: ready, hint: 'Empacadas, esperando salir', to: '/produccion' });
+    if (supplies && supplies.low_count > 0) extras.push({ title: 'Insumos con stock bajo', count: supplies.low_count, hint: 'Conviene reponerlos', to: '/insumos' });
+    const toReview = manuals?.data.filter((m) => m.status === 'in_review').length ?? 0;
+    if (toReview > 0) extras.push({ title: 'Manuales por revisar', count: toReview, hint: 'Esperan tu respuesta', to: '/capacitaciones' });
+    return { artisans: artisans.data, pieces: pieces.data, events: events.data, summary, board, extras };
   });
 
   return (
     <div className="max-w-6xl mx-auto pb-12">
-      <PageHeader title={greeting} subtitle={state.status === 'ready' ? attentionLine(state.data.summary) : 'Lo que hay y lo que falta en ArtesaNFC.'} />
+      <PageHeader title={greeting} subtitle={state.status === 'ready' ? attentionLine(state.data.summary, state.data.extras) : 'Lo que hay y lo que falta en ArtesaNFC.'} />
 
       {state.status === 'loading' && <Loading label="Cargando inicio..." />}
       {state.status === 'error' && <div className="card-elevated"><ErrorState error={state.error} /></div>}
       {state.status === 'ready' && (() => {
         const artisans = countBy(state.data.artisans);
         const pieces = countBy(state.data.pieces);
-        const metrics = [
-          { label: 'Artesanos', value: state.data.artisans.length, detail: `${artisans.published} publicados · ${artisans.draft} borradores`, to: '/artesanos' },
-          { label: 'Piezas', value: state.data.pieces.length, detail: `${pieces.published} publicadas · ${pieces.draft} borradores`, to: '/piezas' },
-          { label: 'Archivados', value: artisans.archived + pieces.archived, detail: `${artisans.archived} artesanos · ${pieces.archived} piezas`, to: '/archivo' },
-        ];
         return (
           <>
-            <section aria-label="Métricas" className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-              {metrics.map((metric) => (
-                <Link key={metric.label} to={metric.to} className="bg-white p-6 rounded-xl border border-botanica-gris/15 shadow-sm flex flex-col hover:border-botanica-jade/40">
-                  <h2 className="text-botanica-gris font-medium text-sm mb-4">{metric.label}</h2>
-                  <div className="text-4xl font-serif text-botanica-negro mb-2 tracking-tight tabular-nums">{metric.value}</div>
-                  <div className="text-sm mt-auto text-botanica-grafito/70">{metric.detail}</div>
-                </Link>
-              ))}
-            </section>
+            <QuickActions />
 
-            <Pending summary={state.data.summary} />
+            <Pending summary={state.data.summary} extras={state.data.extras} />
+
+            <PieceJourney pieces={state.data.pieces} board={state.data.board} />
+
+            <p className="mb-12 flex flex-wrap gap-x-6 gap-y-1 text-sm text-botanica-grafito">
+              <Link to="/artesanos" className="hover:text-botanica-jade">
+                <strong>{state.data.artisans.length}</strong> artesanos ({artisans.published} publicados · {artisans.draft} borradores)
+              </Link>
+              <Link to="/piezas" className="hover:text-botanica-jade">
+                <strong>{state.data.pieces.length}</strong> piezas ({pieces.published} publicadas · {pieces.draft} borradores)
+              </Link>
+              <Link to="/archivo" className="hover:text-botanica-jade">
+                <strong>{artisans.archived + pieces.archived}</strong> archivados
+              </Link>
+            </p>
 
             <section>
               <h2 className="text-2xl font-serif text-botanica-negro mb-6">Actividad reciente</h2>
               <div className="bg-white border border-botanica-gris/15 rounded-xl overflow-hidden shadow-sm">
                 {state.data.events.length === 0 ? (
-                  <p className="p-12 text-center text-botanica-gris">
-                    Aún no hay eventos de auditoría. Aparecerán cuando se habiliten las altas y ediciones (fase 2).
-                  </p>
+                  <p className="p-12 text-center text-botanica-gris">Todavía no hay actividad. Aquí aparecerá lo último que haga el equipo.</p>
                 ) : (
                   <table className="w-full text-left border-collapse">
                     <thead>
@@ -84,6 +105,7 @@ export default function Dashboard() {
                   </table>
                 )}
               </div>
+              <p className="mt-3 text-sm"><Link to="/auditoria" className="text-botanica-jade hover:underline">Ver toda la auditoría</Link></p>
             </section>
           </>
         );
@@ -92,6 +114,58 @@ export default function Dashboard() {
   );
 }
 
+// The few things people do most, only the ones this account is allowed to do.
+const SHORTCUTS: { label: string; to: string; permission: string }[] = [
+  { label: 'Nueva pieza', to: '/piezas/nueva', permission: 'edit' },
+  { label: 'Registrar visita', to: '/visitas', permission: 'visits' },
+  { label: 'Certificar', to: '/certificacion', permission: 'nfc' },
+  { label: 'Producción', to: '/produccion', permission: 'production' },
+  { label: 'Nuevo manual', to: '/capacitaciones', permission: 'training' },
+];
+
+function QuickActions() {
+  const permissions = usePermissions();
+  const shown = SHORTCUTS.filter((s) => permissions.includes(s.permission)).slice(0, 4);
+  if (shown.length === 0) return null;
+  return (
+    <nav aria-label="Accesos rápidos" className="mb-10 flex flex-wrap gap-3">
+      {shown.map((s) => (
+        <Link key={s.to} to={s.to} className="btn-secondary">{s.label}</Link>
+      ))}
+    </nav>
+  );
+}
+
+// Where the pieces are on their way, from draft to delivered. The last two steps
+// come from the production board, so they show only to accounts that can read it.
+function PieceJourney({ pieces, board }: { pieces: PieceSummary[]; board: ProductionBoard | null }) {
+  const live = pieces.filter((p) => p.publication_status !== 'archived');
+  const sold = live.filter((p) => p.availability_status === 'sold').length;
+  const steps: { label: string; count: number; to: string }[] = [
+    { label: 'Borrador', count: live.filter((p) => p.publication_status === 'draft' && p.availability_status !== 'sold').length, to: '/piezas' },
+    { label: 'Publicadas', count: live.filter((p) => p.publication_status === 'published' && p.availability_status !== 'sold').length, to: '/piezas' },
+    { label: 'Vendidas', count: sold, to: '/piezas?vista=inventario' },
+  ];
+  if (board) {
+    steps.push({ label: 'En camino', count: board.counts.in_transit, to: '/produccion' });
+    steps.push({ label: 'Entregadas', count: board.counts.delivered, to: '/produccion' });
+  }
+  return (
+    <section aria-labelledby="journey-heading" className="mb-12">
+      <h2 id="journey-heading" className="text-2xl font-serif text-botanica-negro mb-4">El camino de las piezas</h2>
+      <ol className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        {steps.map((step, i) => (
+          <li key={step.label}>
+            <Link to={step.to} className="bg-white border border-botanica-gris/15 rounded-xl p-4 shadow-sm flex flex-col hover:border-botanica-jade/40">
+              <span className="text-xs text-botanica-gris">{i + 1}. {step.label}</span>
+              <span className="text-3xl font-serif tabular-nums text-botanica-negro">{step.count}</span>
+            </Link>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
 
 // P-026 G5/G8: what needs attention. Each card links to where it is fixed;
 // cards for other roles simply do not come back from the API.
@@ -111,15 +185,18 @@ const CARDS: { key: keyof Summary; title: string; hint: string; to: (id: string)
 
 // One sentence under the greeting with what asks for attention first, from the
 // same cards listed in Pendientes (the API only returns the ones for this account).
-function attentionLine(summary: Summary): string {
-  const open = CARDS.map((c) => ({ title: c.title, count: (summary[c.key] as SummaryBucket | undefined)?.count ?? 0 })).filter((c) => c.count > 0);
+function attentionLine(summary: Summary, extras: Extra[]): string {
+  const open = [
+    ...CARDS.map((c) => ({ title: c.title, count: (summary[c.key] as SummaryBucket | undefined)?.count ?? 0 })),
+    ...extras,
+  ].filter((c) => c.count > 0);
   if (open.length === 0) return 'Todo al día ✓ Lo que hay y lo que falta en ArtesaNFC.';
   const total = open.reduce((sum, c) => sum + c.count, 0);
   const top = open.slice(0, 2).map((c) => `${c.title.toLowerCase()} (${c.count})`).join(' y ');
   return `${total === 1 ? 'Hay 1 cosa' : `Hay ${total} cosas`} por atender: ${top}${open.length > 2 ? ' y más' : ''}.`;
 }
 
-function Pending({ summary }: { summary: Summary }) {
+function Pending({ summary, extras }: { summary: Summary; extras: Extra[] }) {
   const cards = CARDS.filter((c) => {
     const bucket = summary[c.key] as SummaryBucket | undefined;
     return bucket && bucket.count > 0;
@@ -128,7 +205,7 @@ function Pending({ summary }: { summary: Summary }) {
   return (
     <section aria-labelledby="pending-heading" className="mb-12 flex flex-col gap-6">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 id="pending-heading" className="text-2xl font-serif text-botanica-negro">Pendientes</h2>
+        <h2 id="pending-heading" className="text-2xl font-serif text-botanica-negro">Para ti hoy</h2>
         <p className="text-sm text-botanica-grafito">
           Ventas en 30 días: <strong>{sales.count}</strong>
           {sales.count > 0 && <> · {(sales.total_cents / 100).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}</>}
@@ -151,10 +228,20 @@ function Pending({ summary }: { summary: Summary }) {
         </div>
       )}
 
-      {cards.length === 0 ? (
-        <p className="rounded-xl border border-botanica-jade/25 bg-botanica-jade/5 p-4 text-sm text-botanica-negro">Todo al día ✓</p>
+      {cards.length === 0 && extras.length === 0 ? (
+        <p className="rounded-xl border border-botanica-jade/25 bg-botanica-jade/5 p-4 text-sm text-botanica-negro">Todo al día ✓ No hay nada esperándote. Buen momento para visitar a un artesano o repasar un manual.</p>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {extras.map((e) => (
+            <div key={e.title} className="bg-white border border-botanica-gris/15 rounded-xl p-5 shadow-sm flex flex-col gap-2">
+              <div className="flex items-baseline justify-between gap-2">
+                <h3 className="font-medium text-botanica-negro">{e.title}</h3>
+                <span className="text-2xl font-serif tabular-nums text-botanica-negro">{e.count}</span>
+              </div>
+              <p className="text-xs text-botanica-gris">{e.hint}</p>
+              <Link to={e.to} className="text-sm text-botanica-grafito underline decoration-botanica-gris/40 hover:text-botanica-jade">Ir allí</Link>
+            </div>
+          ))}
           {cards.map((c) => {
             const bucket = summary[c.key] as SummaryBucket;
             return (
