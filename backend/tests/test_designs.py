@@ -226,3 +226,43 @@ def test_edition_label_and_validation():
             assert exc.code == "invalid_design"
         else:
             raise AssertionError(bad)
+
+
+STORY = {"enabled": True, "technique": "Barro negro bruñido", "materials": "barro de San Bartolo, cuarzo",
+         "place": "San Bartolo Coyotepec, Oaxaca"}
+
+
+def test_the_story_block_only_prints_when_turned_on_and_is_validated():
+    base = designs.clean_params({**PARAMS, "template": "clasico"})
+    off = renderer.render(designs.clean_params({**PARAMS, "template": "clasico", "story": {**STORY, "enabled": False}}), version=1)
+    on = renderer.render(designs.clean_params({**PARAMS, "template": "clasico", "story": STORY}), version=1)
+    # A design saved before the block existed renders exactly as before; "off" prints nothing of it.
+    assert "story" not in base and "OFICIO" not in renderer.render(base, version=1)
+    assert "Barro negro" not in off and "OFICIO" not in off
+    assert "OFICIO" in on and "Barro negro bruñido" in on and "MATERIALES" in on and "San Bartolo Coyotepec" in on
+    assert "<script" not in renderer.render(designs.clean_params({**PARAMS, "story": {**STORY, "place": "<script>x</script>"}}), version=1)
+    assert designs.clean_params({**PARAMS, "story": STORY})["story"] == STORY
+    for bad in ("texto", {"technique": 5}, {"technique": "x" * 61}, {"materials": "x" * 91}, {"place": "x" * 81}):
+        try:
+            designs.clean_params({**PARAMS, "story": bad})
+        except designs.ContentConflict as exc:
+            assert exc.code == "invalid_design"
+        else:
+            raise AssertionError(bad)
+
+
+def test_story_rows_that_would_touch_the_seal_are_left_out():
+    long_name = {**PARAMS, "template": "clasico", "piece_name": "Máscara de tigre con listones de colores", "story": STORY,
+                 "quote": "Una frase larga " * 14}
+    svg = renderer.render(designs.clean_params(long_name), version=1)
+    assert svg.endswith("</svg>") and svg.count("OFICIO") <= 1 and svg.count("LUGAR") == 0
+
+
+def test_the_telar_template_draws_two_woven_bands_and_keeps_the_motion_rules():
+    svg = renderer.render(designs.clean_params({**PARAMS, "template": "telar"}), version=1)
+    assert "telar" in renderer.TEMPLATES and svg.endswith("</svg>") and svg.count("<path d=\"M") > 20
+    assert "<script" not in svg and "<animate" not in svg and 'class="m-greca"' not in svg and svg.count('class="m-wave') == 3
+    assert svg == renderer.render(designs.clean_params({**PARAMS, "template": "telar"}), version=1)
+    assert designs.clean_params({**PARAMS, "template": "telar"})["template"] == "telar"
+    dark = renderer.render(designs.clean_params({**PARAMS, "template": "telar", "variant": "oscuro"}), version=1)
+    assert dark != svg

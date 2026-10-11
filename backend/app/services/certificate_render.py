@@ -25,7 +25,7 @@ import re
 import textwrap
 from xml.sax.saxutils import escape
 
-TEMPLATES = ("clasico", "greca", "constelacion")
+TEMPLATES = ("clasico", "greca", "constelacion", "telar")
 VARIANTS = ("claro", "oscuro")
 # Phase 5b: where the team's artwork goes.
 ART_PLACEMENTS = ("sello", "encabezado", "fondo")
@@ -174,6 +174,37 @@ def _greca(colors: list[str], roles: dict[str, str], rng: random.Random, inset: 
     return "".join(parts)
 
 
+def _telar(colors: list[str], roles: dict[str, str], rng: random.Random, y: float, h: float) -> str:
+    """A woven band like the embroidered bands of a huipil: a row of stepped
+    diamonds between two stripes, in the palette's colours. Static: the greca
+    template is the one that draws itself."""
+    unit = h * 0.9
+    x0, x1 = 100.0, W - 100.0
+    count = max(1, int((x1 - x0) // unit))
+    start = x0 + ((x1 - x0) - count * unit) / 2
+    cycle = [roles["accent"], roles["mid"], roles["dark"]] + [c for c in colors if c not in (roles["accent"], roles["mid"], roles["dark"])]
+    offset = rng.randrange(len(cycle))
+    parts = [f'<rect x="{x0}" y="{y}" width="{x1 - x0}" height="5" fill="{roles["accent"]}"/>',
+             f'<rect x="{x0}" y="{y + h - 5}" width="{x1 - x0}" height="5" fill="{roles["accent"]}"/>']
+    mid = y + h / 2
+    half = (h - 18) / 2
+    for i in range(count):
+        cx = start + unit * (i + 0.5)
+        color = cycle[(i + offset) % len(cycle)]
+        parts.append(f'<path d="M{cx:.1f},{mid - half:.1f} L{cx + half:.1f},{mid:.1f} L{cx:.1f},{mid + half:.1f} '
+                     f'L{cx - half:.1f},{mid:.1f} Z" fill="{color}"/>')
+        parts.append(f'<circle cx="{cx:.1f}" cy="{mid:.1f}" r="{half * 0.28:.1f}" fill="{roles["light"] if color != roles["light"] else roles["dark"]}"/>')
+    return "".join(parts)
+
+
+def _story_lines(story: object) -> list[tuple[str, str]]:
+    """(label, value) rows of the "Historia y oficio" block, only when it is on."""
+    if not isinstance(story, dict) or not story.get("enabled"):
+        return []
+    rows = [("OFICIO", story.get("technique")), ("MATERIALES", story.get("materials")), ("LUGAR", story.get("place"))]
+    return [(label, str(value).strip()) for label, value in rows if isinstance(value, str) and value.strip()]
+
+
 def _constellation(colors: list[str], rng: random.Random, area: tuple[float, float, float, float]) -> str:
     x0, y0, x1, y1 = area
     points = [(rng.uniform(x0, x1), rng.uniform(y0, y1)) for _ in range(rng.randint(26, 38))]
@@ -228,6 +259,11 @@ def render(params: dict, *, version: int, approved_by: str | None = None, approv
         out.append(_constellation(colors, rng, (100, 100, W - 100, 430)))
     if template == "greca":
         out.append(_greca(colors, roles, rng, 56))
+    elif template == "telar":
+        out.append(f'<rect x="48" y="48" width="{W - 96}" height="{H - 96}" fill="none" stroke="{ink}" stroke-width="3"/>')
+        out.append(f'<rect x="66" y="66" width="{W - 132}" height="{H - 132}" fill="none" stroke="{roles["accent"]}" stroke-width="1.5"/>')
+        out.append(_telar(colors, roles, rng, 96, 52))
+        out.append(_telar(colors, roles, rng, H - 190, 52))
     else:
         out.append(f'<rect x="48" y="48" width="{W - 96}" height="{H - 96}" fill="none" stroke="{ink}" stroke-width="3"/>')
         out.append(f'<rect x="66" y="66" width="{W - 132}" height="{H - 132}" fill="none" stroke="{roles["accent"]}" stroke-width="1.5"/>')
@@ -236,7 +272,7 @@ def render(params: dict, *, version: int, approved_by: str | None = None, approv
     dense = template == "constelacion"
     top = 560 if dense else 330
     if header_art:
-        y0 = 110 if dense else 96
+        y0 = 110 if dense else (170 if template == "telar" else 96)
         out.append(_image(art_uri, 300, y0, W - 600, top - 90 - y0))
     out.append(_band(colors, 300, top - 70, W - 600, 12, ink))
     out.append(f'<text x="{W / 2}" y="{top}" text-anchor="middle" font-family="{SANS}" font-size="26" '
@@ -249,12 +285,25 @@ def render(params: dict, *, version: int, approved_by: str | None = None, approv
                f'font-size="40" fill="{ink}">por {_t(params.get("artisan_name"))}</text>')
 
     quote = (params.get("quote") or "").strip()
+    below = y + 20  # where the next block may start (baseline of the last line so far)
     if quote:
         q_lines = _lines(f"“{quote}”", 40, 3 if dense else 4)
         out.append(_text_block(q_lines, W / 2, y + 120, 34, 1.4, text_anchor="middle",
                                font_family=SERIF, font_style="italic", fill=roles["mid"] if variant == "claro" else ink))
+        below = y + 120 + 34 * 1.4 * (len(q_lines) - 1)
 
     seal_y, seal_r = (H - 445, 88) if dense else (H - 540, 120)
+    # "Historia y oficio": a few centred rows between the quote and the seal. Rows
+    # that would touch the seal are left out, so a long name or quote never overlaps it.
+    story_y, story_gap = below + 70, 40
+    for label, value in _story_lines(params.get("story")):
+        if story_y > seal_y - seal_r - 28:
+            break
+        # One plain line per row (label and value in the same text run), so every viewer centres it the same way.
+        text = _lines(f"{label} · {value}", 46, 1)[0]
+        out.append(f'<text x="{W / 2}" y="{story_y:.0f}" text-anchor="middle" font-family="{SANS}" font-size="26" '
+                   f'letter-spacing="1" fill="{ink}">{_t(text)}</text>')
+        story_y += story_gap
     if art is not None and placement == "sello":
         # The artwork inside the seal's rings, clipped to a circle.
         out.append(f'<clipPath id="art-seal"><circle cx="{W / 2}" cy="{seal_y}" r="{seal_r - 16}"/></clipPath>')
