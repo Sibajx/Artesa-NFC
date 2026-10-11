@@ -44,7 +44,7 @@ const WEEKDAYS: Record<string, string[]> = {
 // the same while the page is open and a new load can bring another one.
 let current: string | null = null;
 
-function mexicoParts(now: Date): { hour: number; monthDay: string; weekday: string } {
+export function mexicoParts(now: Date): { hour: number; monthDay: string; weekday: string } {
   const get = (options: Intl.DateTimeFormatOptions) =>
     new Intl.DateTimeFormat('en-US', { timeZone: 'America/Mexico_City', ...options }).format(now);
   const [month, day] = get({ month: '2-digit', day: '2-digit' }).split('/');
