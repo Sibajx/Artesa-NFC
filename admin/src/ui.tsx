@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { LOGOUT_URL } from './api';
 import type { ApiError, PublicationStatus } from './api';
 import { labels } from './format';
@@ -72,6 +73,30 @@ export function PageHeader({ title, subtitle, children }: { title: string; subti
       </div>
       {children}
     </header>
+  );
+}
+
+// Tabs of one page, kept in the URL (`?vista=`) so each view can be linked and the
+// back button works. The first tab is the default and carries no parameter.
+export function SectionTabs({ tabs, current }: { tabs: { key: string; label: string }[]; current: string }) {
+  return (
+    <nav aria-label="Vistas" className="mb-6 flex gap-1 border-b border-botanica-gris/20">
+      {tabs.map((tab, i) => {
+        const active = tab.key === current;
+        return (
+          <Link
+            key={tab.key}
+            to={i === 0 ? '?' : `?vista=${tab.key}`}
+            aria-current={active ? 'page' : undefined}
+            className={`-mb-px px-4 py-2 text-sm border-b-2 ${
+              active ? 'border-botanica-jade text-botanica-jade font-medium' : 'border-transparent text-botanica-grafito hover:text-botanica-negro'
+            }`}
+          >
+            {tab.label}
+          </Link>
+        );
+      })}
+    </nav>
   );
 }
 

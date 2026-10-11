@@ -3,11 +3,30 @@ import { adminApi, PIECES_CSV_URL } from '../api';
 import { formatDate, labels } from '../format';
 import { useListFilters, useLoad } from '../hooks';
 import { ListFilters } from '../ListFilters';
-import { Can, ErrorState, Loading, PageHeader, PublicationBadge } from '../ui';
+import { Can, ErrorState, Loading, PageHeader, PublicationBadge, SectionTabs } from '../ui';
+import Inventario from './Inventario';
 import { QuickPublish } from '../QuickPublish';
 import { useState } from 'react';
 
+const TABS = [
+  { key: 'lista', label: 'Lista' },
+  { key: 'inventario', label: 'Inventario' },
+];
+
+// Inventario is the same pieces seen by where they are and their state, so it
+// lives here as a tab instead of a menu entry of its own.
 export default function Piezas() {
+  const [params] = useSearchParams();
+  const view = params.get('vista') === 'inventario' ? 'inventario' : 'lista';
+  return (
+    <div className="max-w-6xl mx-auto">
+      <SectionTabs tabs={TABS} current={view} />
+      {view === 'inventario' ? <Inventario /> : <PiezasLista />}
+    </div>
+  );
+}
+
+function PiezasLista() {
   const filters = useListFilters();
   const [revision, setRevision] = useState(0);
   const [params] = useSearchParams();
