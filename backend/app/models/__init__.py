@@ -1,5 +1,6 @@
 from app.db.base import Base
 from app.models.admin_account import AdminAccount
+from app.models.admin_role_profile import AdminRoleProfile
 from app.models.artisan import Artisan
 from app.models.artisan_authorization import ArtisanAuthorization
 from app.models.audit_event import AuditEvent
@@ -18,4 +19,4 @@ from app.models.site_image import SiteImage
 from app.models.supply import Supply, SupplyMovement
 from app.models.visit import Visit
 
-__all__ = ["Base", "Artisan", "Piece", "MediaAsset", "Certificate", "NfcTag", "AuditEvent", "OwnershipCard", "PieceClaim", "OwnerVerification", "CertificateDesign", "Sale", "AdminAccount", "ArtisanAuthorization", "HeroCampaign", "PieceLocation", "CertificateArt", "SiteImage", "Supply", "SupplyMovement", "ProductionStep", "ProductionPhoto", "Visit"]
+__all__ = ["Base", "Artisan", "Piece", "MediaAsset", "Certificate", "NfcTag", "AuditEvent", "OwnershipCard", "PieceClaim", "OwnerVerification", "CertificateDesign", "Sale", "AdminAccount", "ArtisanAuthorization", "HeroCampaign", "PieceLocation", "CertificateArt", "SiteImage", "Supply", "SupplyMovement", "ProductionStep", "ProductionPhoto", "Visit", "AdminRoleProfile"]

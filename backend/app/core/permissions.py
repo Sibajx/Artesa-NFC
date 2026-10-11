@@ -1,6 +1,6 @@
 """Permission checkboxes for Gestión (the owner's "Usuarios" matrix).
 
-Twelve permissions (eleven agreed with the PO on 2026-10-10, plus Visits) (Artesa_Brain/02_Producto/
+Thirteen permissions (eleven agreed with the PO on 2026-10-10, plus Visits and Production) (Artesa_Brain/02_Producto/
 Equipo.md). Managing users is not one of them: only the owner does that
 (``OWNER`` role, fixed in OWNER_EMAILS).
 
@@ -24,18 +24,21 @@ REVOCATIONS = "revocations"      # 8 Revocaciones y robos
 DESIGN = "design"                # 9 Diseño de certificados
 HERO = "hero"                    # 10 Hero e imágenes del sitio
 TRAINING = "training"            # 11 Capacitaciones (módulo aún sin construir)
-VISITS = "visits"                # 12 Visitas y bitácora (solo se da a mano: Sol y Hariel)
+VISITS = "visits"                # 12 Visitas y bitácora (se da a mano o con un rol)
+PRODUCTION = "production"        # 13 Producción: tablero y pasos de cada pieza (antes iba con Logística)
 
 ALL_PERMISSIONS: tuple[str, ...] = (
-    VIEW, EDIT, PUBLISH, AUTHORIZATION, SALES, LOGISTICS, NFC, REVOCATIONS, DESIGN, HERO, TRAINING, VISITS,
+    VIEW, EDIT, PUBLISH, AUTHORIZATION, SALES, LOGISTICS, NFC, REVOCATIONS, DESIGN, HERO, TRAINING, VISITS, PRODUCTION,
 )
 
 # Role -> permissions, matching exactly what each role could do before the
 # checkboxes existed: an editor could do everything outside design, custody
 # and the hero; a designer adds design; a custodian (also a designer) adds
 # custody; the hero manager adds the hero. TRAINING has no endpoints yet. VISITS
-# (the visit log) is in no role: the owner gives it by hand, to Sol and Hariel.
-_EDITOR = frozenset({VIEW, EDIT, PUBLISH, AUTHORIZATION, SALES, LOGISTICS})
+# (the visit log) is in none of these old roles: the owner gives it with a role
+# profile (``admin_role_profile``) or by hand. PRODUCTION used to ride on
+# LOGISTICS, so the old roles that had one keep the other.
+_EDITOR = frozenset({VIEW, EDIT, PUBLISH, AUTHORIZATION, SALES, LOGISTICS, PRODUCTION})
 ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
     "editor": _EDITOR,
     "designer": _EDITOR | {DESIGN},

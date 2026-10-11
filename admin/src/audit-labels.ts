@@ -88,6 +88,11 @@ const LABELS: Record<string, string> = {
   'account.added': 'Dio acceso a Gestión',
   'account.role_changed': 'Cambió el rol de una cuenta',
   'account.removed': 'Quitó el acceso a Gestión',
+  'account.permissions_changed': 'Cambió las casillas de una cuenta',
+  'account.imported': 'Importó una cuenta fija a Gestión',
+  'role.created': 'Creó un rol',
+  'role.updated': 'Editó un rol',
+  'role.deleted': 'Borró un rol',
   'export.pieces': 'Exportó el inventario a CSV',
 };
 
@@ -102,6 +107,7 @@ export const AUDIT_CATEGORIES: { value: string; label: string }[] = [
   { value: 'ownership.', label: 'Certificado original (público)' },
   { value: 'design.', label: 'Diseños de certificado' },
   { value: 'account.', label: 'Usuarios' },
+  { value: 'role.', label: 'Roles' },
   { value: 'export.', label: 'Exportaciones' },
 ];
 
