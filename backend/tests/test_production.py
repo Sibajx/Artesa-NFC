@@ -187,6 +187,58 @@ def test_steps_are_audited(owner_client, piece, db_session):
     assert actions == ["piece.production_step", "piece.production_step", "piece.production_step_undone"]
 
 
+# --- 2026-10-11: the owner is told when a piece ships or is delivered; purging leaves no photos ----
+
+
+@pytest.fixture()
+def outbox(monkeypatch):
+    from app.services import mailer
+
+    sent: list[tuple[str, str, str]] = []
+    monkeypatch.setattr(get_settings(), "smtp_host", "smtp.example.org")
+    monkeypatch.setattr(mailer, "send_email", lambda to, subject, body: sent.append((to, subject, body)))
+    return sent
+
+
+def test_shipping_and_delivering_email_the_owner_other_steps_do_not(owner_client, piece, outbox):
+    mark(owner_client, piece, "received")
+    mark(owner_client, piece, "packed")
+    assert outbox == []
+    mark(owner_client, piece, "shipped", carrier="Estafeta", tracking="1234567890")
+    assert len(outbox) >= 1
+    to, subject, body = outbox[0]
+    assert subject == "ArtesaNFC: Máscara de tigre salió en envío"
+    assert "Estafeta" in body and "1234567890" in body and OWNER in body
+    sent = len(outbox)
+    mark(owner_client, piece, "delivered")
+    assert len(outbox) == 2 * sent and outbox[-1][1] == "ArtesaNFC: Máscara de tigre se entregó"
+
+
+def test_the_step_stays_marked_when_the_email_cannot_be_sent(owner_client, piece, monkeypatch):
+    from app.services import mailer
+
+    def boom(*_):
+        raise mailer.MailError("SMTPServerDisconnected")
+
+    monkeypatch.setattr(get_settings(), "smtp_host", "smtp.example.org")
+    monkeypatch.setattr(mailer, "send_email", boom)
+    assert mark(owner_client, piece, "shipped").status_code == 201
+    assert steps(owner_client, piece)["shipped"]["done"]
+    monkeypatch.setattr(get_settings(), "smtp_host", "")
+    assert mark(owner_client, piece, "delivered").status_code == 201
+
+
+def test_purging_a_piece_from_the_trash_removes_its_private_photos(owner_client, piece, media_root):
+    mark(owner_client, piece, "received")
+    assert upload(owner_client, piece, "received", jpeg(size=(40, 30))).status_code == 201
+    assert len([p for p in media_root.rglob("*") if p.is_file()]) == 1
+    h = H(**{"If-Match": piece["updated_at"]})
+    trashed = owner_client.post(f"/api/admin/v1/pieces/{piece['id']}/trash", json={}, headers=h).json()
+    purge = owner_client.post(f"/api/admin/v1/pieces/{piece['id']}/purge", json={},
+                              headers=H(**{"If-Match": trashed["updated_at"]}))
+    assert purge.status_code == 204, purge.text
+    assert [p for p in media_root.rglob("*") if p.is_file()] == []
+
 def test_the_board_shows_the_sale_and_the_shipment(owner_client, piece, db_session):
     from datetime import date
 
