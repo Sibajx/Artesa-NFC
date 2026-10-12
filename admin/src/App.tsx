@@ -192,7 +192,7 @@ export default function App() {
     .filter((group) => group.items.length > 0);
 
   return (
-    <div className="min-h-screen md:h-screen md:overflow-hidden flex flex-col md:flex-row bg-botanica-hueso">
+    <div className="relative min-h-screen md:h-screen md:overflow-hidden flex flex-col md:flex-row bg-botanica-hueso">
       <aside className="sidebar w-full md:w-60 md:overflow-y-auto border-r border-botanica-gris/20 flex flex-col shrink-0">
         <div className="px-6 pt-7 pb-6 border-b border-botanica-gris/20">
           <div className="flex items-center gap-2.5 mb-1">
