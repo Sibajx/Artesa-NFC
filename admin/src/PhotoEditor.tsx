@@ -20,15 +20,17 @@ interface Props {
   source: Blob;
   onDone: (edited: Blob) => void;
   onCancel: () => void;
+  /** When the destination has one fixed shape (a site slot), the crop is locked to it. */
+  fixedAspect?: number;
 }
 
-export function PhotoEditor({ source, onDone, onCancel }: Props) {
+export function PhotoEditor({ source, onDone, onCancel, fixedAspect }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [failed, setFailed] = useState(false);
   const [rotation, setRotation] = useState(0); // 0, 90, 180, 270
-  const [aspect, setAspect] = useState<number | null>(null);
+  const [aspect, setAspect] = useState<number | null>(fixedAspect ?? null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 }); // fraction of the free space, -1..1
   const drag = useRef<{ x: number; y: number; pan: { x: number; y: number } } | null>(null);
@@ -143,16 +145,20 @@ export function PhotoEditor({ source, onDone, onCancel }: Props) {
           <button type="button" className="btn-secondary" onClick={() => setRotation((r) => (r + 270) % 360)}>⟲ Girar a la izquierda</button>
           <button type="button" className="btn-secondary" onClick={() => setRotation((r) => (r + 90) % 360)}>⟳ Girar a la derecha</button>
         </div>
-        <fieldset className="flex flex-wrap gap-2">
-          <legend className="text-xs font-medium text-botanica-grafito mb-1">Proporción</legend>
-          {ASPECTS.map((a) => (
-            <button key={a.label} type="button" aria-pressed={aspect === a.value}
-              onClick={() => { setAspect(a.value); setPan({ x: 0, y: 0 }); }}
-              className={aspect === a.value ? 'btn-primary' : 'btn-secondary'}>
-              {a.label}
-            </button>
-          ))}
-        </fieldset>
+        {fixedAspect === undefined ? (
+          <fieldset className="flex flex-wrap gap-2">
+            <legend className="text-xs font-medium text-botanica-grafito mb-1">Proporción</legend>
+            {ASPECTS.map((a) => (
+              <button key={a.label} type="button" aria-pressed={aspect === a.value}
+                onClick={() => { setAspect(a.value); setPan({ x: 0, y: 0 }); }}
+                className={aspect === a.value ? 'btn-primary' : 'btn-secondary'}>
+                {a.label}
+              </button>
+            ))}
+          </fieldset>
+        ) : (
+          <p className="text-xs text-botanica-grafito">Esta imagen se muestra en una sola proporción, así que el recorte ya viene fijado a ella.</p>
+        )}
         <label className="flex items-center gap-3 text-sm text-botanica-grafito">
           Acercar
           <input type="range" min={1} max={3} step={0.05} value={zoom}
