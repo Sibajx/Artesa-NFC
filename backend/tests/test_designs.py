@@ -1,6 +1,8 @@
 """ADR-030 phase 5: designed original certificates — render, workflow, review link, publication."""
 from __future__ import annotations
 
+import re
+
 from datetime import timedelta
 
 import pytest
@@ -206,7 +208,7 @@ def test_motion_is_scoped_to_allowed_motion_and_static_at_rest():
     svg = renderer.render(designs.clean_params({**PARAMS, "template": "greca"}), version=1)
     assert "<style>@media (prefers-reduced-motion:no-preference){" in svg
     # Outside the media query nothing animates: the resting sheet is complete.
-    assert svg.count("@keyframes") == 11 and svg.count("animation:") == 14
+    assert svg.count("@keyframes") == 14 and svg.count("animation:") == 17
     assert svg.index("@media") < svg.index("animation:") and "<script" not in svg and "<set" not in svg
     # Waves and shine are invisible at rest; the greca is fully stroked at rest.
     assert svg.count('class="m-wave') == 3 and 'class="m-greca" pathLength="1"' in svg
@@ -305,3 +307,15 @@ def test_the_tesseract_takes_the_dominant_colour_of_the_piece_and_the_frame_ligh
     assert '<g class="m-tess-static" color="#d62839"' not in dark and dark != red
     # Rest state: the light, the motes and the sheen are invisible until the motion rules show them.
     assert red.count('opacity="0"') >= 4 + 16 + 1
+
+
+def test_the_sheet_rises_in_turn_the_name_gets_a_holographic_band_and_the_layers_light_up_in_sequence():
+    svg = renderer.render(designs.clean_params({**PARAMS, "template": "clasico"}), version=1)
+    # Every block rises in its own beat; the name carries a band clipped to its letters, invisible at rest.
+    assert svg.count('class="m-rise"') >= 5 and 'clip-path="url(#name-clip)"' in svg
+    assert 'class="m-holo"' in svg and 'opacity="0"' in svg.split('class="m-holo"', 1)[1].split(">", 1)[0]
+    # Chip (inner layer) lights first, then packing, then shipping.
+    assert svg.count('class="m-light"') == 3
+    assert [int(d) for d in re.findall(r'class="m-light" style="animation-delay:(\d+)s"', svg)] == [6, 3, 0]
+    # The words are still all there at rest.
+    assert PARAMS["artisan_name"] in svg and svg.count(">por ") == 1

@@ -51,10 +51,10 @@ _FALLBACK = ["#1d1915", "#c9761c", "#efe4cf", "#5c3f28"]
 _MOTION = (
     "@media (prefers-reduced-motion:no-preference){"
     ".m-greca{animation:m-draw .7s ease-out both}"
-    ".m-wave{transform-box:fill-box;transform-origin:center;animation:m-wave 3.6s ease-out infinite}"
-    ".m-wave2{animation-delay:1.2s}.m-wave3{animation-delay:2.4s}"
+    ".m-wave{transform-box:fill-box;transform-origin:center;animation:m-wave 3.6s ease-out 1.4s infinite}"
+    ".m-wave2{animation-delay:2.6s}.m-wave3{animation-delay:3.8s}"
     ".m-shine{animation:m-shine 7s ease-in-out infinite}"
-    ".m-stamp{transform-box:fill-box;transform-origin:center;animation:m-stamp 1.1s cubic-bezier(.2,.9,.25,1.15) both}"
+    ".m-stamp{transform-box:fill-box;transform-origin:center;animation:m-stamp 1.1s cubic-bezier(.2,.9,.25,1.15) .9s both}"
     ".m-ring{animation:m-spin 54s linear infinite}.m-ticks{animation:m-spinr 90s linear infinite}"
     ".m-glow{transform-box:fill-box;transform-origin:center;animation:m-glow 4.2s ease-in-out infinite}"
     ".m-chip{transform-box:fill-box;transform-origin:center;animation:m-chip 2.4s ease-in-out infinite}"
@@ -63,6 +63,9 @@ _MOTION = (
     ".m-flow{opacity:1;animation:m-flow 9s linear infinite}.m-flow2{animation-delay:-4.5s}"
     ".m-mote{animation:m-mote 11s ease-in infinite}"
     ".m-sheen{opacity:1;animation:m-sheen 12s ease-in-out infinite}"
+    ".m-rise{animation:m-rise .9s cubic-bezier(.2,.8,.2,1) both}"
+    ".m-holo{opacity:1;animation:m-holo 8s ease-in-out 2.4s infinite}"
+    ".m-light{animation:m-light 9s ease-in-out infinite}"
     ".m-tess-static{display:none}.m-tess-live{display:inline}"
     "@keyframes m-draw{from{stroke-dasharray:1;stroke-dashoffset:1}to{stroke-dasharray:1;stroke-dashoffset:0}}"
     "@keyframes m-wave{0%{opacity:.55;transform:scale(1)}100%{opacity:0;transform:scale(1.55)}}"
@@ -73,6 +76,9 @@ _MOTION = (
     "@keyframes m-chip{0%,100%{opacity:.7;transform:scale(.8)}50%{opacity:1;transform:scale(1.25)}}"
     "@keyframes m-flow{to{stroke-dashoffset:-50}}"
     "@keyframes m-mote{0%{opacity:0;transform:translateY(0)}18%{opacity:.85}100%{opacity:0;transform:translateY(-560px)}}"
+    "@keyframes m-rise{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:none}}"
+    "@keyframes m-holo{0%{transform:translateX(0)}38%,100%{transform:translateX(2300px)}}"
+    "@keyframes m-light{0%,100%{opacity:.4}14%,46%{opacity:1}}"
     "@keyframes m-sheen{0%{transform:translateX(0)}40%,100%{transform:translateX(2300px)}}"
     "}"
 )
@@ -249,8 +255,10 @@ def _seal_tesseract(cx: float, cy: float, r: float, roles: dict[str, str], paper
     def layers(path_id: str, classes: tuple[str, str, str]) -> str:
         out = []
         for cls, scale, width, opacity, mirror in zip(classes, (1.0, 0.66, 0.36), (2.6, 2.2, 1.9), (0.95, 0.8, 1.0), ("", " scale(-1 1)", "")):
-            out.append(f'<g class="{cls}" {origin}><use href="#{path_id}" stroke-width="{width / (k * scale):.2f}" '
-                       f'opacity="{opacity}" transform="translate({cx:.1f} {cy:.1f}) scale({k * scale:.4f}){mirror}"/></g>')
+            layer = (f'<g class="{cls}" {origin}><use href="#{path_id}" stroke-width="{width / (k * scale):.2f}" '
+                     f'opacity="{opacity}" transform="translate({cx:.1f} {cy:.1f}) scale({k * scale:.4f}){mirror}"/></g>')
+            # Live layers light up in turn, the way the piece goes through production: chip, packing, shipping.
+            out.append(f'<g class="m-light" style="animation-delay:{(2 - len(out)) * 3}s">{layer}</g>' if cls else layer)
         return "".join(out)
 
     return "".join([
@@ -304,6 +312,26 @@ def _motes(seed: int, roles: dict[str, str], dark: bool) -> str:
                      f'r="{rng.choice((2, 2.5, 3, 4))}" fill="{color}" opacity="0" '
                      f'style="animation-duration:{rng.randint(8, 15)}s;animation-delay:-{rng.randint(0, 14)}s"/>')
     return "".join(parts)
+
+
+def _rise(out: list[str], start: int, step: int) -> None:
+    """Wrap what was appended since ``start`` so it rises into place, ``step`` beats after the first."""
+    if len(out) > start:
+        out[start:] = [f'<g class="m-rise" style="animation-delay:{step * 0.14:.2f}s">{"".join(out[start:])}</g>']
+
+
+def _holo(name_lines: list[str], y: float, colors: list[str]) -> str:
+    """A band of changing colours that glides over the piece's name, clipped to its letters."""
+    cs = [_mix(c, "#ffffff", 0.25) for c in colors[:4]]
+    cs += cs[: max(0, 3 - len(cs))]
+    height = 104 * 1.05 * len(name_lines) + 60
+    return (f'<clipPath id="name-clip">{_text_block(name_lines, W / 2, y, 104, 1.05, text_anchor="middle", font_family=SERIF)}</clipPath>'
+            f'<linearGradient id="holo"><stop offset="0" stop-color="{cs[0]}" stop-opacity="0"/>'
+            f'<stop offset=".28" stop-color="{cs[0]}" stop-opacity=".95"/><stop offset=".48" stop-color="#ffffff" stop-opacity=".98"/>'
+            f'<stop offset=".66" stop-color="{cs[1]}" stop-opacity=".95"/><stop offset=".84" stop-color="{cs[2]}" stop-opacity=".9"/>'
+            f'<stop offset="1" stop-color="{cs[2]}" stop-opacity="0"/></linearGradient>'
+            f'<g clip-path="url(#name-clip)"><g transform="skewX(-18)"><rect class="m-holo" x="-760" y="{y - 100:.0f}" width="620" '
+            f'height="{height:.0f}" fill="url(#holo)" opacity="0"/></g></g>')
 
 
 def _sheen(roles: dict[str, str], dark: bool) -> str:
@@ -553,28 +581,38 @@ def render(params: dict, *, version: int, approved_by: str | None = None, approv
         out.append(_image(art_uri, 300, y0, W - 600, top - 90 - y0))
     out.append(_motes(int(params.get("seed") or 1), roles, variant == "oscuro"))
     out.append(_frame_light(roles, variant == "oscuro"))
+    beat = len(out)
     out.append(_band(colors, 300, top - 70, W - 600, 12, ink))
     out.append(f'<text x="{W / 2}" y="{top}" text-anchor="middle" font-family="{SANS}" font-size="26" '
                f'letter-spacing="7" fill="{ink}">{_t((params.get("title") or "Certificado original").upper())}</text>')
+    _rise(out, beat, 0)
     name_lines = _lines(params.get("piece_name") or "", 18, 2)
+    beat = len(out)
     out.append(_text_block(name_lines, W / 2, top + 130, 104, 1.05, text_anchor="middle",
                            font_family=SERIF, fill=ink))
+    out.append(_holo(name_lines, top + 130, colors))
+    _rise(out, beat, 1)
     y = top + 130 + 104 * 1.05 * (len(name_lines) - 1) + 80
+    beat = len(out)
     out.append(f'<text x="{W / 2}" y="{y:.0f}" text-anchor="middle" font-family="{SERIF}" font-style="italic" '
                f'font-size="40" fill="{ink}">por {_t(params.get("artisan_name"))}</text>')
+    _rise(out, beat, 2)
 
     quote = (params.get("quote") or "").strip()
     below = y + 20  # where the next block may start (baseline of the last line so far)
     if quote:
         q_lines = _lines(f"“{quote}”", 40, 3 if dense else 4)
+        beat = len(out)
         out.append(_text_block(q_lines, W / 2, y + 120, 34, 1.4, text_anchor="middle",
                                font_family=SERIF, font_style="italic", fill=roles["mid"] if variant == "claro" else ink))
         below = y + 120 + 34 * 1.4 * (len(q_lines) - 1)
+        _rise(out, beat, 3)
 
     seal_y, seal_r = (H - 470, 106) if dense else (H - 545, 168)
     # "Historia y oficio": a few centred rows between the quote and the seal. Rows
     # that would touch the seal are left out, so a long name or quote never overlaps it.
     story_y, story_gap = below + 70, 40
+    beat = len(out)
     for label, value in _story_lines(params.get("story")):
         if story_y > seal_y - seal_r - 28:
             break
@@ -583,6 +621,7 @@ def render(params: dict, *, version: int, approved_by: str | None = None, approv
         out.append(f'<text x="{W / 2}" y="{story_y:.0f}" text-anchor="middle" font-family="{SANS}" font-size="26" '
                    f'letter-spacing="1" fill="{ink}">{_t(text)}</text>')
         story_y += story_gap
+    _rise(out, beat, 4)
     if art is not None and placement == "sello":
         # The artwork inside the seal's rings, clipped to a circle.
         out.append(f'<clipPath id="art-seal"><circle cx="{W / 2}" cy="{seal_y}" r="{seal_r - 16}"/></clipPath>')
@@ -601,6 +640,7 @@ def render(params: dict, *, version: int, approved_by: str | None = None, approv
     if approved_by:
         facts.append(("Aprobado por", f"{approved_by}{' · ' + approved_on if approved_on else ''}"))
     fy = H - 300
+    beat = len(out)
     for label, value in facts:
         out.append(f'<text x="{W / 2 - 20}" y="{fy}" text-anchor="end" font-family="{SANS}" font-size="22" '
                    f'letter-spacing="3" fill="{roles["accent"] if variant == "oscuro" else roles["mid"]}">{_t(label.upper())}</text>')
@@ -608,6 +648,7 @@ def render(params: dict, *, version: int, approved_by: str | None = None, approv
         fy += 44
     out.append(f'<text x="{W / 2}" y="{H - 110}" text-anchor="middle" font-family="{SANS}" font-size="22" '
                f'letter-spacing="4" fill="{ink}" fill-opacity="0.7">ARTESANFC.COM · {_edition_label(params.get("edition"))}</text>')
+    _rise(out, beat, 6)
 
     out.append(_sheen(roles, variant == "oscuro"))
     if watermark:
