@@ -732,14 +732,36 @@ servidor de estáticos no tenga que redirigir.
 
 | Página | Ruta | Rol | Qué se hace |
 |---|---|---|---|
-| Inicio | `#/inicio` (antes `#/resumen`, que redirige) | Todos | Lo que requiere atención: pendientes de publicar, autorizaciones, diseños, huecos de certificación |
+| Inicio | `#/inicio` (antes `#/resumen`, que redirige) | Todos | Saludo con el nombre de la persona (por la hora de México, fechas y día de la semana; banderines de papel picado en Día de Muertos y Navidad), accesos rápidos según permisos, "Para ti hoy" (pendientes de publicar, autorizaciones, diseños, huecos de certificación, piezas listas para enviar, insumos con stock bajo y manuales por revisar), el camino de las piezas y la actividad reciente |
 | Artesanos | `#/artesanos`, `/nuevo`, `/:id`, `/:id/editar` | Editor | Lista con filtros, ficha, formulario, autorización por WhatsApp |
 | Piezas | `#/piezas`, `/nueva`, `/:id`, `/:id/editar` | Editor | Ficha, media, paleta, venta, checklist de publicación. Pestaña Inventario: `#/piezas?vista=inventario` (antes `#/inventario`, que redirige) |
 | Certificación | `#/certificacion`, `/:id` | Custodio | Emitir, grabar y leer de vuelta, bloquear, tarjeta, reclamo, robo, liberar chip |
 | Diseño del certificado | `#/diseno/:id` | Diseñador | Vista previa en vivo, enviar a revisión, aprobar, publicar |
+| Producción | `#/produccion` | Casilla Producción | Tablero de piezas por etapa (pendientes, en proceso, listas para enviar, en tránsito, entregadas) con venta y envío; pasos con fotos privadas (hasta 5 por paso, de cámara o galería), paquetería y guía |
+| Insumos | `#/insumos` | Leer: todos; registrar: Logística | Stock de chips, sellos, rasca y gana y epoxi, con libro de movimientos (compra, uso, merma, ajuste) y aviso de stock bajo |
+| Visitas | `#/visitas` | Casilla Visitas | Bitácora de visitas a artesanos y galerías, con resumen, acuerdos, una foto privada y el consentimiento de publicación (solo se anota) |
+| Capacitaciones | `#/capacitaciones` | Casilla Capacitar; revisa solo el dueño | Manuales por oficio, escritos y con dibujos privados, con revisión del dueño: borrador, en revisión, cambios pedidos, aprobado |
+| Hero | `#/hero` | Casilla Hero | Temporadas del hero del sitio (video, fechas, forzar ahora) e imágenes del sitio |
 | Usuarios | `#/usuarios` | Dueño | Agregar, quitar y cambiar roles; sincronizar Access |
 | Archivo | `#/archivo`, pestaña Papelera: `#/archivo?vista=papelera` (antes `#/archivados` y `#/papelera`, que redirigen) | Editor | Restaurar o purgar |
 | Auditoría | `#/auditoria` | Todos | La bitácora, con filtros y etiquetas en español |
+
+**Menú:** Inicio y Certificación sueltos; Catálogo (Artesanos, Piezas); Archivo;
+Logística (Producción, Insumos); Equipo (Visitas, Capacitaciones); Sitio (Hero);
+Administración (Auditoría, Usuarios). Cada entrada se muestra solo si la cuenta
+tiene el permiso (`any`/`role` en `menuGroups` de `App.tsx`); el API vuelve a
+comprobarlo. Una caja de búsqueda sobre el menú (`GlobalSearch.tsx`, Ctrl+K o `/`)
+encuentra artesanos, piezas, insumos y manuales.
+
+**Permisos por casillas** (`backend/app/core/permissions.py`; el dueño las edita
+en Usuarios, con roles editables): Ver, Editar, Publicar, Autorización, Ventas,
+Logística, Certificación NFC, Revocaciones, Diseño, Hero, Capacitaciones, Visitas
+y Producción.
+
+**Campos numéricos** (`numbers.ts`): precio y medidas solo admiten dígitos y
+separadores y se validan al guardar (nunca se descartan en silencio); el año de
+creación no puede ser futuro. **Reglas del CI de admin:** sin `sessionStorage`
+ni `localStorage` (salvo el tema en `theme.ts`), por eso el saludo vive en memoria.
 
 **Componentes clave:** `api.ts` (el cliente: `If-Match`, `X-Artesa-Admin`,
 traducción de errores al español), `nfc.ts` (Web NFC: escribir, leer de vuelta
