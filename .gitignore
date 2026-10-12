@@ -23,3 +23,12 @@ test-results/
 playwright-report/
 *.trace.zip
 *.har
+
+# Private working notes: the project Brain and the assistant's instructions hold the
+# production host, the team's contacts and security notes. This repository is public,
+# so none of it is versioned (PEND-065); keep it local or in a private repository.
+Artesa_Brain/
+CLAUDE.md
+AGENTS.md
+.claude/
+
