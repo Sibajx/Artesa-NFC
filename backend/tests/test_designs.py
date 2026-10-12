@@ -319,3 +319,11 @@ def test_the_sheet_rises_in_turn_the_name_gets_a_holographic_band_and_the_layers
     assert [int(d) for d in re.findall(r'class="m-light" style="animation-delay:(\d+)s"', svg)] == [6, 3, 0]
     # The words are still all there at rest.
     assert PARAMS["artisan_name"] in svg and svg.count(">por ") == 1
+
+
+def test_the_sheet_does_not_print_the_design_version_but_keeps_the_code_and_the_approval():
+    draft = renderer.render(designs.clean_params({**PARAMS, "template": "clasico"}), version=3)
+    assert "DISEÑO" not in draft and "versión 3" not in draft and PARAMS["public_code"].upper() in draft.upper()
+    approved = renderer.render(designs.clean_params({**PARAMS, "template": "clasico"}), version=3,
+                               approved_by="Rigoberto", approved_on="04/10/2026")
+    assert "APROBADO POR" in approved and "Rigoberto" in approved and "DISEÑO" not in approved
