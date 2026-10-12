@@ -38,3 +38,8 @@ export function yearError(raw: string, now: Date = new Date()): string | undefin
   const max = now.getFullYear();
   return year > max ? `El año no puede ser futuro (máximo ${max}).` : undefined;
 }
+
+/** Today as `YYYY-MM-DD` in the browser's own time zone, for the `max` of date fields. */
+export function todayLocal(now: Date = new Date()): string {
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}

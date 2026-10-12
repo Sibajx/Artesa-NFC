@@ -1,3 +1,4 @@
+import { typedPrice } from './numbers';
 import { useState } from 'react';
 import { ApiError, adminApi } from './api';
 import type { PieceDetail, Sale, SaleInput } from './api';
@@ -159,7 +160,7 @@ function SaleForm({ piece, onDone, onCancel, setError }: {
         <input type="date" required max={today()} value={soldOn} onChange={(e) => setSoldOn(e.target.value)} className={input} />
       </label>
       <label className="text-xs font-medium text-botanica-grafito">Precio de venta (MXN)
-        <input required inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} className={input} />
+        <input required inputMode="decimal" value={price} onChange={(e) => setPrice(typedPrice(e.target.value))} className={input} />
       </label>
       <label className="text-xs font-medium text-botanica-grafito">Canal
         <select value={channel} onChange={(e) => setChannel(e.target.value as Sale['channel'])} className={input}>

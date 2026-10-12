@@ -47,10 +47,15 @@ function NewSupply({ onCreated }: { onCreated: (d: SupplyDetail) => void }) {
   const toast = useToast();
 
   async function save() {
+    const minStock = min.trim() === '' ? 0 : Number(min);
+    if (!Number.isFinite(minStock) || minStock < 0) {
+      setError('El aviso de stock debe ser un número desde 0, por ejemplo 10.');
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      const d = await adminApi.createSupply({ name: name.trim(), unit: unit.trim(), min_stock: Number(min) || 0, note: null });
+      const d = await adminApi.createSupply({ name: name.trim(), unit: unit.trim(), min_stock: minStock, note: null });
       toast('Insumo creado');
       setName('');
       setMin('0');
@@ -71,7 +76,7 @@ function NewSupply({ onCreated }: { onCreated: (d: SupplyDetail) => void }) {
         <input required value={unit} maxLength={30} onChange={(e) => setUnit(e.target.value)} placeholder="pieza, ml, g, rollo" className={`mt-1 ${input}`} />
       </label>
       <label className="text-xs font-medium text-botanica-grafito">Aviso al bajar de
-        <input type="number" min="0" step="any" value={min} onChange={(e) => setMin(e.target.value)} className={`mt-1 ${input}`} />
+        <input type="number" inputMode="decimal" min="0" step="any" value={min} onChange={(e) => setMin(e.target.value)} className={`mt-1 ${input}`} />
       </label>
       <button type="submit" className="btn-primary" disabled={busy || !name.trim()}>Agregar</button>
       {error && <p role="alert" className="md:col-span-4 text-sm text-red-700">{error}</p>}
@@ -157,7 +162,7 @@ function Detail({ id, onChanged }: { id: string; onChanged: () => void }) {
             </select>
           </label>
           <label className="text-xs font-medium text-botanica-grafito">Cantidad ({s.unit})
-            <input required type="number" min="0" step="any" value={quantity} onChange={(e) => setQuantity(e.target.value)} className={`mt-1 ${input}`} />
+            <input required type="number" inputMode="decimal" min="0" step="any" value={quantity} onChange={(e) => setQuantity(e.target.value)} className={`mt-1 ${input}`} />
           </label>
           {kind === 'purchase' && (
             <label className="text-xs font-medium text-botanica-grafito">Costo por unidad (MXN, opcional)
