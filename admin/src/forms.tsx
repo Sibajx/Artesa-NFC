@@ -13,6 +13,9 @@ interface FieldProps {
   required?: boolean;
   disabled?: boolean;
   placeholder?: string;
+  inputMode?: 'decimal' | 'numeric';
+  min?: number;
+  max?: number;
 }
 
 function Wrapper({ id, label, hint, error, required, children }: Omit<FieldProps, 'value' | 'onChange'> & { children: ReactNode }) {
@@ -30,12 +33,15 @@ function Wrapper({ id, label, hint, error, required, children }: Omit<FieldProps
 }
 
 export function TextInput(props: FieldProps & { type?: 'text' | 'number' }) {
-  const { id, value, onChange, error, hint, required, disabled, placeholder, type = 'text' } = props;
+  const { id, value, onChange, error, hint, required, disabled, placeholder, inputMode, min, max, type = 'text' } = props;
   return (
     <Wrapper {...props}>
       <input
         id={id}
         type={type}
+        inputMode={inputMode}
+        min={min}
+        max={max}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         required={required}

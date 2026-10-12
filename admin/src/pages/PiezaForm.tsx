@@ -7,6 +7,7 @@ import { blankToNull, labels, splitList, writeErrorMessage } from '../format';
 import { FormError, Section, Select, TextArea, TextInput } from '../forms';
 import { useLoad } from '../hooks';
 import { ErrorState, Loading, PageHeader } from '../ui';
+import { measureError, priceCents, priceError, typedMeasure, typedPrice, yearError, MIN_YEAR } from '../numbers';
 
 interface Values {
   artisan_id: string;
@@ -50,14 +51,6 @@ function dimensions(v: Values): Record<string, number> | null {
   return Object.keys(out).length ? out : null;
 }
 
-// "$1,250.50" or "1250,5" -> 125050 cents; blank -> null.
-function priceCents(raw: string): number | null {
-  const cleaned = raw.replace(/[$\s]/g, '').replace(/,(?=\d{3}(\D|$))/g, '').replace(',', '.');
-  if (!cleaned) return null;
-  const n = Number(cleaned);
-  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : null;
-}
-
 function toInput(v: Values, isDraft: boolean, isNew: boolean): PieceInput {
   const year = Number(v.creation_year);
   return {
@@ -97,6 +90,17 @@ function Form({ initial, existing, artisans }: { initial: Values; existing?: Pie
       setError(new ApiError('invalid', 422, { error: { details: [{ field: 'artisan_id', reason: 'Elige un artesano.' }] } }));
       return;
     }
+    const problems = [
+      ['price_cents', priceError(values.price)],
+      ['creation_year', yearError(values.creation_year)],
+      ['height_cm', measureError(values.height_cm)],
+      ['width_cm', measureError(values.width_cm)],
+      ['depth_cm', measureError(values.depth_cm)],
+    ].filter((p): p is [string, string] => p[1] !== undefined);
+    if (problems.length > 0) {
+      setError(new ApiError('invalid', 422, { error: { details: problems.map(([field, reason]) => ({ field, reason })) } }));
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -134,14 +138,15 @@ function Form({ initial, existing, artisans }: { initial: Values; existing?: Pie
           <TextInput id="technique" label="Técnica" value={values.technique} onChange={set('technique')} />
           <TextInput id="materials" label="Materiales" value={values.materials} onChange={set('materials')} hint="Separados por comas." error={fieldError('materials')} />
           <TextInput id="origin" label="Origen" value={values.origin} onChange={set('origin')} />
-          <TextInput id="creation_year" label="Año de creación" type="number" value={values.creation_year} onChange={set('creation_year')} error={fieldError('creation_year')} />
-          <TextInput id="price" label="Precio de lista (MXN)" value={values.price} onChange={set('price')} error={fieldError('price_cents')}
+          <TextInput id="creation_year" label="Año de creación" type="number" inputMode="numeric" min={MIN_YEAR} max={new Date().getFullYear()}
+            value={values.creation_year} onChange={set('creation_year')} error={fieldError('creation_year')} />
+          <TextInput id="price" label="Precio de lista (MXN)" inputMode="decimal" value={values.price} onChange={(v) => set('price')(typedPrice(v))} error={fieldError('price_cents')}
             hint="Solo se ve en Gestión. Ej. 3500 o 3,500.00" />
         </div>
         <div className="grid grid-cols-3 gap-4">
-          <TextInput id="height_cm" label="Alto (cm)" value={values.height_cm} onChange={set('height_cm')} />
-          <TextInput id="width_cm" label="Ancho (cm)" value={values.width_cm} onChange={set('width_cm')} />
-          <TextInput id="depth_cm" label="Profundidad (cm)" value={values.depth_cm} onChange={set('depth_cm')} />
+          <TextInput id="height_cm" label="Alto (cm)" inputMode="decimal" value={values.height_cm} onChange={(v) => set('height_cm')(typedMeasure(v))} error={fieldError('height_cm')} />
+          <TextInput id="width_cm" label="Ancho (cm)" inputMode="decimal" value={values.width_cm} onChange={(v) => set('width_cm')(typedMeasure(v))} error={fieldError('width_cm')} />
+          <TextInput id="depth_cm" label="Profundidad (cm)" inputMode="decimal" value={values.depth_cm} onChange={(v) => set('depth_cm')(typedMeasure(v))} error={fieldError('depth_cm')} />
         </div>
         <TextArea id="description" label="Descripción" value={values.description} onChange={set('description')} />
         <TextArea id="history" label="Historia" value={values.history} onChange={set('history')} />

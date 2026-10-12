@@ -103,7 +103,7 @@ function VisitForm({ initial, artisans, onSaved, onCancel }: {
       </label>
       <label className="text-xs font-medium text-botanica-grafito md:col-span-2">
         {initial?.photo ? 'Cambiar la foto (opcional)' : 'Una foto de la visita (opcional; no tiene que salir el artesano)'}
-        <input type="file" accept="image/*" capture="environment" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className={`mt-1 ${field}`} />
+        <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className={`mt-1 ${field}`} />
       </label>
       <label className="flex items-start gap-2 text-sm text-botanica-grafito md:col-span-2">
         <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-1 accent-botanica-jade" />
