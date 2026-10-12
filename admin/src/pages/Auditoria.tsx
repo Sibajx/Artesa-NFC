@@ -5,6 +5,7 @@ import { AUDIT_CATEGORIES, actionLabel, actorLabel, entityLink } from '../audit-
 import { formatDateTime } from '../format';
 import { useLoad } from '../hooks';
 import { Badge, ErrorState, Loading, PageHeader } from '../ui';
+import { todayLocal } from '../numbers';
 
 // P-026 G7: filters (category, person, dates) and actions in plain Spanish.
 // The trail itself stays append-only: nothing here edits or deletes.
@@ -50,10 +51,10 @@ export default function Auditoria() {
           <input type="email" value={draft.actor_email} onChange={set('actor_email')} placeholder="nombre@gmail.com" className={INPUT} />
         </label>
         <label className="text-xs font-medium text-botanica-grafito">Desde
-          <input type="date" value={draft.since} onChange={set('since')} className={INPUT} />
+          <input type="date" max={draft.until || todayLocal()} value={draft.since} onChange={set('since')} className={INPUT} />
         </label>
         <label className="text-xs font-medium text-botanica-grafito">Hasta
-          <input type="date" value={draft.until} onChange={set('until')} className={INPUT} />
+          <input type="date" min={draft.since || undefined} max={todayLocal()} value={draft.until} onChange={set('until')} className={INPUT} />
         </label>
         <div className="flex gap-2">
           <button type="submit" className="btn-primary">Filtrar</button>
