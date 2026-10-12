@@ -25,6 +25,10 @@ const TEMPLATES: { value: DesignParams['template']; label: string; hint: string 
   { value: 'greca', label: 'Greca', hint: 'Marco de grecas con el color de la pieza' },
   { value: 'constelacion', label: 'Constelación', hint: 'Fondo oscuro con patrón generativo' },
   { value: 'telar', label: 'Telar', hint: 'Bandas bordadas como las de un huipil' },
+  { value: 'amate', label: 'Amate', hint: 'Papel de corteza con fibras y borde rasgado' },
+  { value: 'barro', label: 'Barro', hint: 'Zigzag incisado, como la cerámica' },
+  { value: 'mitla', label: 'Mitla', hint: 'Grecas escalonadas en dos colores' },
+  { value: 'alebrije', label: 'Alebrije', hint: 'Triángulos y puntos de colores saturados' },
 ];
 
 // A tiny drawing of each template, so the choice is seen and not only read.
@@ -46,6 +50,10 @@ function TemplateThumb({ template }: { template: DesignParams['template'] }) {
           {[12, 20, 28, 36, 44].map((x, i) => <path key={x} d={`M${x},${y + 1.6} l2.4,2.4 l-2.4,2.4 l-2.4,-2.4 Z`} fill={i % 2 ? ink : accent} />)}
         </g>
       ))}
+      {template === 'amate' && <path d="M4,5 l5,-1.5 l6,1.5 l7,-1 l8,1.5 l7,-1 l8,1 l7,-0.5 l4,2 l-1,15 l1,20 l-1,18 l-3,2 l-8,-1 l-9,1.5 l-9,-1 l-8,1 l-9,-1 l-6,0.5 l-1,-18 l1,-20 Z" fill="none" stroke={ink} strokeWidth="0.9" />}
+      {template === 'barro' && [9, 62].map((y) => <polyline key={y} fill="none" stroke={accent} strokeWidth="1.3" points={Array.from({ length: 12 }, (_, i) => `${8 + i * 4},${y + (i % 2 ? 6 : 1)}`).join(' ')} />)}
+      {template === 'mitla' && [9, 62].map((y) => <path key={y} fill="none" stroke={accent} strokeWidth="1.6" d={`M8,${y + 7} L8,${y + 4} L14,${y + 4} L14,${y + 1} L20,${y + 1} M52,${y + 7} L52,${y + 4} L46,${y + 4} L46,${y + 1} L40,${y + 1}`} />)}
+      {template === 'alebrije' && [9, 62].map((y) => [10, 18, 26, 34, 42].map((x, i) => <path key={`${y}${x}`} d={i % 2 ? `M${x},${y + 7} l3.5,-7 l3.5,7 Z` : `M${x},${y} l7,0 l-3.5,7 Z`} fill={['#c9761c', '#2f7a5b', '#5c3f28'][i % 3]} />))}
       <rect x="20" y="22" width="20" height="2" fill={ink} opacity="0.7" />
       <rect x="14" y="28" width="32" height="5" fill={ink} opacity="0.85" />
       <circle cx="30" cy="52" r="7" fill="none" stroke={accent} strokeWidth="1.4" />
@@ -455,7 +463,7 @@ function EditorForm({ design, onChanged, setError, piecePalette, contact }: {
             </fieldset>
             <div className="flex flex-wrap items-center gap-3">
               <button type="button" className="btn-secondary" onClick={() => set('seed', Math.floor(Math.random() * 2 ** 31))}>Otro patrón</button>
-              <span className="text-xs text-botanica-gris">Cambia el sello{params.template === 'constelacion' ? ' y la constelación' : params.template === 'greca' ? ' y la greca' : params.template === 'telar' ? ' y las bandas bordadas' : ' y las esquinas'}.</span>
+              <span className="text-xs text-botanica-gris">Cambia el sello{params.template === 'constelacion' ? ' y la constelación' : params.template === 'greca' ? ' y la greca' : params.template === 'telar' ? ' y las bandas bordadas' : params.template === 'amate' ? ' y las fibras' : ['barro', 'mitla', 'alebrije'].includes(params.template) ? ' y las bandas' : ' y las esquinas'}.</span>
             </div>
             <div className="flex flex-wrap gap-2 border-t border-botanica-gris/15 pt-4">
               <button type="button" className="btn-primary" disabled={!dirty || busy}

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+import pytest
 from sqlalchemy import func, select, update
 
 from app.models.audit_event import AuditEvent
@@ -266,3 +267,15 @@ def test_the_telar_template_draws_two_woven_bands_and_keeps_the_motion_rules():
     assert designs.clean_params({**PARAMS, "template": "telar"})["template"] == "telar"
     dark = renderer.render(designs.clean_params({**PARAMS, "template": "telar", "variant": "oscuro"}), version=1)
     assert dark != svg
+
+
+@pytest.mark.parametrize("template", ["amate", "barro", "mitla", "alebrije"])
+def test_the_regional_templates_render_static_and_deterministic_in_both_variants(template):
+    params = designs.clean_params({**PARAMS, "template": template})
+    svg = renderer.render(params, version=1)
+    assert template in renderer.TEMPLATES and params["template"] == template and svg.endswith("</svg>")
+    assert "<script" not in svg and "<animate" not in svg and 'class="m-greca"' not in svg and svg.count('class="m-wave') == 3
+    assert svg == renderer.render(params, version=1)
+    assert renderer.render({**params, "variant": "oscuro"}, version=1) != svg
+    with_art = renderer.render({**params, "art": {"placement": "encabezado"}}, version=1, art_uri="data:image/png;base64,AAAA")
+    assert "<image" in with_art
