@@ -4,6 +4,7 @@ import type { ReactElement } from 'react';
 import { adminApi, LOGOUT_URL } from './api';
 import { useLoad } from './hooks';
 import { ErrorState, Loading, ThemeToggle } from './ui';
+import { GlobalSearch } from './GlobalSearch';
 import Dashboard from './pages/Dashboard';
 import Artesanos from './pages/Artesanos';
 import ArtesanoDetalle from './pages/ArtesanoDetalle';
@@ -206,6 +207,8 @@ export default function App() {
           </div>
           <p className="text-xs text-botanica-gris pl-[38px]">Consola de gestión</p>
         </div>
+
+        <div className="pt-4"><GlobalSearch /></div>
 
         <nav aria-label="Principal" className="side-nav flex-1 px-3 py-4 flex flex-col gap-0.5">
           {visibleGroups.map((group, index) => (

@@ -155,6 +155,7 @@ export function RecordActions({ kind, id, version, status, availability, trashed
           </button>
         )}
         {status !== 'archived' && canEdit && <Link to={`${base}/${id}/editar`} className="btn-secondary">Editar</Link>}
+        {kind === 'pieces' && canEdit && !trashedAt && <Link to={`/piezas/nueva?copiar=${id}`} className="btn-secondary" title="Crear una pieza nueva con los datos de esta">Duplicar</Link>}
         {canPublish && buttons.filter((b) => b.action !== 'publish').map((b) => (
           <button key={b.action} type="button" disabled={busy} onClick={() => void transition(b.action)} className="btn-secondary">
             {b.label}

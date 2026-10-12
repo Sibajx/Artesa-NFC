@@ -721,3 +721,75 @@
   from { transform: rotate(-3deg); }
   to { transform: rotate(3deg); }
 }
+
+/* Búsqueda global del menú (artesanos y piezas). Usa la paleta oscura de .sidebar. */
+.global-search__input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--rule);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 0.875rem;
+}
+
+.global-search__input::placeholder {
+  color: var(--muted);
+}
+
+.global-search__input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.global-search__message {
+  min-height: 0;
+  padding: 0.25rem 0.25rem 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.global-search__message:empty {
+  display: none;
+}
+
+.global-search__list {
+  margin-top: 0.5rem;
+  max-height: 16rem;
+  overflow-y: auto;
+  border: 1px solid var(--rule);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  list-style: none;
+  padding: 0.25rem;
+}
+
+.global-search__item {
+  display: flex;
+  flex-direction: column;
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+}
+
+.global-search__item.is-active {
+  background: var(--surface-2);
+}
+
+.global-search__label {
+  color: var(--ink);
+  font-size: 0.875rem;
+}
+
+.global-search__detail {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.global-search__heading {
+  padding: 0.25rem 0.5rem;
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}

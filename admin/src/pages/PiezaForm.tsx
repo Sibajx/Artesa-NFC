@@ -160,26 +160,44 @@ function Form({ initial, existing, artisans }: { initial: Values; existing?: Pie
   );
 }
 
+// A new piece started from another: the descriptive data comes along; what must be
+// unique or belongs to the original (code, slug, history, photos, certificate) does not.
+function fromCopy(p: PieceDetail): Values {
+  return {
+    ...fromDetail(p),
+    name: `Copia de ${p.name}`, public_code: '', slug: '', history: '', availability_status: 'available',
+  };
+}
+
 export default function PiezaForm() {
   const { id } = useParams<{ id: string }>();
   const [params] = useSearchParams();
   const preselected = params.get('artesano') ?? '';
-  const state = useLoad(`piece-form:${id ?? 'new'}`, async (signal) => {
-    const [artisans, piece] = await Promise.all([
+  const copyOf = id ? '' : params.get('copiar') ?? '';
+  const state = useLoad(`piece-form:${id ?? 'new'}:${copyOf}`, async (signal) => {
+    const [artisans, piece, source] = await Promise.all([
       adminApi.artisans({}, signal),
       id ? adminApi.piece(id, signal) : Promise.resolve(null),
+      copyOf ? adminApi.piece(copyOf, signal) : Promise.resolve(null),
     ]);
-    return { artisans: artisans.data, piece };
+    return { artisans: artisans.data, piece, source };
   });
 
   return (
     <div className="max-w-3xl mx-auto pb-12">
-      <PageHeader title={id ? 'Editar pieza' : 'Nueva pieza'} />
+      <PageHeader title={id ? 'Editar pieza' : copyOf ? 'Nueva pieza (copia)' : 'Nueva pieza'} />
       {state.status === 'loading' && <Loading label="Cargando..." />}
       {state.status === 'error' && <div className="card-elevated"><ErrorState error={state.error} /></div>}
       {state.status === 'ready' && (
         state.data.piece ? (
           <Form key={state.data.piece.updated_at} initial={fromDetail(state.data.piece)} existing={state.data.piece} artisans={state.data.artisans} />
+        ) : state.data.source ? (
+          <>
+            <p className="mb-4 rounded-xl border border-botanica-jade/25 bg-botanica-jade/5 p-4 text-sm text-botanica-negro">
+              Copiada de «{state.data.source.name}». Cambia el nombre; el código, la historia y las fotos no se copian.
+            </p>
+            <Form key={`copy:${state.data.source.id}`} initial={fromCopy(state.data.source)} artisans={state.data.artisans} />
+          </>
         ) : (
           <Form
             initial={{ artisan_id: preselected, name: '', public_code: '', slug: '', technique: '', materials: '', origin: '',
