@@ -92,6 +92,10 @@
     "e5c2a8f1b7d3": {
       "class": "additive",
       "note": "Adds the training_manual and training_image tables (training manuals per craft with the owner's review, and their private drawings on disk). Nothing existing changes and no row is seeded; older code ignores them, so a code-only rollback is compatible. The downgrade drops both tables; the drawing files under privado/ stay on disk."
+    },
+    "a4d7c1e9b3f6": {
+      "class": "additive",
+      "note": "Adds the nullable column visit.unregistered_artisan (the name of an artisan who is not registered, typed by hand) and two checks that only the new column can break (not together with artisan_id; at least two letters). Nothing existing changes and no row is touched; older code ignores the column, so a code-only rollback is compatible. The downgrade drops the column, so the names typed by hand are lost."
     }
   }
 }

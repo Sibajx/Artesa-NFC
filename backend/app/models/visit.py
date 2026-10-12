@@ -22,6 +22,9 @@ class Visit(Base):
         CheckConstraint("kind IN ('artesano', 'galeria', 'otro')", name="ck_visit_kind"),
         CheckConstraint("length(btrim(summary)) >= 10", name="ck_visit_summary"),
         CheckConstraint("(photo_path IS NULL) = (photo_width IS NULL)", name="ck_visit_photo_consistent"),
+        CheckConstraint("artisan_id IS NULL OR unregistered_artisan IS NULL", name="ck_visit_artisan_exclusive"),
+        CheckConstraint("unregistered_artisan IS NULL OR length(btrim(unregistered_artisan)) >= 2",
+                        name="ck_visit_unregistered_name"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -29,6 +32,9 @@ class Visit(Base):
     kind: Mapped[str] = mapped_column(Text, nullable=False)
     artisan_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("artisan.id", ondelete="SET NULL"), index=True)
+    # The name of an artisan who is not registered (typed by hand). Never together with
+    # `artisan_id`: a visit has one or the other.
+    unregistered_artisan: Mapped[str | None] = mapped_column(Text)
     # The gallery or place visited (always for a gallery; optional for an artisan).
     place: Mapped[str | None] = mapped_column(Text)
     # Who from the team went (free text; the person who recorded it is always saved).

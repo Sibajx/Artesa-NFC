@@ -234,6 +234,7 @@ export interface Visit {
   kind: VisitKind;
   artisan_id: string | null;
   artisan_name: string | null;
+  unregistered_artisan: string | null;
   place: string | null;
   attendees: string | null;
   summary: string;
@@ -249,6 +250,7 @@ export interface VisitInput {
   visited_on: string;
   kind: VisitKind;
   artisan_id: string | null;
+  unregistered_artisan: string | null;
   place: string | null;
   attendees: string | null;
   summary: string;

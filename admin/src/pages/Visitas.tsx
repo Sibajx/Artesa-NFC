@@ -6,6 +6,8 @@ import { useConfirm, useToast } from '../feedback-context';
 import { useLoad } from '../hooks';
 import { useRoles } from '../roles-context';
 import { Badge, ErrorState, Loading, PageHeader } from '../ui';
+import { ArtisanPicker } from '../ArtisanPicker';
+import type { Picked } from '../ArtisanPicker';
 
 // Visit log of artisans and galleries (Sol and Hariel, plus the owner). The
 // written summary is mandatory; the photo is one and optional, and private.
@@ -42,7 +44,7 @@ function VisitForm({ initial, artisans, onSaved, onCancel }: {
 }) {
   const [date, setDate] = useState(initial?.visited_on ?? today());
   const [kind, setKind] = useState<VisitKind>(initial?.kind ?? 'artesano');
-  const [artisanId, setArtisanId] = useState(initial?.artisan_id ?? '');
+  const [who, setWho] = useState<Picked>({ artisanId: initial?.artisan_id ?? '', text: initial?.artisan_name ?? '' });
   const [place, setPlace] = useState(initial?.place ?? '');
   const [attendees, setAttendees] = useState(initial?.attendees ?? '');
   const [summary, setSummary] = useState(initial?.summary ?? '');
@@ -57,7 +59,7 @@ function VisitForm({ initial, artisans, onSaved, onCancel }: {
     setBusy(true);
     setError(null);
     const body: VisitInput = {
-      visited_on: date, kind, artisan_id: artisanId || null, place: place.trim() || null, attendees: attendees.trim() || null,
+      visited_on: date, kind, artisan_id: who.artisanId || null, unregistered_artisan: who.artisanId ? null : who.text.trim() || null, place: place.trim() || null, attendees: attendees.trim() || null,
       summary: summary.trim(), agreements: agreements.trim() || null, consent_to_publish: consent,
     };
     try {
@@ -82,12 +84,12 @@ function VisitForm({ initial, artisans, onSaved, onCancel }: {
           {KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
         </select>
       </label>
-      <label className="text-xs font-medium text-botanica-grafito">Artesano (si aplica)
-        <select value={artisanId} onChange={(e) => setArtisanId(e.target.value)} className={`mt-1 ${field}`}>
-          <option value="">Ninguno</option>
-          {artisans.map((a) => <option key={a.id} value={a.id}>{a.full_name}</option>)}
-        </select>
-      </label>
+      <div className="text-xs font-medium text-botanica-grafito">
+        <label htmlFor="visit-artisan">Artesano visitado (si aplica)</label>
+        <div className="mt-1">
+          <ArtisanPicker id="visit-artisan" artisans={artisans} value={who} onChange={setWho} className={field} />
+        </div>
+      </div>
       <label className="text-xs font-medium text-botanica-grafito">{kind === 'galeria' ? 'Galería (obligatorio)' : 'Lugar (opcional)'}
         <input value={place} maxLength={200} required={kind === 'galeria'} onChange={(e) => setPlace(e.target.value)} placeholder="Ej. Taller en San Bartolo, Galería Centro" className={`mt-1 ${field}`} />
       </label>
@@ -193,7 +195,7 @@ export default function Visitas() {
                       {v.consent_to_publish && <Badge tone="jade">Autorizó publicar</Badge>}
                     </div>
                     <p className="text-sm text-botanica-grafito">
-                      {[v.artisan_name, v.place].filter(Boolean).join(' · ') || 'Sin lugar'}
+                      {[v.artisan_name && !v.artisan_id ? `${v.artisan_name} (no registrado)` : v.artisan_name, v.place].filter(Boolean).join(' · ') || 'Sin lugar'}
                       {v.attendees && <span className="text-botanica-gris"> · fue: {v.attendees}</span>}
                     </p>
                     <p className="mt-2 whitespace-pre-line text-sm text-botanica-grafito">{v.summary}</p>
