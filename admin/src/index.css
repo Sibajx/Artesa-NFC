@@ -492,11 +492,8 @@
   }
 }
 
-/* Sticky action bar on record pages */
+/* Action bar on record pages. It stays in place and scrolls with the page: stuck to the top it covered the content (2026-10-12). */
 .record-bar {
-  position: sticky;
-  top: 0.75rem;
-  z-index: 20;
   padding: 0.75rem;
   border-radius: 14px;
   background: color-mix(in srgb, var(--surface) 90%, transparent);
