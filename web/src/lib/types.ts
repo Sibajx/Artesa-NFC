@@ -195,3 +195,19 @@ export interface SiteImageFiles {
 export interface SiteImagesEnvelope {
   readonly data: Readonly<Record<string, SiteImageFiles>>;
 }
+
+// GET /collections: the entries of the home's collection block (photo, title,
+// short text and a button), active ones only, in order. Empty keeps the single
+// entry built into the page.
+export interface CollectionPublic {
+  readonly id: string;
+  readonly title: string;
+  readonly body: string | null;
+  readonly cta_label: string;
+  readonly link: string;
+  readonly image: SiteImageFiles;
+}
+
+export interface CollectionsEnvelope {
+  readonly data: readonly CollectionPublic[];
+}

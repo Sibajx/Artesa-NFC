@@ -1,5 +1,5 @@
 """Visit log: visits to artisans and galleries. The written summary is
-mandatory (what was said); the photo is one and optional, stored privately."""
+mandatory (what was said); photos are optional (up to ``MAX_PHOTOS``), stored privately."""
 from __future__ import annotations
 
 import uuid
@@ -7,11 +7,12 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.artisan import Artisan
 from app.models.visit import VISIT_KINDS, Visit
+from app.models.visit_photo import MAX_PHOTOS, VisitPhoto
 from app.services import private_photos
 from app.services.content import Actor, ContentConflict, ContentNotFound, _audit
 
@@ -109,27 +110,42 @@ def update(db: Session, actor: Actor, visit_id: uuid.UUID, changes: dict[str, An
     return visit
 
 
-def set_photo(db: Session, actor: Actor, media_root: Path, visit_id: uuid.UUID, data: bytes) -> Visit:
+def photos_of(db: Session, visit_ids: list[uuid.UUID]) -> dict[uuid.UUID, list[VisitPhoto]]:
+    """The photos of several visits in one query, oldest first."""
+    found: dict[uuid.UUID, list[VisitPhoto]] = {vid: [] for vid in visit_ids}
+    if visit_ids:
+        rows = db.execute(select(VisitPhoto).where(VisitPhoto.visit_id.in_(visit_ids))
+                          .order_by(VisitPhoto.created_at, VisitPhoto.id)).scalars()
+        for photo in rows:
+            found[photo.visit_id].append(photo)
+    return found
+
+
+def add_photo(db: Session, actor: Actor, media_root: Path, visit_id: uuid.UUID, data: bytes) -> Visit:
     visit = get(db, visit_id)
+    count = db.execute(select(func.count()).select_from(VisitPhoto).where(VisitPhoto.visit_id == visit.id)).scalar_one()
+    if count >= MAX_PHOTOS:
+        raise ContentConflict("too_many_photos", f"Una visita admite hasta {MAX_PHOTOS} fotos. Quita una para subir otra.")
     path, width, height = private_photos.store(media_root, "visitas", visit.id, data)
-    old = visit.photo_path
-    visit.photo_path, visit.photo_width, visit.photo_height = path, width, height
+    photo = VisitPhoto(visit_id=visit.id, path=path, width=width, height=height, created_by=actor.identity.email,
+                       created_at=datetime.now(timezone.utc))  # explicit: the order of photos is the order of upload
+    db.add(photo)
+    db.flush()
     visit.updated_at = datetime.now(timezone.utc)
-    _audit(db, actor, "visit", visit.id, "visit.photo_set", {"replaced": old is not None})
+    _audit(db, actor, "visit", visit.id, "visit.photo_added", {"photo_id": str(photo.id), "count": count + 1})
     db.commit()
-    if old:
-        private_photos.remove(media_root, old)
     return visit
 
 
-def remove_photo(db: Session, actor: Actor, media_root: Path | None, visit_id: uuid.UUID) -> Visit:
+def remove_photo(db: Session, actor: Actor, media_root: Path | None, visit_id: uuid.UUID, photo_id: uuid.UUID) -> Visit:
     visit = get(db, visit_id)
-    old = visit.photo_path
-    if old is None:
-        raise ContentConflict("no_photo", "Esta visita no tiene foto.")
-    visit.photo_path = visit.photo_width = visit.photo_height = None
+    photo = db.get(VisitPhoto, photo_id)
+    if photo is None or photo.visit_id != visit.id:
+        raise ContentNotFound("not_found", "Esa foto no existe.")
+    old = photo.path
+    db.delete(photo)
     visit.updated_at = datetime.now(timezone.utc)
-    _audit(db, actor, "visit", visit.id, "visit.photo_removed", {})
+    _audit(db, actor, "visit", visit.id, "visit.photo_removed", {"photo_id": str(photo_id)})
     db.commit()
     if media_root is not None:
         private_photos.remove(media_root, old)
@@ -138,17 +154,19 @@ def remove_photo(db: Session, actor: Actor, media_root: Path | None, visit_id: u
 
 def delete(db: Session, actor: Actor, media_root: Path | None, visit_id: uuid.UUID) -> None:
     visit = get(db, visit_id)
-    old = visit.photo_path
-    _audit(db, actor, "visit", visit.id, "visit.deleted", {"kind": visit.kind, "visited_on": visit.visited_on.isoformat()})
+    old = [photo.path for photo in photos_of(db, [visit.id])[visit.id]]
+    _audit(db, actor, "visit", visit.id, "visit.deleted", {"kind": visit.kind, "visited_on": visit.visited_on.isoformat(),
+                                                          "photos": len(old)})
     db.delete(visit)
     db.commit()
-    if old and media_root is not None:
-        private_photos.remove(media_root, old)
+    if media_root is not None:
+        for path in old:
+            private_photos.remove(media_root, path)
 
 
-def photo_file(db: Session, media_root: Path, visit_id: uuid.UUID) -> Path:
-    visit = get(db, visit_id)
-    path = private_photos.resolve(media_root, visit.photo_path) if visit.photo_path else None
+def photo_file(db: Session, media_root: Path, visit_id: uuid.UUID, photo_id: uuid.UUID) -> Path:
+    photo = db.get(VisitPhoto, photo_id)
+    path = private_photos.resolve(media_root, photo.path) if photo is not None and photo.visit_id == visit_id else None
     if path is None:
         raise ContentNotFound("not_found", "Esa foto no existe.")
     return path
