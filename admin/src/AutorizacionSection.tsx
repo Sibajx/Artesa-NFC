@@ -57,8 +57,12 @@ export function AutorizacionSection({ artisan, onChanged }: { artisan: ArtisanDe
     }
   }
 
+  // Two messages: the first request, and the new link after the artisan asked for changes
+  // and the team fixed them (last_answer stays "changes_requested" until something replaces it).
   const whatsappText = (url: string) =>
-    `Hola${contact ? ` ${contact}` : ''}. Somos de ArtesaNFC. ${contact ? `Por favor enséñale a ${name} este enlace` : 'Este enlace muestra'} todo lo que aparece de ${contact ? 'él' : 'ti'} en artesanfc.com: nombre, foto, historia, contacto y piezas. Si ${contact ? 'está de acuerdo' : 'estás de acuerdo'}, toca "Sí, autorizo"; si algo no está bien, toca "Quiero cambios" y ${contact ? 'escriban' : 'escribe'} qué corregir: ${url}`;
+    artisan.last_answer?.status === 'changes_requested'
+      ? `Hola${contact ? ` ${contact}` : ` ${artisan.full_name}`}. Ya se hicieron los cambios que ${contact ? `pidió ${name}` : 'solicitó'}. ${contact ? `Por favor enséñale de nuevo este enlace para que revise` : 'Por favor vuelva a revisar en este enlace'} si su información ya está correcta. Si todo está bien, toque "Sí, autorizo"; si falta algo, toque "Quiero cambios" y escriba qué corregir: ${url}`
+      : `Hola${contact ? ` ${contact}` : ''}. Somos de ArtesaNFC. ${contact ? `Por favor enséñale a ${name} este enlace` : 'Este enlace muestra'} todo lo que aparece de ${contact ? 'él' : 'ti'} en artesanfc.com: nombre, foto, historia, contacto y piezas. Si ${contact ? 'está de acuerdo' : 'estás de acuerdo'}, toca "Sí, autorizo"; si algo no está bien, toca "Quiero cambios" y ${contact ? 'escriban' : 'escribe'} qué corregir: ${url}`;
 
   const answer = artisan.last_answer;
   const inPerson = auth?.status === 'authorized' && auth.medium !== 'whatsapp';
