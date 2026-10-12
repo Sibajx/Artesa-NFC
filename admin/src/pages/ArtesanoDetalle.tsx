@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useLoad } from '../hooks';
 import { MediaSection } from '../MediaSection';
 import { AutorizacionSection } from '../AutorizacionSection';
+import { ArtisanVisits } from '../ArtisanVisits';
 import { PublishChecklist } from '../PublishChecklist';
 import { RecordActions } from '../RecordActions';
 import { Can, ErrorState, Field, Gate, Loading, PublicationBadge } from '../ui';
@@ -88,6 +89,10 @@ export default function ArtesanoDetalle() {
               <MediaSection kind="artisans" ownerId={a.id} media={a.media}
                 ownerArchived={a.publication_status === 'archived'} onChanged={() => setRevision((r) => r + 1)} />
             </Gate>
+
+            <Can permission="visits">
+              <ArtisanVisits artisanId={a.id} />
+            </Can>
           </div>
         );
       })()}
