@@ -160,7 +160,7 @@ function StepRow({ pieceId, s, last, photosEnabled, onChanged }: {
                 </label>
                 {photosEnabled && (
                   <label className="text-xs font-medium text-botanica-grafito">Foto (opcional)
-                    <input ref={markFile} type="file" accept="image/*" capture="environment" className={`mt-1 ${field}`} />
+                    <input ref={markFile} type="file" accept="image/*" className={`mt-1 ${field}`} />
                   </label>
                 )}
                 <div className="flex flex-wrap gap-3">
@@ -174,7 +174,7 @@ function StepRow({ pieceId, s, last, photosEnabled, onChanged }: {
                 {photosEnabled && s.photos.length < 5 && (
                   <label className="btn-secondary cursor-pointer !py-1.5 text-xs">
                     Agregar foto
-                    <input ref={addFile} type="file" accept="image/*" capture="environment" className="sr-only" disabled={busy}
+                    <input ref={addFile} type="file" accept="image/*" className="sr-only" disabled={busy}
                       onChange={(e) => void addPhoto(e.target.files?.[0])} />
                   </label>
                 )}
