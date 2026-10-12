@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { ApiError, adminApi } from './api';
+import { typedTracking } from './numbers';
 import type { ProductionStep, ProductionStepKey } from './api';
 import { formatDateTime, writeErrorMessage } from './format';
 import { useConfirm, useToast } from './feedback-context';
@@ -151,7 +152,7 @@ function StepRow({ pieceId, s, last, photosEnabled, onChanged }: {
                       <input value={carrier} maxLength={80} onChange={(e) => setCarrier(e.target.value)} placeholder="Ej. Estafeta, DHL" className={`mt-1 ${field}`} />
                     </label>
                     <label className="text-xs font-medium text-botanica-grafito">Número de guía
-                      <input value={tracking} maxLength={80} onChange={(e) => setTracking(e.target.value)} className={`mt-1 ${field}`} />
+                      <input value={tracking} maxLength={80} onChange={(e) => setTracking(typedTracking(e.target.value))} className={`mt-1 ${field}`} />
                     </label>
                   </div>
                 )}

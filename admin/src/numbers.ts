@@ -43,3 +43,11 @@ export function yearError(raw: string, now: Date = new Date()): string | undefin
 export function todayLocal(now: Date = new Date()): string {
   return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 }
+
+/** `type="number"` still lets "e", "+" and "-" through; this keeps them out of the keyboard. */
+export function blockNumberKeys(e: { key: string; preventDefault: () => void }): void {
+  if (e.key === 'e' || e.key === 'E' || e.key === '+' || e.key === '-') e.preventDefault();
+}
+
+/** A tracking number is letters, digits and dashes; spaces and symbols are dropped as typed. */
+export const typedTracking = (raw: string): string => raw.replace(/[^A-Za-z0-9-]/g, '');
