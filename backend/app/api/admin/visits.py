@@ -35,7 +35,8 @@ class VisitOut(BaseModel):
     visited_on: date
     kind: str
     artisan_id: uuid.UUID | None
-    artisan_name: str | None
+    artisan_name: str | None  # the registered artisan's name, or the typed one
+    unregistered_artisan: str | None  # set only when the artisan is not registered
     place: str | None
     attendees: str | None
     summary: str
@@ -55,6 +56,7 @@ class VisitBody(BaseModel):
     visited_on: date
     kind: Literal["artesano", "galeria", "otro"]
     artisan_id: uuid.UUID | None = None
+    unregistered_artisan: str | None = Field(default=None, max_length=200)
     place: str | None = Field(default=None, max_length=200)
     attendees: str | None = Field(default=None, max_length=300)
     summary: str = Field(max_length=5000)
@@ -66,6 +68,7 @@ class VisitPatch(BaseModel):
     visited_on: date | None = None
     kind: Literal["artesano", "galeria", "otro"] | None = None
     artisan_id: uuid.UUID | None = None
+    unregistered_artisan: str | None = Field(default=None, max_length=200)
     place: str | None = Field(default=None, max_length=200)
     attendees: str | None = Field(default=None, max_length=300)
     summary: str | None = Field(default=None, max_length=5000)
@@ -74,7 +77,8 @@ class VisitPatch(BaseModel):
 
 
 def _out(v: Visit, name: str | None) -> VisitOut:
-    return VisitOut(id=v.id, visited_on=v.visited_on, kind=v.kind, artisan_id=v.artisan_id, artisan_name=name, place=v.place,
+    return VisitOut(id=v.id, visited_on=v.visited_on, kind=v.kind, artisan_id=v.artisan_id, artisan_name=name or v.unregistered_artisan,
+                    unregistered_artisan=v.unregistered_artisan, place=v.place,
                     attendees=v.attendees, summary=v.summary, agreements=v.agreements, consent_to_publish=v.consent_to_publish,
                     photo=f"/api/admin/v1/visits/{v.id}/photo" if v.photo_path else None, recorded_by=v.recorded_by,
                     created_at=v.created_at, updated_at=v.updated_at)

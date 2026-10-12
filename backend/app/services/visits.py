@@ -39,8 +39,10 @@ def listing(db: Session, artisan_id: uuid.UUID | None = None, limit: int = 200) 
 
 
 def artisan_name(db: Session, visit: Visit) -> str | None:
-    return db.execute(select(Artisan.full_name).where(Artisan.id == visit.artisan_id)).scalar_one_or_none() \
-        if visit.artisan_id else None
+    """Who was visited: the registered artisan's name, or the one typed by hand."""
+    if visit.artisan_id:
+        return db.execute(select(Artisan.full_name).where(Artisan.id == visit.artisan_id)).scalar_one_or_none()
+    return visit.unregistered_artisan
 
 
 def _validated(db: Session, data: dict[str, Any]) -> dict[str, Any]:
@@ -62,9 +64,18 @@ def _validated(db: Session, data: dict[str, Any]) -> dict[str, Any]:
         if data["artisan_id"] is not None and db.get(Artisan, data["artisan_id"]) is None:
             raise ContentNotFound("not_found", "Ese artesano no existe.")
         out["artisan_id"] = data["artisan_id"]
-    for key, limit in (("place", 200), ("attendees", 300), ("agreements", 3000)):
+    for key, limit in (("place", 200), ("attendees", 300), ("agreements", 3000), ("unregistered_artisan", 200)):
         if key in data:
             out[key] = _clean(data[key], limit)
+    name = out.get("unregistered_artisan")
+    if name is not None and len(name) < 2:
+        raise ContentConflict("invalid_visit", "Escribe el nombre completo del artesano.", "unregistered_artisan")
+    # A visit has a registered artisan or a typed name, never both: choosing a registered
+    # one clears the typed name, and typing a name clears the registered one.
+    if out.get("artisan_id") is not None:
+        out["unregistered_artisan"] = None
+    elif name is not None:
+        out["artisan_id"] = None
     if "consent_to_publish" in data:
         out["consent_to_publish"] = bool(data["consent_to_publish"])
     return out
@@ -78,7 +89,8 @@ def create(db: Session, actor: Actor, data: dict[str, Any]) -> Visit:
     db.add(visit)
     db.flush()
     _audit(db, actor, "visit", visit.id, "visit.created", {"kind": visit.kind, "visited_on": visit.visited_on.isoformat(),
-                                                          "artisan_id": str(visit.artisan_id) if visit.artisan_id else None})
+                                                          "artisan_id": str(visit.artisan_id) if visit.artisan_id else None,
+                                                          "unregistered_artisan": visit.unregistered_artisan is not None})
     db.commit()
     return visit
 

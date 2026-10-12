@@ -157,3 +157,35 @@ def test_without_a_media_folder_the_text_still_works(owner_client, monkeypatch):
     v = new_visit(owner_client)
     assert upload(owner_client, v, jpeg()).status_code >= 400
     assert get(owner_client, f"/visits/{v['id']}").json()["photo"] is None
+
+
+def test_a_visit_can_be_to_an_artisan_who_is_not_registered(owner_client, db_session):
+    """Talks and negotiations with people who are not in the system yet: the name is typed by hand
+    (or left out), a visit never has both a registered artisan and a typed name."""
+    typed = new_visit(owner_client, unregistered_artisan="  Doña Chuy, alfarera de Atzompa  ")
+    assert typed["artisan_id"] is None
+    assert typed["unregistered_artisan"] == "Doña Chuy, alfarera de Atzompa"
+    assert typed["artisan_name"] == "Doña Chuy, alfarera de Atzompa"
+    nameless = new_visit(owner_client)  # no name at all is fine: the summary is what matters
+    assert nameless["artisan_name"] is None and nameless["unregistered_artisan"] is None
+    assert post(owner_client, "/visits", visit_body(unregistered_artisan="x")).json()["error"]["code"] == "invalid_visit"
+    assert post(owner_client, "/visits", visit_body(unregistered_artisan="a" * 201)).status_code == 422
+
+    registered = post(owner_client, "/artisans", {"full_name": "Rigoberto Ramírez Robles"}).json()
+    both = new_visit(owner_client, artisan_id=registered["id"], unregistered_artisan="Otro nombre")
+    assert both["artisan_id"] == registered["id"] and both["unregistered_artisan"] is None  # the registered one wins
+    assert both["artisan_name"] == "Rigoberto Ramírez Robles"
+
+    # Editing swaps one for the other.
+    r = owner_client.patch(f"{API}/visits/{typed['id']}", json={"artisan_id": registered["id"]}, headers=H())
+    assert r.status_code == 200 and r.json()["unregistered_artisan"] is None and r.json()["artisan_name"] == "Rigoberto Ramírez Robles"
+    r = owner_client.patch(f"{API}/visits/{both['id']}", json={"artisan_id": None, "unregistered_artisan": "Don Beto"}, headers=H())
+    assert r.status_code == 200 and r.json()["artisan_id"] is None and r.json()["artisan_name"] == "Don Beto"
+    r = owner_client.patch(f"{API}/visits/{both['id']}", json={"unregistered_artisan": None}, headers=H())
+    assert r.status_code == 200 and r.json()["artisan_name"] is None
+
+    # The filter by artisan only finds visits of registered ones; the audit never stores the typed name.
+    only = get(owner_client, f"/visits?artisan_id={registered['id']}").json()["data"]
+    assert [v["id"] for v in only] == [typed["id"]]
+    events = db_session.execute(select(AuditEvent).where(AuditEvent.action == "visit.created")).scalars().all()
+    assert all("Chuy" not in str(e.event_metadata) and "Beto" not in str(e.event_metadata) for e in events)
