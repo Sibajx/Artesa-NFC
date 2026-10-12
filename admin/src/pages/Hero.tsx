@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { DragEvent } from 'react';
+import { blockNumberKeys } from '../numbers';
 import { ApiError, MAX_UPLOAD_BYTES, adminApi, mediaUrl } from '../api';
 import type { HeroCampaign, HeroState, SiteImagesState, SiteSlot } from '../api';
 import { writeErrorMessage } from '../format';
@@ -106,6 +107,7 @@ function DropZone({ campaign, busy, onFile }: { campaign: HeroCampaign; busy: bo
           min={0}
           max={MAX_START_SECONDS}
           step={0.5}
+          onKeyDown={blockNumberKeys}
           placeholder="0"
           value={startText}
           disabled={disabled}

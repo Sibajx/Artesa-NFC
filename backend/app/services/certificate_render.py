@@ -25,7 +25,9 @@ import re
 import textwrap
 from xml.sax.saxutils import escape
 
-TEMPLATES = ("clasico", "greca", "constelacion", "telar")
+TEMPLATES = ("clasico", "greca", "constelacion", "telar", "amate", "barro", "mitla", "alebrije")
+# Templates that draw a band at the top and bottom of the sheet (the title starts lower).
+_BANDED = ("telar", "barro", "mitla", "alebrije")
 VARIANTS = ("claro", "oscuro")
 # Phase 5b: where the team's artwork goes.
 ART_PLACEMENTS = ("sello", "encabezado", "fondo")
@@ -197,6 +199,105 @@ def _telar(colors: list[str], roles: dict[str, str], rng: random.Random, y: floa
     return "".join(parts)
 
 
+def _frame(ink: str, accent: str) -> str:
+    return (f'<rect x="48" y="48" width="{W - 96}" height="{H - 96}" fill="none" stroke="{ink}" stroke-width="3"/>'
+            f'<rect x="66" y="66" width="{W - 132}" height="{H - 132}" fill="none" stroke="{accent}" stroke-width="1.5"/>')
+
+
+def _amate(roles: dict[str, str], rng: random.Random, ink: str) -> str:
+    """Bark paper: short pale fibres over the whole sheet and a hand-torn edge."""
+    fibre = roles["mid"]
+    parts = []
+    for _ in range(170):
+        x, y = rng.uniform(75, W - 75), rng.uniform(75, H - 75)
+        a = rng.uniform(-0.5, 0.5) + (0 if rng.random() < 0.7 else math.pi / 2)
+        n = rng.uniform(40, 130)
+        x2 = min(max(x + n * math.cos(a), 75), W - 75)  # fibres stay inside the torn edge
+        y2 = min(max(y + n * math.sin(a), 75), H - 75)
+        parts.append(f'<line x1="{x:.0f}" y1="{y:.0f}" x2="{x2:.0f}" y2="{y2:.0f}" '
+                     f'stroke="{fibre}" stroke-opacity="{rng.uniform(.06, .16):.2f}" stroke-width="{rng.choice((2, 3, 4))}" stroke-linecap="round"/>')
+    pts = []
+    def jag(x: float, y: float) -> str:
+        return f"{x + rng.uniform(-9, 9):.0f},{y + rng.uniform(-9, 9):.0f}"
+    for x in range(56, W - 56, 36):
+        pts.append(jag(x, 56))
+    for y in range(56, H - 56, 36):
+        pts.append(jag(W - 56, y))
+    for x in range(W - 56, 56, -36):
+        pts.append(jag(x, H - 56))
+    for y in range(H - 56, 56, -36):
+        pts.append(jag(56, y))
+    parts.append(f'<polygon points="{" ".join(pts)}" fill="none" stroke="{ink}" stroke-width="3" stroke-linejoin="round"/>')
+    parts.append(f'<polygon points="{" ".join(pts)}" fill="none" stroke="{roles["accent"]}" stroke-width="1.5" '
+                 f'stroke-dasharray="2 9" transform="translate(12 12) scale({(W - 24) / W:.4f} {(H - 24) / H:.4f})"/>')
+    return "".join(parts)
+
+
+def _barro(roles: dict[str, str], rng: random.Random, y: float, h: float) -> str:
+    """Incised pottery: a zig-zag cut between two lines, with a row of dots."""
+    x0, x1 = 100.0, W - 100.0
+    step = rng.choice((22, 26, 30))
+    mid = y + h / 2
+    pts, x, up = [], x0, True
+    while x <= x1:
+        pts.append(f"{x:.0f},{(y + 10) if up else (y + h - 10):.0f}")
+        x += step
+        up = not up
+    parts = [f'<rect x="{x0}" y="{y}" width="{x1 - x0}" height="4" fill="{roles["mid"]}"/>',
+             f'<rect x="{x0}" y="{y + h - 4}" width="{x1 - x0}" height="4" fill="{roles["mid"]}"/>',
+             f'<polyline points="{" ".join(pts)}" fill="none" stroke="{roles["accent"]}" stroke-width="5" stroke-linejoin="round"/>']
+    xd = x0 + step / 2
+    while xd < x1:
+        parts.append(f'<circle cx="{xd:.0f}" cy="{mid:.0f}" r="3.2" fill="{roles["dark"]}" fill-opacity=".7"/>')
+        xd += step * 2
+    return "".join(parts)
+
+
+def _mitla(roles: dict[str, str], rng: random.Random, y: float, h: float) -> str:
+    """Stepped fret panels of Mitla: two interlocking staircases per tile, in two colours."""
+    unit = h
+    x0, x1 = 100.0, W - 100.0
+    count = max(1, int((x1 - x0) // unit))
+    start = x0 + ((x1 - x0) - count * unit) / 2
+    a, b = roles["accent"], roles["mid"]
+    s = unit / 6
+    parts = [f'<rect x="{x0}" y="{y}" width="{x1 - x0}" height="3" fill="{roles["dark"]}"/>',
+             f'<rect x="{x0}" y="{y + h}" width="{x1 - x0}" height="3" fill="{roles["dark"]}"/>']
+    for i in range(count):
+        x = start + i * unit
+        flip = (i + rng.randrange(2)) % 2
+        up = [(0, 6), (0, 4), (2, 4), (2, 2), (4, 2), (4, 0), (6, 0)]
+        pts = [(px, 6 - py) if flip else (px, py) for px, py in up]
+        parts.append("<path d=\"M" + " L".join(f"{x + px * s:.1f},{y + py * s:.1f}" for px, py in pts) +
+                     f'" fill="none" stroke="{a}" stroke-width="{s * .55:.1f}" stroke-linejoin="miter" stroke-linecap="square"/>')
+        pts2 = [(6 - px, 6 - py) if flip else (6 - px, py) for px, py in up]
+        parts.append("<path d=\"M" + " L".join(f"{x + px * s:.1f},{y + py * s:.1f}" for px, py in pts2) +
+                     f'" fill="none" stroke="{b}" stroke-width="{s * .55:.1f}" stroke-linejoin="miter" stroke-linecap="square"/>')
+    return "".join(parts)
+
+
+def _alebrije(colors: list[str], roles: dict[str, str], rng: random.Random, y: float, h: float) -> str:
+    """Saturated painted pattern: triangles, dots and stripes cycling through every palette colour."""
+    x0, x1 = 100.0, W - 100.0
+    unit = h * 0.7
+    count = max(1, int((x1 - x0) // unit))
+    start = x0 + ((x1 - x0) - count * unit) / 2
+    off = rng.randrange(len(colors))
+    parts = []
+    for i in range(count):
+        x = start + i * unit
+        c1, c2 = colors[(i + off) % len(colors)], colors[(i + off + 1) % len(colors)]
+        if i % 2:
+            parts.append(f'<path d="M{x:.1f},{y + h:.1f} L{x + unit / 2:.1f},{y:.1f} L{x + unit:.1f},{y + h:.1f} Z" fill="{c1}"/>')
+            parts.append(f'<circle cx="{x + unit / 2:.1f}" cy="{y + h * .66:.1f}" r="{unit * .11:.1f}" fill="{c2}"/>')
+        else:
+            parts.append(f'<path d="M{x:.1f},{y:.1f} L{x + unit:.1f},{y:.1f} L{x + unit / 2:.1f},{y + h:.1f} Z" fill="{c2}"/>')
+            parts.append(f'<circle cx="{x + unit / 2:.1f}" cy="{y + h * .34:.1f}" r="{unit * .11:.1f}" fill="{c1}"/>')
+    parts.append(f'<rect x="{x0}" y="{y - 10}" width="{x1 - x0}" height="5" fill="{roles["accent"]}"/>')
+    parts.append(f'<rect x="{x0}" y="{y + h + 5}" width="{x1 - x0}" height="5" fill="{roles["accent"]}"/>')
+    return "".join(parts)
+
+
 def _story_lines(story: object) -> list[tuple[str, str]]:
     """(label, value) rows of the "Historia y oficio" block, only when it is on."""
     if not isinstance(story, dict) or not story.get("enabled"):
@@ -264,15 +365,22 @@ def render(params: dict, *, version: int, approved_by: str | None = None, approv
         out.append(f'<rect x="66" y="66" width="{W - 132}" height="{H - 132}" fill="none" stroke="{roles["accent"]}" stroke-width="1.5"/>')
         out.append(_telar(colors, roles, rng, 96, 52))
         out.append(_telar(colors, roles, rng, H - 190, 52))
+    elif template == "amate":
+        out.append(_amate(roles, rng, ink))
+    elif template in ("barro", "mitla", "alebrije"):
+        out.append(_frame(ink, roles["accent"]))
+        for by in (96, H - 190):
+            out.append(_barro(roles, rng, by, 52) if template == "barro" else
+                       _mitla(roles, rng, by, 52) if template == "mitla" else
+                       _alebrije(colors, roles, rng, by, 52))
     else:
-        out.append(f'<rect x="48" y="48" width="{W - 96}" height="{H - 96}" fill="none" stroke="{ink}" stroke-width="3"/>')
-        out.append(f'<rect x="66" y="66" width="{W - 132}" height="{H - 132}" fill="none" stroke="{roles["accent"]}" stroke-width="1.5"/>')
+        out.append(_frame(ink, roles["accent"]))
         out.append(_corners(roles["accent"], rng))
 
     dense = template == "constelacion"
     top = 560 if dense else 330
     if header_art:
-        y0 = 110 if dense else (170 if template == "telar" else 96)
+        y0 = 110 if dense else (170 if template in _BANDED else 96)
         out.append(_image(art_uri, 300, y0, W - 600, top - 90 - y0))
     out.append(_band(colors, 300, top - 70, W - 600, 12, ink))
     out.append(f'<text x="{W / 2}" y="{top}" text-anchor="middle" font-family="{SANS}" font-size="26" '

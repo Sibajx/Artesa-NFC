@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { blockNumberKeys } from './numbers';
 
 const INPUT =
   'w-full px-3 py-2 border border-botanica-gris/30 rounded-md text-sm text-botanica-negro bg-white focus:outline-none focus:border-botanica-jade disabled:bg-botanica-hueso disabled:text-botanica-gris';
@@ -44,6 +45,7 @@ export function TextInput(props: FieldProps & { type?: 'text' | 'number' }) {
         max={max}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onKeyDown={type === 'number' ? blockNumberKeys : undefined}
         required={required}
         disabled={disabled}
         placeholder={placeholder}
