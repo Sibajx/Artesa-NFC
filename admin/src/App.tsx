@@ -1,4 +1,5 @@
-import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
+import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { useEffect, useRef } from 'react';
 import type { ReactElement } from 'react';
 import { adminApi, LOGOUT_URL } from './api';
 import { useLoad } from './hooks';
@@ -159,6 +160,14 @@ export default function App() {
   // this identity (allowlist) before anything else is shown.
   const me = useLoad('me', (signal) => adminApi.me(signal));
 
+  // On wide screens the content scrolls inside <main>, apart from the menu, so the
+  // window no longer scrolls: go back to the top when the page (not just a tab) changes.
+  const { pathname } = useLocation();
+  const mainRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0 });
+  }, [pathname]);
+
   if (me.status === 'loading') return <Loading label="Verificando acceso..." />;
   if (me.status === 'error') {
     return (
@@ -182,8 +191,8 @@ export default function App() {
     .filter((group) => group.items.length > 0);
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-botanica-hueso">
-      <aside className="sidebar w-full md:w-60 border-r border-botanica-gris/20 flex flex-col shrink-0">
+    <div className="min-h-screen md:h-screen md:overflow-hidden flex flex-col md:flex-row bg-botanica-hueso">
+      <aside className="sidebar w-full md:w-60 md:overflow-y-auto border-r border-botanica-gris/20 flex flex-col shrink-0">
         <div className="px-6 pt-7 pb-6 border-b border-botanica-gris/20">
           <div className="flex items-center gap-2.5 mb-1">
             <div className="side-logo w-7 h-7 rounded-md bg-botanica-jade/10 border border-botanica-jade/20 flex items-center justify-center shrink-0">
@@ -252,7 +261,7 @@ export default function App() {
         </div>
       </aside>
 
-      <main className="flex-1 p-6 md:p-10 overflow-auto">
+      <main ref={mainRef} className="flex-1 p-6 md:p-10 overflow-auto">
         <EmailContext.Provider value={email}>
         <RolesContext.Provider value={roles}>
         <PermissionsContext.Provider value={permissions}>
