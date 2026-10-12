@@ -4,10 +4,16 @@
 // claimed) open the original. The key, PIN and email only live in this
 // component's state and the POST body: never rendered back, stored, logged or
 // put in a URL. Every refusal reads the same ("invalid" never says why).
-import { useState, type FormEvent } from "react";
+import { lazy, Suspense, useState, type FormEvent } from "react";
 import { api, type UnlockResult } from "@/lib/api";
 import { displayName } from "@/lib/format";
 import type { CertificateOriginal } from "@/lib/types";
+
+// The animation library only downloads once the original is open; until then (and for anyone
+// whose connection is slow) the plain image is shown, so the certificate is never waiting on it.
+const TiltCertificate = lazy(() =>
+  import("./TiltCertificate").then((module) => ({ default: module.TiltCertificate })),
+);
 
 type Step =
   | { kind: "key" }
@@ -194,12 +200,21 @@ function OriginalView({
       data-state="original-open"
     >
       {data.design && (
-        <img
-          className="original__design"
-          src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(data.design.svg)}`}
-          alt={`Certificado original de ${piece.name}, versión ${data.design.version} del diseño`}
-          data-state="original-design"
-        />
+        <Suspense
+          fallback={
+            <img
+              className="original__design"
+              src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(data.design.svg)}`}
+              alt={`Certificado original de ${piece.name}, versión ${data.design.version} del diseño`}
+              data-state="original-design"
+            />
+          }
+        >
+          <TiltCertificate
+            svg={data.design.svg}
+            alt={`Certificado original de ${piece.name}, versión ${data.design.version} del diseño`}
+          />
+        </Suspense>
       )}
       <div className="original__card">
         <p className="certificate__seal">

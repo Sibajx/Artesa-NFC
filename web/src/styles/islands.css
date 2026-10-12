@@ -772,6 +772,56 @@
   box-shadow: 0 18px 50px -24px color-mix(in srgb, var(--color-wood) 80%, transparent);
 }
 
+/* Tilting stage around the design: the plate leans, a glare follows, a shockwave leaves the seal. */
+.original__stage {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-xs, 0.5rem);
+  width: 100%;
+}
+
+.original__tilt {
+  width: 100%;
+  max-width: 520px;
+  perspective: 1100px;
+  touch-action: pan-y;
+}
+
+.original__plate {
+  position: relative;
+  transform-style: preserve-3d;
+  border-radius: 10px;
+}
+
+.original__plate .original__design {
+  display: block;
+  user-select: none;
+}
+
+.original__glare,
+.original__shock {
+  position: absolute;
+  pointer-events: none;
+}
+
+.original__glare {
+  inset: 0;
+  border-radius: 10px;
+  mix-blend-mode: soft-light;
+}
+
+.original__shock {
+  width: 16%;
+  aspect-ratio: 1;
+  margin: -8% 0 0 -8%;
+  border: 2px solid var(--color-cempasuchil);
+  border-radius: 50%;
+}
+
+.original__motion {
+  justify-self: center;
+}
+
 /* Artisan authorization (P-026 G3): the card shows what will be published. */
 .authorization-card {
   display: grid;
