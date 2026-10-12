@@ -12,10 +12,17 @@ are no external references, scripts or fonts (the SVG is shown inside
 PNG/JPEG (services/certificate_art.py); the params only carry its hash.
 
 Motion: a <style> inside the SVG animates the greca (drawing itself), the
-seal (NFC waves) and the title band (foil shine). It lives under
-``prefers-reduced-motion: no-preference`` and the resting state is the
+seal (stamp-in, NFC waves, spinning ring), the title band (foil shine), a
+light that runs around the frame, drifting motes and a slow sheen. It lives
+under ``prefers-reduced-motion: no-preference`` and the resting state is the
 complete static drawing, so print, reduced motion and viewers without CSS
 animation see the same sheet. CSS animation runs inside <img>; scripts do not.
+
+The seal is a tesseract (a 4D hypercube) turning in three nested layers, one
+per production stage (chip, packing, shipping). Its rotation is projected
+here, in Python, into a fixed number of frames and played with one SMIL
+<animate> on ``d``: real 4D motion with no script. Reduced motion (and any
+viewer that ignores CSS) shows the first frame instead.
 """
 from __future__ import annotations
 
@@ -23,6 +30,7 @@ import math
 import random
 import re
 import textwrap
+from functools import lru_cache
 from xml.sax.saxutils import escape
 
 TEMPLATES = ("clasico", "greca", "constelacion", "telar", "amate", "barro", "mitla", "alebrije")
@@ -46,9 +54,26 @@ _MOTION = (
     ".m-wave{transform-box:fill-box;transform-origin:center;animation:m-wave 3.6s ease-out infinite}"
     ".m-wave2{animation-delay:1.2s}.m-wave3{animation-delay:2.4s}"
     ".m-shine{animation:m-shine 7s ease-in-out infinite}"
+    ".m-stamp{transform-box:fill-box;transform-origin:center;animation:m-stamp 1.1s cubic-bezier(.2,.9,.25,1.15) both}"
+    ".m-ring{animation:m-spin 54s linear infinite}.m-ticks{animation:m-spinr 90s linear infinite}"
+    ".m-glow{transform-box:fill-box;transform-origin:center;animation:m-glow 4.2s ease-in-out infinite}"
+    ".m-chip{transform-box:fill-box;transform-origin:center;animation:m-chip 2.4s ease-in-out infinite}"
+    ".m-layer-a{animation:m-spin 38s linear infinite}.m-layer-b{animation:m-spinr 26s linear infinite}"
+    ".m-layer-c{animation:m-spin 17s linear infinite}"
+    ".m-flow{opacity:1;animation:m-flow 9s linear infinite}.m-flow2{animation-delay:-4.5s}"
+    ".m-mote{animation:m-mote 11s ease-in infinite}"
+    ".m-sheen{opacity:1;animation:m-sheen 12s ease-in-out infinite}"
+    ".m-tess-static{display:none}.m-tess-live{display:inline}"
     "@keyframes m-draw{from{stroke-dasharray:1;stroke-dashoffset:1}to{stroke-dasharray:1;stroke-dashoffset:0}}"
     "@keyframes m-wave{0%{opacity:.55;transform:scale(1)}100%{opacity:0;transform:scale(1.55)}}"
     "@keyframes m-shine{0%{transform:translateX(-360px)}30%,100%{transform:translateX(1400px)}}"
+    "@keyframes m-stamp{0%{opacity:0;transform:scale(1.55) rotate(-8deg)}55%{opacity:1}100%{opacity:1;transform:none}}"
+    "@keyframes m-spin{to{transform:rotate(360deg)}}@keyframes m-spinr{to{transform:rotate(-360deg)}}"
+    "@keyframes m-glow{0%,100%{opacity:.55;transform:scale(.94)}50%{opacity:1;transform:scale(1.06)}}"
+    "@keyframes m-chip{0%,100%{opacity:.7;transform:scale(.8)}50%{opacity:1;transform:scale(1.25)}}"
+    "@keyframes m-flow{to{stroke-dashoffset:-50}}"
+    "@keyframes m-mote{0%{opacity:0;transform:translateY(0)}18%{opacity:.85}100%{opacity:0;transform:translateY(-560px)}}"
+    "@keyframes m-sheen{0%{transform:translateX(0)}40%,100%{transform:translateX(2300px)}}"
     "}"
 )
 
@@ -143,6 +168,150 @@ def _seal(cx: float, cy: float, r: float, roles: dict[str, str], rng: random.Ran
                      f'stroke="{roles["mid"]}" stroke-width="3" stroke-linecap="round"/>')
     parts.append(f'<circle cx="{cx}" cy="{cy}" r="{inner - 8:.1f}" fill="{roles["accent"]}"/>')
     return "".join(parts)
+
+
+def _mix(color: str, other: str, amount: float) -> str:
+    """``color`` moved ``amount`` (0 to 1) towards ``other``, both "#rrggbb"."""
+    a, b = _rgb(color), _rgb(other)
+    return "#" + "".join(f"{round(x + (y - x) * amount):02x}" for x, y in zip(a, b))
+
+
+_TESS_FRAMES = 32
+
+
+@lru_cache(maxsize=None)
+def _tesseract_frames() -> tuple[str, ...]:
+    """One full turn of a tesseract as SVG path data, ``_TESS_FRAMES`` frames.
+
+    The 16 vertices of a 4D hypercube are turned in three 4D planes (speeds 1,
+    2 and 1, so the last frame equals the first), pushed to 3D and then to 2D
+    with perspective, and scaled so the largest reach over the whole turn is
+    +-100. The 32 edges are one path per frame, in whole numbers."""
+    verts = [tuple(1.0 if (i >> b) & 1 else -1.0 for b in range(4)) for i in range(16)]
+    edges = [(i, i ^ (1 << b)) for i in range(16) for b in range(4) if i < i ^ (1 << b)]
+
+    def turn(u: float, v: float, a: float) -> tuple[float, float]:
+        return u * math.cos(a) - v * math.sin(a), u * math.sin(a) + v * math.cos(a)
+
+    turns: list[list[tuple[float, float]]] = []
+    for f in range(_TESS_FRAMES):
+        t = 2 * math.pi * f / _TESS_FRAMES
+        points = []
+        for x, y, z, w in verts:
+            x, w = turn(x, w, t)
+            z, w = turn(z, w, 2 * t)
+            x, y = turn(x, y, t)
+            k4 = 3.0 / (3.0 - w)  # 4D -> 3D
+            x, y, z = x * k4, y * k4, z * k4
+            y, z = turn(y, z, 0.5)  # a fixed tilt, so depth is readable
+            x, z = turn(x, z, 0.6)
+            k3 = 9.0 / (9.0 - z)  # 3D -> 2D
+            points.append((x * k3, y * k3))
+        turns.append(points)
+    reach = max(max(abs(x), abs(y)) for points in turns for x, y in points) or 1.0
+    frames = []
+    for points in turns:
+        frames.append("".join(
+            f"M{round(points[a][0] / reach * 100)} {round(points[a][1] / reach * 100)}"
+            f"L{round(points[b][0] / reach * 100)} {round(points[b][1] / reach * 100)}" for a, b in edges))
+    return tuple(frames)
+
+
+def _seal_ring_text(radius: float) -> tuple[str, float]:
+    """The words around the seal and the size that fits them on the circle."""
+    full = radius >= 80
+    text = ("ARTESANFC · PIEZA ORIGINAL · CHIP · EMPAQUE · ENVÍO · " if full
+            else "ARTESANFC · CHIP · EMPAQUE · ENVÍO · ")
+    return text, round(min(17.0, 2 * math.pi * radius / (len(text) * 0.72)), 1)
+
+
+def _seal_tesseract(cx: float, cy: float, r: float, roles: dict[str, str], paper: str, dark: bool) -> str:
+    """The ArtesaNFC seal: a stamp-like disc in the piece's dominant colour, words
+    around it (the three production stages among them), and a tesseract of
+    three nested layers (chip inside, packing, shipping outside) turning in the
+    middle. The layers are the stages; the dominant colour is ``roles["accent"]``."""
+    accent = roles["accent"]
+    tint = _mix(accent, "#ffffff", 0.55)
+    line = tint if dark else accent
+    ring_r = r - (46 if r >= 100 else 30)
+    core_r = ring_r - 24
+    k = core_r / 100
+    text, size = _seal_ring_text(ring_r)
+    circumference = 2 * math.pi * ring_r
+    frames = _tesseract_frames()
+    values = ";".join((*frames, frames[0]))
+    origin = f'style="transform-origin:{cx:.0f}px {cy:.0f}px"'
+    ticks = "".join(
+        f'<line x1="{cx + (r - 13) * math.cos(a):.1f}" y1="{cy + (r - 13) * math.sin(a):.1f}" '
+        f'x2="{cx + (r - 6) * math.cos(a):.1f}" y2="{cy + (r - 6) * math.sin(a):.1f}"/>'
+        for a in (2 * math.pi * i / 60 for i in range(60)))
+
+    def layers(path_id: str, classes: tuple[str, str, str]) -> str:
+        out = []
+        for cls, scale, width, opacity, mirror in zip(classes, (1.0, 0.66, 0.36), (2.6, 2.2, 1.9), (0.95, 0.8, 1.0), ("", " scale(-1 1)", "")):
+            out.append(f'<g class="{cls}" {origin}><use href="#{path_id}" stroke-width="{width / (k * scale):.2f}" '
+                       f'opacity="{opacity}" transform="translate({cx:.1f} {cy:.1f}) scale({k * scale:.4f}){mirror}"/></g>')
+        return "".join(out)
+
+    return "".join([
+        f'<defs><radialGradient id="seal-glow"><stop offset="0" stop-color="{accent}" stop-opacity=".55"/>'
+        f'<stop offset="1" stop-color="{accent}" stop-opacity="0"/></radialGradient>'
+        f'<path id="tess-rest" d="{frames[0]}" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>'
+        f'<path id="tess-live" d="{frames[0]}" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">'
+        f'<animate attributeName="d" dur="30s" repeatCount="indefinite" calcMode="linear" values="{values}"/></path>'
+        f'<path id="seal-ring" d="M{cx - ring_r:.1f},{cy:.1f} a{ring_r:.1f},{ring_r:.1f} 0 1,1 {2 * ring_r:.1f},0 '
+        f'a{ring_r:.1f},{ring_r:.1f} 0 1,1 {-2 * ring_r:.1f},0"/></defs>',
+        '<g class="m-stamp">',
+        f'<circle class="m-glow" cx="{cx}" cy="{cy}" r="{r - 8:.1f}" fill="url(#seal-glow)"/>',
+        f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="{paper}" stroke="{accent}" stroke-width="6"/>',
+        f'<circle cx="{cx}" cy="{cy}" r="{ring_r - 20:.1f}" fill="none" stroke="{accent}" stroke-width="1.5" stroke-opacity=".7"/>',
+        f'<g class="m-ticks" {origin} stroke="{accent}" stroke-width="2" stroke-opacity=".75">{ticks}</g>',
+        f'<g class="m-ring" {origin}><text font-family="{SANS}" font-size="{size}" font-weight="600" fill="{accent}">'
+        f'<textPath href="#seal-ring" textLength="{circumference - 4:.0f}" lengthAdjust="spacing">{_t(text)}</textPath></text></g>',
+        # The still frame, shown at rest and by anything that ignores CSS.
+        f'<g class="m-tess-static" color="{line}">{layers("tess-rest", ("", "", ""))}</g>',
+        # The turning one: hidden by default, shown by the motion rules.
+        f'<g class="m-tess-live" color="{line}" display="none">{layers("tess-live", ("m-layer-a", "m-layer-b", "m-layer-c"))}</g>',
+        f'<circle class="m-chip" cx="{cx}" cy="{cy}" r="{max(4.0, core_r * 0.08):.1f}" fill="{tint if dark else accent}"/>',
+        # The ribbon across the foot of the stamp.
+        f'<g transform="rotate(-6 {cx} {cy + r:.0f})"><rect x="{cx - r * 0.62:.1f}" y="{cy + r - r * 0.135:.1f}" width="{r * 1.24:.1f}" '
+        f'height="{r * 0.27:.1f}" rx="5" fill="{paper}" stroke="{accent}" stroke-width="3"/>'
+        f'<text x="{cx}" y="{cy + r + r * 0.07:.1f}" text-anchor="middle" font-family="{SANS}" font-size="{round(r / 5.2)}" '
+        f'font-weight="700" letter-spacing="{round(r / 22)}" fill="{accent}">ORIGINAL</text></g>',
+        '</g>',
+    ])
+
+
+def _frame_light(roles: dict[str, str], dark: bool, inset: float = 48) -> str:
+    """Two lights running along the frame, always (the pattern repeats every 50% of the length)."""
+    accent = roles["accent"]
+    core = _mix(accent, "#ffffff", 0.6) if dark else accent
+    rect = (f'x="{inset}" y="{inset}" width="{W - 2 * inset}" height="{H - 2 * inset}" pathLength="100" fill="none" '
+            f'stroke-linecap="round" stroke-dasharray="9 41" opacity="0"')
+    return (f'<rect class="m-flow" {rect} stroke="{accent}" stroke-width="16" stroke-opacity=".22"/>'
+            f'<rect class="m-flow" {rect} stroke="{core}" stroke-width="4"/>'
+            f'<rect class="m-flow m-flow2" {rect} stroke="{accent}" stroke-width="16" stroke-opacity=".22"/>'
+            f'<rect class="m-flow m-flow2" {rect} stroke="{core}" stroke-width="4"/>')
+
+
+def _motes(seed: int, roles: dict[str, str], dark: bool) -> str:
+    """Specks of light drifting up the sheet. Invisible at rest."""
+    rng = random.Random(seed * 7919 + 13)
+    color = _mix(roles["accent"], "#ffffff", 0.5) if dark else roles["accent"]
+    parts = []
+    for _ in range(16):
+        parts.append(f'<circle class="m-mote" cx="{rng.randint(110, W - 110)}" cy="{rng.randint(H - 360, H - 120)}" '
+                     f'r="{rng.choice((2, 2.5, 3, 4))}" fill="{color}" opacity="0" '
+                     f'style="animation-duration:{rng.randint(8, 15)}s;animation-delay:-{rng.randint(0, 14)}s"/>')
+    return "".join(parts)
+
+
+def _sheen(roles: dict[str, str], dark: bool) -> str:
+    """A slow diagonal band of light across the whole sheet. Invisible at rest."""
+    color, peak = ("#ffffff", ".16") if dark else (roles["accent"], ".10")
+    return (f'<linearGradient id="sheen"><stop offset="0" stop-color="{color}" stop-opacity="0"/>'
+            f'<stop offset=".5" stop-color="{color}" stop-opacity="{peak}"/><stop offset="1" stop-color="{color}" stop-opacity="0"/></linearGradient>'
+            f'<g transform="skewX(-20)"><rect class="m-sheen" x="-700" y="0" width="520" height="{H}" fill="url(#sheen)" opacity="0"/></g>')
 
 
 def _greca(colors: list[str], roles: dict[str, str], rng: random.Random, inset: float) -> str:
@@ -382,6 +551,8 @@ def render(params: dict, *, version: int, approved_by: str | None = None, approv
     if header_art:
         y0 = 110 if dense else (170 if template in _BANDED else 96)
         out.append(_image(art_uri, 300, y0, W - 600, top - 90 - y0))
+    out.append(_motes(int(params.get("seed") or 1), roles, variant == "oscuro"))
+    out.append(_frame_light(roles, variant == "oscuro"))
     out.append(_band(colors, 300, top - 70, W - 600, 12, ink))
     out.append(f'<text x="{W / 2}" y="{top}" text-anchor="middle" font-family="{SANS}" font-size="26" '
                f'letter-spacing="7" fill="{ink}">{_t((params.get("title") or "Certificado original").upper())}</text>')
@@ -400,7 +571,7 @@ def render(params: dict, *, version: int, approved_by: str | None = None, approv
                                font_family=SERIF, font_style="italic", fill=roles["mid"] if variant == "claro" else ink))
         below = y + 120 + 34 * 1.4 * (len(q_lines) - 1)
 
-    seal_y, seal_r = (H - 445, 88) if dense else (H - 540, 120)
+    seal_y, seal_r = (H - 470, 106) if dense else (H - 545, 168)
     # "Historia y oficio": a few centred rows between the quote and the seal. Rows
     # that would touch the seal are left out, so a long name or quote never overlaps it.
     story_y, story_gap = below + 70, 40
@@ -419,7 +590,7 @@ def render(params: dict, *, version: int, approved_by: str | None = None, approv
         side = 2 * (seal_r - 16)
         out.append(_image(art_uri, W / 2 - side / 2, seal_y - side / 2, side, side, extra=' clip-path="url(#art-seal)"'))
     else:
-        out.append(_seal(W / 2, seal_y, seal_r, roles, rng))
+        out.append(_seal_tesseract(W / 2, seal_y, seal_r, roles, paper, variant == "oscuro"))
 
     # NFC waves leaving the seal: invisible at rest, they only exist in motion.
     for n, extra in enumerate(("", " m-wave2", " m-wave3")):
@@ -438,6 +609,7 @@ def render(params: dict, *, version: int, approved_by: str | None = None, approv
     out.append(f'<text x="{W / 2}" y="{H - 110}" text-anchor="middle" font-family="{SANS}" font-size="22" '
                f'letter-spacing="4" fill="{ink}" fill-opacity="0.7">ARTESANFC.COM · {_edition_label(params.get("edition"))}</text>')
 
+    out.append(_sheen(roles, variant == "oscuro"))
     if watermark:
         out.append(f'<text x="{W / 2}" y="{H / 2}" text-anchor="middle" font-family="{SANS}" font-size="150" '
                    f'font-weight="700" fill="{roles["accent"]}" fill-opacity="0.13" '

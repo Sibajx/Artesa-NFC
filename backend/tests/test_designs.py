@@ -206,8 +206,8 @@ def test_motion_is_scoped_to_allowed_motion_and_static_at_rest():
     svg = renderer.render(designs.clean_params({**PARAMS, "template": "greca"}), version=1)
     assert "<style>@media (prefers-reduced-motion:no-preference){" in svg
     # Outside the media query nothing animates: the resting sheet is complete.
-    assert svg.count("@keyframes") == 3 and svg.count("animation:") == 3
-    assert svg.index("@media") < svg.index("animation:") and "<animate" not in svg and "<script" not in svg
+    assert svg.count("@keyframes") == 11 and svg.count("animation:") == 14
+    assert svg.index("@media") < svg.index("animation:") and "<script" not in svg and "<set" not in svg
     # Waves and shine are invisible at rest; the greca is fully stroked at rest.
     assert svg.count('class="m-wave') == 3 and 'class="m-greca" pathLength="1"' in svg
 
@@ -262,7 +262,7 @@ def test_story_rows_that_would_touch_the_seal_are_left_out():
 def test_the_telar_template_draws_two_woven_bands_and_keeps_the_motion_rules():
     svg = renderer.render(designs.clean_params({**PARAMS, "template": "telar"}), version=1)
     assert "telar" in renderer.TEMPLATES and svg.endswith("</svg>") and svg.count("<path d=\"M") > 20
-    assert "<script" not in svg and "<animate" not in svg and 'class="m-greca"' not in svg and svg.count('class="m-wave') == 3
+    assert "<script" not in svg and "<set" not in svg and 'class="m-greca"' not in svg and svg.count('class="m-wave') == 3
     assert svg == renderer.render(designs.clean_params({**PARAMS, "template": "telar"}), version=1)
     assert designs.clean_params({**PARAMS, "template": "telar"})["template"] == "telar"
     dark = renderer.render(designs.clean_params({**PARAMS, "template": "telar", "variant": "oscuro"}), version=1)
@@ -274,8 +274,34 @@ def test_the_regional_templates_render_static_and_deterministic_in_both_variants
     params = designs.clean_params({**PARAMS, "template": template})
     svg = renderer.render(params, version=1)
     assert template in renderer.TEMPLATES and params["template"] == template and svg.endswith("</svg>")
-    assert "<script" not in svg and "<animate" not in svg and 'class="m-greca"' not in svg and svg.count('class="m-wave') == 3
+    assert "<script" not in svg and "<set" not in svg and 'class="m-greca"' not in svg and svg.count('class="m-wave') == 3
     assert svg == renderer.render(params, version=1)
     assert renderer.render({**params, "variant": "oscuro"}, version=1) != svg
     with_art = renderer.render({**params, "art": {"placement": "encabezado"}}, version=1, art_uri="data:image/png;base64,AAAA")
     assert "<image" in with_art
+
+
+def test_the_seal_is_a_tesseract_of_three_stage_layers_with_a_still_frame_at_rest():
+    svg = renderer.render(designs.clean_params({**PARAMS, "template": "clasico"}), version=1)
+    # One SMIL animation on `d`, looping back to its first frame, and a still copy for reduced motion.
+    assert svg.count("<animate ") == 1 and 'attributeName="d"' in svg and 'repeatCount="indefinite"' in svg
+    values = svg.split('values="', 1)[1].split('"', 1)[0].split(";")
+    assert len(values) == renderer._TESS_FRAMES + 1 and values[0] == values[-1] and len(set(values)) == renderer._TESS_FRAMES
+    assert 'class="m-tess-static"' in svg and 'class="m-tess-live"' in svg and 'display="none"' in svg
+    assert svg.count('<use href="#tess-rest"') == 3 and svg.count('<use href="#tess-live"') == 3
+    # The stages are written on the seal, and the seal is not an official one.
+    for word in ("CHIP", "EMPAQUE", "ENVÍO", "ORIGINAL"):
+        assert word in svg
+    assert "ECONOM" not in svg.upper() and "<script" not in svg and "http" not in svg.replace("http://www.w3.org/2000/svg", "")
+    assert svg == renderer.render(designs.clean_params({**PARAMS, "template": "clasico"}), version=1) and len(svg) < 60_000
+
+
+def test_the_tesseract_takes_the_dominant_colour_of_the_piece_and_the_frame_light_always_runs():
+    red = renderer.render(designs.clean_params({**PARAMS, "template": "clasico", "variant": "claro",
+                                                "palette": ["#1d1915", "#d62839", "#efe4cf", "#5c3f28"]}), version=1)
+    assert '<g class="m-tess-static" color="#d62839"' in red and red.count('class="m-flow') == 4
+    dark = renderer.render(designs.clean_params({**PARAMS, "template": "clasico", "variant": "oscuro",
+                                                 "palette": ["#1d1915", "#d62839", "#efe4cf", "#5c3f28"]}), version=1)
+    assert '<g class="m-tess-static" color="#d62839"' not in dark and dark != red
+    # Rest state: the light, the motes and the sheen are invisible until the motion rules show them.
+    assert red.count('opacity="0"') >= 4 + 16 + 1
