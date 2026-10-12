@@ -785,3 +785,11 @@
   color: var(--muted);
   font-size: 0.75rem;
 }
+
+.global-search__heading {
+  padding: 0.25rem 0.5rem;
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
