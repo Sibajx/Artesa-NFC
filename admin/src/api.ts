@@ -509,7 +509,7 @@ export interface PieceDetail {
 
 // ADR-030 phase 5: the designed original certificate.
 export interface DesignParams {
-  template: 'clasico' | 'greca' | 'constelacion' | 'telar';
+  template: 'clasico' | 'greca' | 'constelacion' | 'telar' | 'amate' | 'barro' | 'mitla' | 'alebrije';
   variant: 'claro' | 'oscuro';
   title: string;
   piece_name: string;
