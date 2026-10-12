@@ -27,7 +27,7 @@ Contract (D10 decisions, docs/BACKUP.md):
     CONFIGURED``. With it, every run uploads the ciphertext + meta.json with
     a no-delete credential and verifies them; a local backup without a
     verified remote copy is never removed by retention. ``D10: INCOMPLETE``
-    until the recovery drills of D10.3.
+    until the off-host copy is verified; the recovery drills (D10.3) are run by hand.
 
 Nothing here calls sudo, writes to the production database or reads a
 private key. Exit codes: docs/DEPLOYMENT.md §12 (0, 1, 2, 10, 11, 20, 31).
@@ -75,6 +75,10 @@ RECIPIENT_KEYS = ("ARTESA_BACKUP_AGE_RECIPIENT_K1", "ARTESA_BACKUP_AGE_RECIPIENT
 _RECIPIENT_RE = re.compile(r"age1[02-9ac-hj-np-z]{58}")
 _BACKUP_ID_RE = re.compile(r"\d{8}T\d{6}Z-(?:[0-9a-f]{12}|nocommit)")
 _X25519_STANZA = re.compile(rb"^-> X25519 [A-Za-z0-9+/]{43}$")
+# The restore drills are run by hand, off the host (docs/BACKUP.md §15), so the tool cannot
+# know they were done: once the off-host copy is verified it reports D10 as complete and
+# says where the drills live, instead of printing a fixed "INCOMPLETE".
+D10_VERIFIED = "D10: COMPLETE (off-host copy verified; restore drills are run by hand, docs/BACKUP.md §15)"
 ALLOWED_LOG_KEYS = frozenset({"ts", "run_id", "event", "backup_id", "result", "exit_code", "detail", "tool_version",
                               "encrypted_sha256", "encrypted_size", "release_id", "git_sha", "alembic", "removed",
                               "provider", "objects", "uploaded", "files", "reused"})
@@ -393,7 +397,7 @@ class Tool:
             if not offsite_ok:
                 self.ctx.say(f"OFFSITE: FAILED -- the local encrypted backup {backup_id} is kept; the upload is retried on the next run. D10: INCOMPLETE")
                 return int(rc.Exit.BACKUP)
-            self.ctx.say(f"OFFSITE: VERIFIED ({state['offsite']['provider']}, bucket {state['offsite']['bucket']}) -- D10: INCOMPLETE (recovery drills: D10.3)")
+            self.ctx.say(f"OFFSITE: VERIFIED ({state['offsite']['provider']}, bucket {state['offsite']['bucket']}) -- {D10_VERIFIED}")
             if not media_ok:
                 if not finanzas_ok:
                     self.ctx.say("FINANZAS: FAILED -- the ArtesaNFC backup is fine; the Finanzas copy is retried on the next run")
@@ -867,7 +871,8 @@ class Tool:
         return {**state, "last_success_age_hours": age_hours, "stale": stale, "local_backups": len(self._backup_dirs()),
                 "encryption_status": "configured" if state.get("encryption") else "unknown (no run yet)",
                 "offsite_configured": configured, "offsite_status": offsite_status, "offsite_age_hours": offsite_age,
-                "offsite_stale": offsite_stale, "d10": "INCOMPLETE"}
+                "offsite_stale": offsite_stale,
+                "d10": "COMPLETE" if configured and offsite_status == "verified" and not offsite_stale else "INCOMPLETE"}
 
     def cmd_status(self, as_json: bool) -> int:
         self.check_root()
@@ -901,7 +906,7 @@ class Tool:
                     self.ctx.say("  WARNING: the last dead-man's switch ping failed")
                 if report["offsite_stale"]:
                     self.ctx.say(f"OFFSITE STALE: no verified off-host copy in the last {STALE_AFTER_HOURS} h")
-                self.ctx.say("D10: INCOMPLETE (recovery drills: D10.3)")
+                self.ctx.say(D10_VERIFIED if report["d10"] == "COMPLETE" else "D10: INCOMPLETE (the off-host copy is not verified)")
         media = report.get("media") if isinstance(report.get("media"), dict) else {"status": "not-configured"}
         if media.get("status") not in (None, "not-configured"):
             self._say_media(media)

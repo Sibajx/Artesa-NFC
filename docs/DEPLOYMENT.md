@@ -588,6 +588,7 @@ bin/artesa-deploy prepare <id>          # fetch imprime las líneas exactas
 bin/artesa-deploy deploy --expect-commit <commit12> <id>     # + --allow-migration si prepare lo pide
 bin/artesa-deploy ui <commit12>         # Gestión: instala y cambia current
 bin/artesa-deploy ui                    # muestra la versión activa y las instaladas
+
 ```
 
 **`fetch`:**
@@ -660,6 +661,8 @@ privilegios y ambos pueden hacerse a mano:
 | Instalar/cambiar la unit | adopción inicial o cambios de la unit | a mano: copiar la unit, `sudo systemctl daemon-reload`, `sudo systemctl restart artesa-nfc.service`. La herramienta solo **lee** la unit (`systemctl show`). |
 
 Parar el servicio para una restauración (§11.5) también es manual.
+
+**Retención de Gestión (TOOL 1.11.0).** `ui <commit12>` conserva la versión activa, la que reemplazó (el destino del rollback) y las más recientes hasta sumar cinco; borra las demás, que siempre se pueden volver a bajar con `fetch`. `ui` sin argumento lista las instaladas de la más reciente a la más antigua (por fecha de instalación, no por nombre).
 
 ### 13.1 Restart privilegiado (#130)
 

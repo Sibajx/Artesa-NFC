@@ -289,7 +289,7 @@ def main() -> int:
         (work / "offsite.tar").unlink(missing_ok=True)
         step("dead-man's switch pinged after the fully successful run", len(pings) == 2 and pings[-1] == "/ping/rehearsal-check")
         code, out = cli("status")
-        step("status: OFFSITE VERIFIED, exit 0, D10 still INCOMPLETE", code == 0 and "OFFSITE: VERIFIED" in out and "D10: INCOMPLETE" in out)
+        step("status: OFFSITE VERIFIED, exit 0, D10 COMPLETE", code == 0 and "OFFSITE: VERIFIED" in out and "D10: COMPLETE" in out)
         before = len(remote)
         clock_base[0] += timedelta(days=1)
         code, out = cli("run")

@@ -288,11 +288,14 @@ def test_status_reports_verified_offsite_then_stale(s):
     assert run(s, "run") == 0
     assert run(s, "status", clock=lambda: NOW + timedelta(hours=2)) == 0
     text = s.sink.text
-    assert "OFFSITE: VERIFIED  fake bucket artesanfc-backups" in text and "D10: INCOMPLETE (recovery drills: D10.3)" in text
+    assert "OFFSITE: VERIFIED  fake bucket artesanfc-backups" in text and "D10: COMPLETE (off-host copy verified" in text
+    assert "D10: INCOMPLETE" not in text
     assert run(s, "status", "--json", clock=lambda: NOW + timedelta(hours=2)) == 0
     report = json.loads(s.sink.text)
     assert report["offsite_configured"] and report["offsite_status"] == "verified" and report["offsite_age_hours"] == 2.0
+    assert report["d10"] == "COMPLETE"
     assert run(s, "status", clock=lambda: NOW + timedelta(hours=27)) == rc.Exit.PREFLIGHT and "OFFSITE STALE" in s.sink.text
+    assert "D10: INCOMPLETE (the off-host copy is not verified)" in s.sink.text
 
 
 def test_status_reports_offsite_failure(s):

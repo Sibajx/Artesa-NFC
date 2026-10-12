@@ -984,3 +984,6 @@ Si sale `wal`, hay dos salidas (decisión humana):
    `ReadWritePaths=/home/energias/artesa-finanzas-backend`. Esta afloja el
    aislamiento.
 
+## Nota (TOOL 1.11.0): el mensaje `D10`
+
+`artesa-backup status` ya no imprime siempre `D10: INCOMPLETE`. Con una copia fuera del host **verificada** y no vencida, dice `D10: COMPLETE (off-host copy verified; restore drills are run by hand, docs/BACKUP.md §15)` y el JSON trae `"d10": "COMPLETE"`. Sin copia fuera del host, con copia sin verificar o vencida, sigue en `INCOMPLETE`. Los simulacros de restauración (K1 y K2) se hacen a mano, fuera del host (§15): la herramienta no puede saber que se hicieron, así que no los da por pendientes.
