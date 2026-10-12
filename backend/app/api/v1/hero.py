@@ -35,6 +35,6 @@ class HeroEnvelope(BaseModel):
 
 @router.get("", response_model=HeroEnvelope)
 def current_hero(response: Response, db: Session = Depends(get_db)) -> HeroEnvelope:
-    response.headers["Cache-Control"] = "public, max-age=300"
+    response.headers["Cache-Control"] = "public, max-age=30"
     campaign, reason = hero.current(db)
     return HeroEnvelope(data=hero.public_view(campaign, reason) if campaign else None)

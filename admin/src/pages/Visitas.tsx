@@ -51,6 +51,7 @@ function VisitForm({ initial, artisans, onSaved, onCancel }: {
   const [agreements, setAgreements] = useState(initial?.agreements ?? '');
   const [consent, setConsent] = useState(initial?.consent_to_publish ?? false);
   const [file, setFile] = useState<File | null>(null);
+  const [fileKey, setFileKey] = useState(0); // a new key clears the file input itself
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const toast = useToast();
@@ -105,8 +106,14 @@ function VisitForm({ initial, artisans, onSaved, onCancel }: {
       </label>
       <label className="text-xs font-medium text-botanica-grafito md:col-span-2">
         {initial?.photo ? 'Cambiar la foto (opcional)' : 'Una foto de la visita (opcional; no tiene que salir el artesano)'}
-        <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className={`mt-1 ${field}`} />
+        <input key={fileKey} type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className={`mt-1 ${field}`} />
       </label>
+      {file && (
+        <div className="md:col-span-2 -mt-2">
+          <button type="button" className="btn-secondary !py-1.5 text-xs" disabled={busy}
+            onClick={() => { setFile(null); setFileKey((k) => k + 1); }}>Quitar la foto elegida</button>
+        </div>
+      )}
       <label className="flex items-start gap-2 text-sm text-botanica-grafito md:col-span-2">
         <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-1 accent-botanica-jade" />
         <span>La persona visitada autorizó que se publique algo de esta visita. <span className="text-botanica-gris">Solo se anota; por ahora nada de esto se publica.</span></span>

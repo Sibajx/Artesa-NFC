@@ -1034,7 +1034,7 @@ verificada para `GET|HEAD /media/*` el 2026-09-30 (`OPERATIONS.md` §8).
 
 ### 14.4 Hero por temporada (P-028, 2026-10-09)
 
-**Público.** `GET /api/v1/hero` → `{"data": null}` o `{"data": {"slug", "name", "reason": "forced"|"date"|"default", "video": {"mp4", "webm"|null}, "poster"}}`. Las URLs son rutas `/media/hero/{slug}/{hash}.{mp4|webm|jpg}` contra el origen de la API. `Cache-Control: public, max-age=300`. `data: null` = el sitio conserva su hero incluido. Elige, en orden: la temporada **forzada** (si no pasó su fecha de fin), una **publicada** cuyo rango anual cubre hoy en `America/Mexico_City` (si varias, la que empezó más tarde), el hero normal **publicado**.
+**Público.** `GET /api/v1/hero` → `{"data": null}` o `{"data": {"slug", "name", "reason": "forced"|"date"|"default", "video": {"mp4", "webm"|null}, "poster"}}`. Las URLs son rutas `/media/hero/{slug}/{hash}.{mp4|webm|jpg}` contra el origen de la API. `Cache-Control: public, max-age=30`. `data: null` = el sitio conserva su hero incluido. Elige, en orden: la temporada **forzada** (si no pasó su fecha de fin), una **publicada** cuyo rango anual cubre hoy en `America/Mexico_City` (si varias, la que empezó más tarde), el hero normal **publicado**.
 
 **Gestión** (`/api/admin/v1/hero`, solo los roles `hero` y `designer_hero` (Diseñador y Hero) y el dueño; los demás reciben 403). Escrituras con `X-Artesa-Admin: 1` y JSON; sin `If-Match` (dos personas, cambios simples). Todas devuelven el estado completo.
 
@@ -1054,7 +1054,7 @@ Errores: `no_video`, `already_processing`, `ffmpeg_unavailable`, `unsupported_me
 
 Fotos fijas de la página pública que el dueño y los roles `hero` y `designer_hero` pueden cambiar desde Gestión → Hero → «Imágenes del sitio». Cada **ranura** es un lugar de la página; hoy solo existe `collection-entry` («Entrada a la colección», proporción 4:5, hasta 1200×1500). Una ranura sin foto conserva la imagen provisional incluida en el sitio.
 
-**Público.** `GET /api/v1/site-images` → `{"data": {"<ranura>": {"avif", "webp", "jpg", "width", "height"}}}`; solo aparecen las ranuras con foto. Las URLs son rutas `/media/sitio/{ranura}/{hash}.{avif|webp|jpg}` contra el origen de la API. `Cache-Control: public, max-age=300`.
+**Público.** `GET /api/v1/site-images` → `{"data": {"<ranura>": {"avif", "webp", "jpg", "width", "height"}}}`; solo aparecen las ranuras con foto. Las URLs son rutas `/media/sitio/{ranura}/{hash}.{avif|webp|jpg}` contra el origen de la API. `Cache-Control: public, max-age=30`.
 
 **Gestión** (`/api/admin/v1/hero/site-images`, mismo rol que las temporadas; los demás reciben 403):
 

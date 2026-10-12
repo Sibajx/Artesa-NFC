@@ -269,7 +269,7 @@ def test_publish_force_and_unforce(hero_client, db_session):
 def test_the_public_endpoint(hero_client, db_session):
     r = hero_client.get("/api/v1/hero")
     assert r.status_code == 200 and r.json() == {"data": None}
-    assert r.headers["cache-control"] == "public, max-age=300"
+    assert r.headers["cache-control"] == "public, max-age=30"
     make_ready(db_session, "hero-normal", published=True)
     body = hero_client.get("/api/v1/hero").json()["data"]
     assert body["slug"] == "hero-normal" and body["reason"] == "default"

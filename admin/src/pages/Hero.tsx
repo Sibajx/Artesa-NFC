@@ -6,6 +6,7 @@ import type { HeroCampaign, HeroState, SiteImagesState, SiteSlot } from '../api'
 import { writeErrorMessage } from '../format';
 import { useConfirm, useToast } from '../feedback-context';
 import { useLoad } from '../hooks';
+import { PhotoEditor } from '../PhotoEditor';
 import { Badge, ErrorState, Loading, PageHeader } from '../ui';
 
 // P-028: the home hero by season. One card per season: drop a video on it,
@@ -336,9 +337,11 @@ function SiteSlotCard({ slot, enabled, busy, onUpload, onClear }: {
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
   const [rw, rh] = slot.ratio.split(':').map(Number);
+  // A chosen photo goes through the crop editor before it is uploaded.
+  const [editing, setEditing] = useState<File | null>(null);
 
   function pick(file: File | undefined) {
-    if (file && enabled && !busy) onUpload(file);
+    if (file && enabled && !busy) setEditing(file);
   }
 
   return (
@@ -385,8 +388,8 @@ function SiteSlotCard({ slot, enabled, busy, onUpload, onClear }: {
           onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; pick(file); }}
         />
         <p className="mt-2 text-xs text-botanica-gris">
-          JPEG, PNG o WebP, hasta 25 MB. Se recorta al centro en proporción {slot.ratio} y se convierte sola; mínimo 600 px de ancho.
-          Cambios visibles en el sitio en unos 5 minutos.
+          JPEG, PNG o WebP, hasta 25 MB. Antes de subirla eliges el encuadre en proporción {slot.ratio}; se convierte sola; mínimo 600 px de ancho.
+          Los cambios se ven en el sitio en unos 30 segundos.
         </p>
       </div>
       {slot.image && (
@@ -398,6 +401,15 @@ function SiteSlotCard({ slot, enabled, busy, onUpload, onClear }: {
         <div>
           <button type="button" className="btn-secondary" disabled={busy} onClick={onClear}>Quitar y volver a la provisional</button>
         </div>
+      )}
+      {editing && (
+        <PhotoEditor source={editing} fixedAspect={rw / rh}
+          onCancel={() => setEditing(null)}
+          onDone={(blob) => {
+            const name = editing.name.replace(/\.[^.]+$/, '') + '.jpg';
+            setEditing(null);
+            onUpload(new File([blob], name, { type: 'image/jpeg' }));
+          }} />
       )}
     </section>
   );
@@ -525,7 +537,7 @@ export default function Hero() {
       )}
       <p role="status" className="rounded-xl border border-botanica-jade/30 bg-botanica-jade/5 p-3 text-sm text-botanica-negro">
         {live && state.live_reason
-          ? <>En el sitio ahora: <strong>{live.name}</strong> ({REASON[state.live_reason]}). Los cambios tardan hasta 5 minutos en verse.</>
+          ? <>En el sitio ahora: <strong>{live.name}</strong> ({REASON[state.live_reason]}). Los cambios tardan unos 30 segundos en verse.</>
           : 'En el sitio ahora: el hero incluido en la página (no hay ninguna temporada publicada para hoy).'}
       </p>
       {!state.media_enabled && (
