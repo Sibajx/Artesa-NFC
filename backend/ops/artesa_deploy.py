@@ -1890,13 +1890,17 @@ class Tool:
         self.check_root()
         with dl.deploy_lock(self.layout):
             previous, new, extracted = rf.activate_ui(ui_root, self.layout.incoming, commit12)
+            removed = rf.prune_ui(ui_root, protect=(previous,) if previous else ())
         how = f"installed from incoming/ ({extracted} files)" if extracted is not None else "already installed (reused)"
         self.ctx.say(f"Gestión UI ACTIVE {new} ({how}); previous {previous or 'none'}")
         if previous and previous != new:
             self.ctx.say(f"  rollback: bin/artesa-deploy ui {previous}")
+        if removed:
+            self.ctx.say(f"  retention: deleted {', '.join(removed)} (kept the current one, the previous one and the newest {rf.UI_KEEP} in all)")
         self.ctx.say("  reload gestion.artesanfc.com in the browser; no service restart is needed")
         self.log().event("ui_activate", command="ui", target_release=new, exit_code=0,
-                         detail=f"previous={previous or 'none'} " + ("extracted" if extracted is not None else "reused"))
+                         detail=f"previous={previous or 'none'} " + ("extracted" if extracted is not None else "reused")
+                         + (f" pruned={','.join(removed)}" if removed else ""))
         return 0
 
     # -- prune ---------------------------------------------------------------------------------------------------------------
