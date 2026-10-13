@@ -108,6 +108,10 @@
     "d5b8e2f4a6c1": {
       "class": "additive",
       "note": "Adds the nullable column certificate.replaces_certificate_id (the certificate a rotation replaces), its foreign key to certificate.id, an index and a check that a certificate does not replace itself. Nothing existing changes and no row is rewritten; older code ignores the column, so a code-only rollback is compatible. The downgrade drops the column, so the links already recorded are lost."
+    },
+    "e7c1f3a9d5b2": {
+      "class": "additive",
+      "note": "PEND-024. Adds 11 CHECK constraints that only state what the code already guarantees (certificate.version >= 1, positions >= 0, image width/height > 0, a real creation year, slugs not blank) and one index on owner_verification.claim_id. Production was checked read-only: no existing row violates any of them. Nothing is rewritten; older code never wrote a violating value, so a code-only rollback is compatible. The downgrade drops them."
     }
   }
 }

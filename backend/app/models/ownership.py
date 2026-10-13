@@ -112,7 +112,7 @@ class OwnerVerification(Base):
         UUID(as_uuid=True), ForeignKey("piece.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     claim_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("piece_claim.id", ondelete="RESTRICT"), nullable=False
+        UUID(as_uuid=True), ForeignKey("piece_claim.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     purpose: Mapped[OwnerVerificationPurpose] = mapped_column(
         Enum(OwnerVerificationPurpose, name="owner_verification_purpose"), nullable=False

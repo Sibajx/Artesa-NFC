@@ -25,6 +25,8 @@ class Piece(Base):
     __tablename__ = "piece"
     __table_args__ = (
         CheckConstraint("price_cents IS NULL OR price_cents >= 0", name="ck_piece_price_cents"),
+        CheckConstraint("creation_year IS NULL OR creation_year BETWEEN 1 AND 9999", name="ck_piece_creation_year"),
+        CheckConstraint("length(btrim(slug)) > 0", name="ck_piece_slug_not_blank"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

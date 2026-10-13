@@ -47,6 +47,7 @@ class Certificate(Base):
         # DATA_MODEL.md section 7: composite index to resolve a piece's full
         # certificate history (active + revoked + draft) without a table scan.
         Index("ix_certificate_piece_id_status", "piece_id", "status"),
+        CheckConstraint("version >= 1", name="ck_certificate_version"),
         # PEND-032: a replacement points at the certificate it succeeds.
         CheckConstraint("replaces_certificate_id <> id", name="ck_certificate_replaces_not_self"),
         # DATA_MODEL.md section 4 restriction C' / section 6: at most one

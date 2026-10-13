@@ -37,6 +37,7 @@ class MediaAssetStatus(str, enum.Enum):
 class MediaAsset(Base):
     __tablename__ = "media_asset"
     __table_args__ = (
+        CheckConstraint("position >= 0", name="ck_media_asset_position"),
         CheckConstraint(
             "num_nonnulls(artisan_id, piece_id) <= 1",
             name="ck_media_asset_single_owner",
