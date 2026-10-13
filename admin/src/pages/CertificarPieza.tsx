@@ -204,6 +204,40 @@ function Wizard({ state, reload, error, setError }: WizardProps) {
     }
   }
 
+  async function markWrittenAndLockedExternally(issued: CustodyIssued) {
+    const uid = issued.uid ?? live?.uid;
+    if (!uid) {
+      setError('No se conoce el número del chip. Vuelve a empezar leyendo el chip.');
+      return;
+    }
+    const answer = await confirm({
+      title: '¿Grabaste y bloqueaste el chip con otra app?',
+      body: `Se registrará el chip ${uid} como grabado y bloqueado para siempre, sin leerlo. Antes, escanéalo con otro teléfono: debe abrir el certificado de esta pieza. Si no está bloqueado de verdad, el sistema creerá que sí.`,
+      confirmLabel: 'Sí, grabado y bloqueado',
+      tone: 'danger',
+    });
+    if (answer === null) return;
+    try {
+      await adminApi.custodyProgram(state.piece_id, issued.tag_id, uid);
+    } catch (e) {
+      setError(message(e));
+      return;
+    }
+    // Programmed is already recorded: a failure here is retried with "Ya lo bloqueé".
+    try {
+      await adminApi.custodyLock(state.piece_id, uid);
+      toast('Chip registrado como grabado y bloqueado ✓');
+    } catch (e) {
+      setError(`Se registró como grabado, pero falta el bloqueo: usa "Ya lo bloqueé: solo registrar". ${message(e)}`);
+      setPhase({ step: 'idle' });
+      reload();
+      return;
+    }
+    setError(null);
+    setPhase({ step: 'idle' });
+    reload();
+  }
+
   async function lock() {
     // Irreversible: the code must be typed, so it cannot happen by a slip.
     const typed = await confirm({
@@ -258,17 +292,22 @@ function Wizard({ state, reload, error, setError }: WizardProps) {
     }
   }
 
-  // The chip was locked earlier but the server never heard about it.
+  // The chip was locked earlier (e.g. with an external app) but the server never
+  // heard about it. No NFC needed: the registered UID is the one recorded.
   async function recordExistingLock() {
-    setError(null);
-    setPhase({ step: 'locking' });
-    try {
-      const { uid } = await readTag();
-      await recordLock(uid);
-    } catch (e) {
-      setError(message(e));
-      setPhase({ step: 'idle' });
+    const uid = live?.uid;
+    if (!uid) {
+      setError('No se conoce el número del chip. Revisa la pieza.');
+      return;
     }
+    const answer = await confirm({
+      title: '¿Ya bloqueaste el chip con otra app?',
+      body: `Se registrará el chip ${uid} como bloqueado para siempre, sin leerlo. Confirma que el bloqueo se hizo de verdad: si no, el sistema creerá que está protegido y no lo está.`,
+      confirmLabel: 'Sí, ya está bloqueado',
+      tone: 'danger',
+    });
+    if (answer === null) return;
+    await recordLock(uid);
   }
 
   async function revoke(reason: string) {
@@ -355,6 +394,7 @@ function Wizard({ state, reload, error, setError }: WizardProps) {
               <div className="flex flex-wrap gap-2">
                 <button type="button" className="btn-secondary" onClick={() => void copyUrl(phase.issued)}>Copiar URL para NFC Tools</button>
                 <button type="button" className="btn-secondary" onClick={() => void markWrittenExternally(phase.issued)}>Ya lo grabé con NFC Tools</button>
+                <button type="button" className="btn-secondary" onClick={() => void markWrittenAndLockedExternally(phase.issued)}>Grabado y bloqueado con otra app</button>
               </div>
             )}
           </>
@@ -392,7 +432,7 @@ function Wizard({ state, reload, error, setError }: WizardProps) {
                 <div className="flex flex-wrap gap-2">
                   <button type="button" className="btn-secondary" disabled={!supported} onClick={() => void lock()}>Bloquear chip</button>
                   <button type="button" className="btn-secondary" disabled={!supported} onClick={() => void emit('reissue', null, 'other')}>Regrabar el mismo chip</button>
-                  <button type="button" className="btn-secondary" disabled={!supported} onClick={() => void recordExistingLock()}>Ya lo bloqueé: solo registrar</button>
+                  <button type="button" className="btn-secondary" onClick={() => void recordExistingLock()}>Ya lo bloqueé: solo registrar</button>
                 </div>
               </>
             )}
