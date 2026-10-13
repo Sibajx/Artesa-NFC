@@ -167,7 +167,8 @@ def test_authentic_authenticity_metadata_only_exposes_allowlisted_notes(db_sessi
         response = _resolve(raw_token)
         body = response.json()
 
-        assert body["authenticity_metadata"] == {"notes": "Piloto Cuilápam"}
+        assert body["authenticity_metadata"] == {
+            "notes": "Piloto Cuilápam", "verified_by": None, "verified_on": None, "edition": None}
         assert "internal_flag" not in response.text
 
 
@@ -179,7 +180,8 @@ def test_authentic_metadata_defaults_to_null_notes_when_absent(db_session):
 
         body = _resolve(raw_token).json()
 
-        assert body["authenticity_metadata"] == {"notes": None}
+        assert body["authenticity_metadata"] == {
+            "notes": None, "verified_by": None, "verified_on": None, "edition": None}
 
 
 def test_authentic_certificate_version_matches_stored_value(db_session):

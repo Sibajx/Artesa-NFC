@@ -10,8 +10,10 @@ Writes (token generation, tag writing, card keys) arrive in later phases.
 """
 from __future__ import annotations
 
+import dataclasses
 import ipaddress
 import uuid
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import func, select
@@ -176,6 +178,7 @@ from pydantic import BaseModel, Field  # noqa: E402
 from app.api.admin.writes import actor, require_write_guard  # noqa: E402
 from app.core.config import get_settings  # noqa: E402
 from app.services import provisioning as prov  # noqa: E402
+from app.services import authenticity  # noqa: E402
 from app.services.content import Actor  # noqa: E402
 from app.services.lifecycle import LifecycleConflict, LifecycleError  # noqa: E402
 from app.services.nfc_tags import (  # noqa: E402
@@ -237,6 +240,23 @@ class CustodyClaim(BaseModel):
     verified_until: str | None = None
 
 
+class CustodyAuthenticity(BaseModel):
+    """PEND-030: what the public certificate shows about the verification."""
+
+    verified_by: str | None = None
+    verified_on: date | None = None
+    edition: str | None = None
+    notes: str | None = None
+
+
+class AuthenticityBody(CustodyAuthenticity):
+    # Longer values are refused by the service with a field error (422), not
+    # silently cut.
+    verified_by: str | None = Field(default=None, max_length=400)
+    edition: str | None = Field(default=None, max_length=200)
+    notes: str | None = Field(default=None, max_length=1000)
+
+
 class CustodyState(BaseModel):
     piece_id: uuid.UUID
     public_code: str
@@ -258,6 +278,7 @@ class CustodyState(BaseModel):
     card: CustodyCard | None = None
     claim: CustodyClaim | None = None
     reported_stolen_at: str | None = None
+    authenticity: CustodyAuthenticity | None = None
 
 
 class CustodyIssued(BaseModel):
@@ -333,6 +354,15 @@ def _run(db: Session, call):
         raise _conflict("invalid_transition") from None
 
 
+def _authenticity_of(db: Session, piece_id: uuid.UUID) -> CustodyAuthenticity | None:
+    certificate = db.execute(
+        select(Certificate).where(Certificate.piece_id == piece_id, Certificate.status == CertificateStatus.active)
+    ).scalar_one_or_none()
+    if certificate is None:
+        return None
+    return CustodyAuthenticity(**dataclasses.asdict(authenticity.project(certificate.authenticity_metadata)))
+
+
 @router.get("/pieces/{piece_id}/state", response_model=CustodyState, dependencies=[Depends(_needs(perms.NFC))])
 def custody_state(piece_id: uuid.UUID, db: Session = Depends(get_db)) -> CustodyState:
     state = prov.load_piece_state(db, _public_code(db, piece_id))
@@ -353,6 +383,7 @@ def custody_state(piece_id: uuid.UUID, db: Session = Depends(get_db)) -> Custody
         rotate_blockers=prov.rotate_blockers(state),
         lock_blockers=prov.lock_blockers(state),
         revocation_reasons=list(prov.REVOCATION_REASONS),
+        authenticity=_authenticity_of(db, piece_id),
         releasable_tags=[ReleasableTag(id=t.id, status=t.status.value, uid=t.physical_uid)
                          for t in prov.releasable_tags(db, state.piece_id)],
         **_ownership_state(db, piece_id),
@@ -464,6 +495,37 @@ def custody_revoke(piece_id: uuid.UUID, body: RevokeBody, who: Actor = Depends(a
 # custodian's record of the proof they checked (PO decision 2026-10-03).
 
 from app.services import ownership as own  # noqa: E402
+
+
+def _active_certificate(db: Session, piece_id: uuid.UUID) -> Certificate | None:
+    return db.execute(
+        select(Certificate).where(Certificate.piece_id == piece_id, Certificate.status == CertificateStatus.active)
+        .with_for_update()
+    ).scalar_one_or_none()
+
+
+@writes_router.put("/pieces/{piece_id}/authenticity", response_model=CustodyAuthenticity,
+                   dependencies=[Depends(_needs(perms.NFC))])
+def set_piece_authenticity(piece_id: uuid.UUID, body: AuthenticityBody, who: Actor = Depends(actor),
+                           db: Session = Depends(get_db)) -> CustodyAuthenticity:
+    """PEND-030: set what the public certificate says about the verification
+    and the edition. Needs an active certificate (it is the one the public sees)."""
+    _public_code(db, piece_id)
+    certificate = _active_certificate(db, piece_id)
+    if certificate is None:
+        raise _conflict("no_active_certificate")
+    try:
+        stored = authenticity.set_authenticity(
+            db, certificate, verified_by=body.verified_by, verified_on=body.verified_on,
+            edition=body.edition, notes=body.notes)
+    except authenticity.InvalidAuthenticity as exc:
+        db.rollback()
+        raise HTTPException(status_code=422, detail={"code": f"{exc.field}_{exc.reason}",
+                                                     "message": str(exc), "field": exc.field}) from None
+    _audit_custody(db, who, piece_id, "authenticity_set",
+                   {"certificate_id": str(certificate.id), "keys": sorted(k for k, v in stored.items() if v)})
+    db.commit()
+    return CustodyAuthenticity(**stored)
 
 
 def _ownership_state(db: Session, piece_id: uuid.UUID) -> dict:
