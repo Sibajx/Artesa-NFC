@@ -31,6 +31,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # PEND-035: the narrower constraint only allows locked_at while the tag is
+    # locked, so the preserved history of replaced/retired tags would make it
+    # fail. Going back means giving that history up: clear it first.
+    op.execute("UPDATE nfc_tag SET locked_at = NULL WHERE status IN ('replaced', 'retired')")
     op.drop_constraint("ck_nfc_tag_locked_at_matches_status", "nfc_tag", type_="check")
     op.create_check_constraint(
         "ck_nfc_tag_locked_at_matches_status",

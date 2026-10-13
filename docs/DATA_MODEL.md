@@ -154,6 +154,16 @@ Reglas de integridad conceptuales:
   `authentic`, sin importar cuántos certificados de reemplazo existan
   después para la misma pieza.
 
+**Actualización 2026-10-13 (PEND-032, por petición del PO):** la extensión
+aditiva se hizo. `certificate.replaces_certificate_id` (UUID nullable, FK a
+`certificate.id`, `ON DELETE RESTRICT`, indexada, con un check de que no sea el
+propio `id`; migración `d5b8e2f4a6c1`). La rellena `rotate_certificate` en el
+certificado nuevo con el id del que reemplaza. Queda vacía para el primer
+certificado de una pieza, para el que se emite tras una revocación simple y para
+los reemplazos anteriores a la migración (no se reconstruyó el pasado). Es
+interna: la API pública no la expone. Lo que sigue es el texto original de la
+decisión del 2026-09-16.
+
 **Aprobado por Alexis (Product Owner) el 2026-09-16 — sin enlace
 explícito de reemplazo en el MVP:** este documento **no** agrega una
 columna que enlace explícitamente un certificado de reemplazo con el

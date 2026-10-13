@@ -35,6 +35,7 @@ from app.api.v1.router import router as api_v1_router
 from app.core.config import get_settings
 from app.core.errors import UnhandledErrorMiddleware, error_response, register_exception_handlers
 from app.core.media_files import MediaFilesMiddleware
+from app.core.rate_limit import PublicRateLimitMiddleware
 from app.db.session import check_database_connection
 
 settings = get_settings()
@@ -224,6 +225,9 @@ app.add_middleware(ResolveBodySizeLimitMiddleware)
 app.add_middleware(UnhandledErrorMiddleware)
 app.add_middleware(ResolveNoStoreMiddleware)
 app.add_middleware(AdminNoStoreMiddleware)
+# PEND-005 / PEND-025: inside CORS, so a 429 still carries the CORS headers a
+# browser needs to read it.
+app.add_middleware(PublicRateLimitMiddleware)
 # Explicit allowlist only (docs/SECURITY.md section 10) - no "*", no origin
 # regex. GET and POST are the only methods the public API's browser
 # integration needs: GET for the artisan/piece catalog, POST for

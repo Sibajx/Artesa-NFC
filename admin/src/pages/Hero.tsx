@@ -353,7 +353,7 @@ function SiteSlotCard({ slot, enabled, busy, onUpload, onClear }: {
   }
 
   return (
-    <section className="card-elevated flex flex-col gap-3" aria-label={slot.label}>
+    <section className="card-elevated p-5 flex flex-col gap-3" aria-label={slot.label}>
       <header className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="font-serif text-xl text-botanica-negro">{slot.label}</h3>
         <Badge tone={slot.image ? 'jade' : 'neutral'}>{slot.image ? 'Foto propia' : 'Imagen provisional'}</Badge>
@@ -517,7 +517,7 @@ function CollectionCard({ entry, index, count, state, busy, run, onUpload }: {
   }
 
   return (
-    <section className="card-elevated flex flex-col gap-3" aria-label={`Colección ${index + 1}: ${entry.title}`}>
+    <section className="card-elevated p-5 flex flex-col gap-3" aria-label={`Colección ${index + 1}: ${entry.title}`}>
       <header className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="font-serif text-xl text-botanica-negro">{index + 1}. {entry.title}</h3>
         <div className="flex items-center gap-2">
@@ -618,7 +618,7 @@ function Collections() {
       {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
       {state && (
         <>
-          <form className="card-elevated flex flex-wrap items-end gap-3" onSubmit={(e) => { e.preventDefault();
+          <form className="card-elevated p-5 flex flex-wrap items-end gap-3" onSubmit={(e) => { e.preventDefault();
             void run(() => adminApi.createCollection({ title: name }), 'Colección creada').then((ok) => { if (ok) setName(''); }); }}>
             <label className="min-w-[14rem] flex-1 text-xs font-medium text-botanica-grafito">Nueva colección: ¿cómo se llama?
               <input value={name} maxLength={80} required minLength={3} onChange={(e) => setName(e.target.value)}

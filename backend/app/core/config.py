@@ -90,6 +90,14 @@ class Settings(BaseSettings):
     # P-026 G3: an artisan is published only with their authorization
     # (asked by WhatsApp or recorded in person). Tests switch it off.
     require_artisan_authorization: bool = True
+    # PEND-005 / PEND-025: per-IP limit on the public GETs (requests per
+    # minute; 0 turns it off) and the cooldown for sustained abuse (how many
+    # requests refused inside one minute trigger it, and for how long every
+    # request from that IP is refused). In memory, so right for the single
+    # uvicorn worker production runs (docs/OPERATIONS.md section 9).
+    public_rate_limit_per_minute: int = Field(default=120, ge=0)
+    public_abuse_rejections: int = Field(default=30, ge=1)
+    public_abuse_cooldown_seconds: int = Field(default=600, ge=1)
     # P-026 G4: the owner manages Gestión's accounts from its "Usuarios" page.
     # Fixed here (never editable from Gestión) so nobody can lock them out.
     owner_emails: str = ""

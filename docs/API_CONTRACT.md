@@ -585,15 +585,20 @@ raíz de la respuesta:
 }
 ```
 
-- En el MVP, `data` contiene siempre el conjunto completo (sin límite
-  artificial), y `meta.total` simplemente refleja `data.length`.
-- No se implementa paginación real todavía; `meta` se reserva para
-  cuando el catálogo lo justifique.
+- Sin parámetros, `data` contiene siempre el conjunto completo (sin límite
+  artificial), `meta.total` refleja `data.length` y `meta.next_cursor` es `null`.
+- **Paginación opcional por cursor (2026-10-13, PEND-029)** en
+  `GET /api/v1/artisans` y `GET /api/v1/pieces`: `limit` (1 a 100) y `cursor`.
+  Con `limit`, `data` trae a lo más esa cantidad, ordenada por `slug`, y
+  `meta.next_cursor` es el cursor opaco de la página siguiente (`null` en la
+  última); `meta.total` cuenta el conjunto filtrado completo. El cursor se pasa
+  tal cual en `?cursor=`; uno inválido da `400` (`invalid_cursor`) y un `limit`
+  fuera de rango `422`. Es una adición no disruptiva (sección 13): quien no
+  manda `limit` no nota nada.
 
-### Dirección futura preferida (documentada, no congelada)
+### Dirección elegida (implementada como opcional)
 
-Si el catálogo crece lo suficiente para requerir paginación, la
-dirección preferida es **paginación por cursor** (`meta.next_cursor` +
+La dirección preferida, ahora implementada de forma opcional (arriba), es **paginación por cursor** (`meta.next_cursor` +
 parámetro de query `cursor`), por ser estable ante inserciones
 concurrentes a diferencia de offset/limit. Esto es una **preferencia
 documentada, no un contrato congelado**: el diseño exacto del cursor
