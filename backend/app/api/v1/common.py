@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import uuid
 from collections.abc import Sequence
 
@@ -24,6 +26,27 @@ NOT_FOUND_ERROR = {"code": "not_found", "message": "The requested resource does 
 
 def not_found() -> HTTPException:
     return HTTPException(status_code=404, detail=NOT_FOUND_ERROR)
+
+
+# PEND-029: keyset pagination over the unique, already-ordered ``slug``. A
+# request without ``limit`` gets the whole set, exactly as before; with it,
+# the page plus ``meta.next_cursor``. The cursor is the last slug of the page,
+# opaque to clients (base64url), so the encoding can change without notice.
+DEFAULT_MAX_PAGE_SIZE = 100
+
+
+def encode_cursor(slug: str) -> str:
+    return base64.urlsafe_b64encode(slug.encode()).decode().rstrip("=")
+
+
+def decode_cursor(cursor: str) -> str:
+    try:
+        return base64.b64decode(cursor + "=" * (-len(cursor) % 4), altchars=b"-_", validate=True).decode()
+    except (binascii.Error, UnicodeDecodeError, ValueError):
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "invalid_cursor", "message": "The cursor is not valid."},
+        ) from None
 
 
 def media_order_by():

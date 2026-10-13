@@ -59,3 +59,13 @@ def _artisan_authorization_off_by_default(monkeypatch):
     from app.core.config import get_settings
 
     monkeypatch.setattr(get_settings(), "require_artisan_authorization", False)
+
+
+@pytest.fixture(autouse=True)
+def _public_rate_limiter_fresh():
+    """PEND-005: the limiter is process state; every test starts from zero."""
+    from app.core.rate_limit import limiter
+
+    limiter.reset()
+    yield
+    limiter.reset()
