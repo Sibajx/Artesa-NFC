@@ -1064,6 +1064,23 @@ Fotos fijas de la página pública que el dueño y los roles `hero` y `designer_
 | `POST /hero/site-images/{ranura}` | Sube la foto **como cuerpo** (`image/jpeg`, `image/png` o `image/webp`, hasta 25 MB, con `X-Artesa-Admin: 1`). Se recorta al centro a la proporción de la ranura, se limita a su ancho máximo y se guarda en AVIF + WebP + JPEG sin metadatos. Mínimo 600 px de ancho en esa proporción. 200 con el estado completo. |
 | `DELETE /hero/site-images/{ranura}` | Vuelve a la imagen provisional y borra los archivos. |
 
+### Colecciones de la portada (entrada a la colección del inicio)
+
+**Público.** `GET /api/v1/collections` → `{"data": [{"id", "title", "body", "cta_label", "link", "image": {"avif", "webp", "jpg", "width", "height"}}]}`. Solo las colecciones **activas con foto**, en orden; lista vacía = el inicio conserva su entrada incorporada. `cta_label` y `link` ya traen su valor por omisión (`Ver la colección`, `/piezas/`). `Cache-Control: public, max-age=30`. El sitio rota entre ellas cuando hay más de una; `link` es una página del sitio (empieza con `/`) o una dirección `https://`, y el sitio vuelve a validarlo.
+
+**Gestión** (`/api/admin/v1/hero/collections`, mismo rol que las temporadas):
+
+| Ruta | Qué hace |
+|---|---|
+| `GET /hero/collections` | Estado: `media_enabled`, `max_entries` (6), `default_cta`, `default_link`, `ratio` (`4:5`) e `items[]` en orden. |
+| `POST /hero/collections` | Crea una colección con `{"title"}` (3 a 80 letras); nace oculta y sin foto. `409 too_many_collections` pasado el máximo. |
+| `PATCH /hero/collections/{id}` | Cambia `title`, `body` (hasta 240), `cta_label` (hasta 40), `link` o `active`. `409 invalid_link`; `409 image_required` si se activa sin foto. |
+| `POST /hero/collections/{id}/image` | Sube la foto como cuerpo (igual que las imágenes del sitio: se recorta a 4:5, se convierte a AVIF, WebP y JPEG, sin metadatos). Reemplaza y borra la anterior. |
+| `POST /hero/collections/{id}/move` | `{"direction": "up" \| "down"}`: intercambia con la vecina. |
+| `DELETE /hero/collections/{id}` | La quita y borra sus archivos. |
+
+Auditoría: `collection_entry.created`, `.updated`, `.image_set`, `.moved` y `.deleted`.
+
 Errores: `unsupported_type` (422), `empty_file` (422), `too_small` (422), `image_too_large` (422), `too_large` (413), `unsupported_media_type` (415), `avif_unavailable` (503), `media_unavailable` (503), `not_found` (404, ranura desconocida).
 
 ## 15. Estado de las decisiones

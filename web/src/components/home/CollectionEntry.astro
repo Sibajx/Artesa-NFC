@@ -71,6 +71,34 @@ const { certificate } = collection;
           {collection.secondary.label}
         </a>
       </div>
+      <!-- Shown only when Gestión has more than one collection (see the script). -->
+      <div class="collection__nav" role="group" aria-label="Colecciones" hidden>
+        <button
+          type="button"
+          class="collection__arrow"
+          data-dir="-1"
+          aria-label="Colección anterior"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M15 5l-7 7 7 7"></path>
+          </svg>
+        </button>
+        <ul class="collection__dots" role="list"></ul>
+        <button
+          type="button"
+          class="collection__arrow"
+          data-dir="1"
+          aria-label="Colección siguiente"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M9 5l7 7-7 7"></path>
+          </svg>
+        </button>
+        <button type="button" class="collection__pause" aria-pressed="false">
+          Pausar
+        </button>
+      </div>
+      <p class="sr-only" role="status" aria-live="polite" data-collection-status></p>
     </div>
   </div>
 </section>
@@ -82,6 +110,8 @@ const { certificate } = collection;
   // failure (API down, file missing) leaves the provisional image untouched.
   import { createApiClient } from "@/lib/api";
   import { currentApiConfig, resolveMediaUrl } from "@/lib/api-config";
+  import { nextIndex, safeLink } from "@/lib/collections";
+  import type { CollectionPublic } from "@/lib/types";
 
   async function replaceCollectionImage(): Promise<void> {
     const picture = document.querySelector<HTMLPictureElement>(".collection__media picture");
@@ -117,7 +147,189 @@ const { certificate } = collection;
     img.height = files.height;
     img.src = jpg;
   }
-  void replaceCollectionImage().catch(() => undefined);
+
+  // Gestión → Hero → Colecciones: when there are entries, they replace the built-in photo,
+  // title, text and button. With one, it is fixed; with more, the block rotates between them
+  // (arrows, dots and a pause button; it stops with reduced motion and while the pointer or
+  // the keyboard is on it). Any failure leaves the page as it shipped.
+  const DEFAULT_LINK = "/piezas/";
+  const AUTOPLAY_MS = 7000;
+  const FADE_MS = 240;
+
+  function startCarousel(
+    entries: readonly CollectionPublic[],
+    config: ReturnType<typeof currentApiConfig>,
+  ): void {
+    const root = document.querySelector<HTMLElement>(".collection");
+    const picture = root?.querySelector<HTMLPictureElement>(".collection__media picture");
+    const img = picture?.querySelector("img");
+    const mediaLink = root?.querySelector<HTMLAnchorElement>(".collection__media");
+    const title = root?.querySelector<HTMLElement>("#collection-title");
+    const lead = root?.querySelector<HTMLElement>(".collection__text .lead");
+    const cta = root?.querySelector<HTMLAnchorElement>(".collection__links .button");
+    const nav = root?.querySelector<HTMLElement>(".collection__nav");
+    const dotsList = root?.querySelector<HTMLElement>(".collection__dots");
+    const pauseButton = root?.querySelector<HTMLButtonElement>(".collection__pause");
+    const status = root?.querySelector<HTMLElement>("[data-collection-status]");
+    if (
+      !root ||
+      !picture ||
+      !img ||
+      !mediaLink ||
+      !title ||
+      !lead ||
+      !cta ||
+      !nav ||
+      !dotsList ||
+      !pauseButton ||
+      !status
+    )
+      return;
+
+    const slides = entries
+      .map((e) => ({
+        title: e.title,
+        body: e.body,
+        cta: e.cta_label,
+        href: safeLink(e.link, DEFAULT_LINK),
+        avif: resolveMediaUrl(e.image.avif, config),
+        webp: resolveMediaUrl(e.image.webp, config),
+        jpg: resolveMediaUrl(e.image.jpg, config),
+        width: e.image.width,
+        height: e.image.height,
+      }))
+      .filter((s) => s.jpg);
+    if (slides.length === 0) return;
+
+    const defaultLead = lead.textContent ?? "";
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let current = -1;
+    let timer = 0;
+    let paused = reduced; // reduced motion: never rotates by itself
+    let hovering = false;
+    let focused = false; // keyboard focus inside the block (a mouse click does not count)
+    let swapping = false;
+
+    const apply = (index: number): void => {
+      const slide = slides[index];
+      if (!slide) return;
+      current = index;
+      picture.querySelectorAll("source").forEach((source) => source.remove());
+      for (const [type, url] of [
+        ["image/avif", slide.avif],
+        ["image/webp", slide.webp],
+      ] as const) {
+        if (!url) continue;
+        const source = document.createElement("source");
+        source.type = type;
+        source.srcset = url;
+        picture.insertBefore(source, img);
+      }
+      img.width = slide.width;
+      img.height = slide.height;
+      img.src = slide.jpg ?? "";
+      root.querySelector(".collection__media .placeholder-note")?.remove();
+      title.textContent = slide.title;
+      lead.textContent = slide.body ?? defaultLead;
+      cta.textContent = slide.cta;
+      cta.href = slide.href;
+      mediaLink.href = slide.href;
+      dotsList.querySelectorAll("button").forEach((dot, i) => {
+        if (i === index) dot.setAttribute("aria-current", "true");
+        else dot.removeAttribute("aria-current");
+      });
+      // Warm the next photo so the change does not wait on the network.
+      const next = slides[nextIndex(index, 1, slides.length)];
+      if (next?.jpg && slides.length > 1) new Image().src = next.jpg;
+    };
+
+    const go = (dir: number, announce: boolean): void => {
+      if (swapping || slides.length < 2) return;
+      const target = nextIndex(current, dir, slides.length);
+      const finish = () => {
+        apply(target);
+        if (announce)
+          status.textContent = `Colección ${target + 1} de ${slides.length}: ${slides[target]?.title ?? ""}`;
+        root.classList.remove("is-fading");
+        swapping = false;
+      };
+      if (reduced) {
+        finish();
+        return;
+      }
+      swapping = true;
+      root.classList.add("is-fading");
+      window.setTimeout(finish, FADE_MS);
+    };
+
+    const schedule = (): void => {
+      window.clearInterval(timer);
+      if (slides.length < 2 || paused || hovering || focused || document.hidden) return;
+      timer = window.setInterval(() => go(1, false), AUTOPLAY_MS);
+    };
+
+    apply(0);
+    if (slides.length < 2) return;
+
+    nav.hidden = false;
+    slides.forEach((slide, i) => {
+      const item = document.createElement("li");
+      const dot = document.createElement("button");
+      dot.type = "button";
+      dot.className = "collection__dot";
+      dot.setAttribute("aria-label", `Ver la colección ${i + 1}: ${slide.title}`);
+      if (i === 0) dot.setAttribute("aria-current", "true");
+      dot.addEventListener("click", () => {
+        if (i !== current) go(i - current, true);
+        schedule();
+      });
+      item.append(dot);
+      dotsList.append(item);
+    });
+    nav.querySelectorAll<HTMLButtonElement>(".collection__arrow").forEach((button) =>
+      button.addEventListener("click", () => {
+        go(Number(button.dataset.dir), true);
+        schedule();
+      }),
+    );
+    pauseButton.textContent = reduced ? "Reproducir" : "Pausar";
+    pauseButton.setAttribute("aria-pressed", String(reduced));
+    pauseButton.addEventListener("click", () => {
+      paused = !paused;
+      pauseButton.textContent = paused ? "Reproducir" : "Pausar";
+      pauseButton.setAttribute("aria-pressed", String(paused));
+      schedule();
+    });
+    root.addEventListener("pointerenter", () => {
+      hovering = true;
+      schedule();
+    });
+    root.addEventListener("pointerleave", () => {
+      hovering = false;
+      schedule();
+    });
+    root.addEventListener("focusin", (event) => {
+      focused = event.target instanceof Element && event.target.matches(":focus-visible");
+      schedule();
+    });
+    root.addEventListener("focusout", () => {
+      focused = false;
+      schedule();
+    });
+    document.addEventListener("visibilitychange", schedule);
+    schedule();
+  }
+
+  async function initCollection(): Promise<void> {
+    const config = currentApiConfig();
+    const result = await createApiClient({ config, timeoutMs: 2500 }).getCollections();
+    if (result.kind === "ok" && result.data.data.length > 0) {
+      startCarousel(result.data.data, config);
+      return;
+    }
+    await replaceCollectionImage();
+  }
+  void initCollection().catch(() => undefined);
 
   // Pointer-driven tilt + foil position, written as CSS custom properties
   // (CSSOM, allowed by the CSP). Only for a fine pointer and allowed motion.
@@ -345,9 +557,122 @@ const { certificate } = collection;
     margin-top: var(--space-xs);
   }
 
+  /* --- Carousel (only when there is more than one collection) ------------- */
+
+  .collection__visual,
+  .collection__text {
+    transition: opacity 240ms var(--ease-out);
+  }
+
+  .collection:global(.is-fading) .collection__visual,
+  .collection:global(.is-fading) .collection__text {
+    opacity: 0;
+  }
+
+  .collection__nav {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-top: var(--space-xs);
+  }
+
+  .collection__nav[hidden] {
+    display: none;
+  }
+
+  .collection__arrow {
+    display: inline-grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border: 1px solid color-mix(in srgb, var(--color-cempasuchil) 55%, transparent);
+    border-radius: 50%;
+    background: transparent;
+    color: var(--color-cempasuchil);
+    cursor: pointer;
+    transition:
+      background-color 160ms var(--ease-out),
+      transform 160ms var(--ease-out);
+  }
+
+  .collection__arrow:hover {
+    background: color-mix(in srgb, var(--color-cempasuchil) 18%, transparent);
+  }
+
+  .collection__arrow:active {
+    transform: scale(0.94);
+  }
+
+  .collection__arrow svg {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .collection__dots {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .collection__dots :global(.collection__dot) {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    cursor: pointer;
+    position: relative;
+  }
+
+  .collection__dots :global(.collection__dot)::after {
+    content: "";
+    position: absolute;
+    inset: 7px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--color-text-inverse) 40%, transparent);
+    transition:
+      background-color 160ms var(--ease-out),
+      transform 160ms var(--ease-out);
+  }
+
+  .collection__dots :global(.collection__dot[aria-current="true"])::after {
+    background: var(--color-cempasuchil);
+    transform: scale(1.35);
+  }
+
+  .collection__pause {
+    min-height: 44px;
+    padding: 0 var(--space-xs);
+    border: 0;
+    background: transparent;
+    color: color-mix(in srgb, var(--color-text-inverse) 78%, transparent);
+    font: inherit;
+    font-size: var(--text-small);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .cert__card {
       transform: none;
+    }
+
+    .collection__visual,
+    .collection__text,
+    .collection__arrow,
+    .collection__dots :global(.collection__dot)::after {
+      transition: none;
     }
   }
 

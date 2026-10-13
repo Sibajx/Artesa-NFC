@@ -96,6 +96,14 @@
     "a4d7c1e9b3f6": {
       "class": "additive",
       "note": "Adds the nullable column visit.unregistered_artisan (the name of an artisan who is not registered, typed by hand) and two checks that only the new column can break (not together with artisan_id; at least two letters). Nothing existing changes and no row is touched; older code ignores the column, so a code-only rollback is compatible. The downgrade drops the column, so the names typed by hand are lost."
+    },
+    "b6f2d8a4c1e9": {
+      "class": "additive",
+      "note": "Adds the visit_photo table (several private photos per visit) and copies into it the single photo each visit already had. The old visit.photo_* columns stay, unused, so a code-only rollback is compatible (older code still shows its photo). The downgrade copies the oldest photo of each visit back to those columns and drops the table; the files under privado/ stay on disk."
+    },
+    "c3e9a5d7b1f2": {
+      "class": "additive",
+      "note": "Adds the collection_entry table (the entries of the home's collection block: photo, title, text and link, with order and an active flag). Nothing existing changes and no row is seeded; older code ignores it, so a code-only rollback is compatible (the home keeps its single built-in entry). The downgrade drops the table; the image files under publico/sitio/colecciones/ stay on disk."
     }
   }
 }

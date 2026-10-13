@@ -58,7 +58,7 @@ def new_visit(client, **extra):
 
 
 def upload(client, visit, data, email=OWNER, content_type="image/jpeg"):
-    return client.post(f"{API}/visits/{visit['id']}/photo", content=data, headers=H(email, **{"Content-Type": content_type}))
+    return client.post(f"{API}/visits/{visit['id']}/photos", content=data, headers=H(email, **{"Content-Type": content_type}))
 
 
 def files(root: Path):
@@ -98,7 +98,7 @@ def test_the_summary_is_mandatory_and_the_rest_is_checked(owner_client):
     assert post(owner_client, "/visits", visit_body(kind="visita")).status_code == 422
     assert post(owner_client, "/visits", visit_body(artisan_id=str(uuid.uuid4()))).status_code == 404
     ok = new_visit(owner_client, kind="galeria", place="Galería Oaxaca Centro", agreements="Llevar 3 piezas el 20 de octubre.")
-    assert ok["consent_to_publish"] is False and ok["photo"] is None and ok["place"] == "Galería Oaxaca Centro"
+    assert ok["consent_to_publish"] is False and ok["photos"] == [] and ok["place"] == "Galería Oaxaca Centro"
 
 
 def test_listing_filter_and_edit(owner_client):
@@ -116,47 +116,63 @@ def test_listing_filter_and_edit(owner_client):
     assert get(owner_client, f"/visits/{uuid.uuid4()}").status_code == 404
 
 
-def test_one_private_photo_per_visit(owner_client, media_root, db_session):
+def test_a_visit_holds_several_private_photos(owner_client, media_root, db_session):
     v = new_visit(owner_client)
-    assert upload(owner_client, v, jpeg()).status_code == 201
+    first = upload(owner_client, v, jpeg())
+    assert first.status_code == 201 and len(first.json()["photos"]) == 1
     [stored] = files(media_root)
     assert stored.relative_to(media_root).parts[:2] == ("privado", "visitas") and oct(stored.stat().st_mode)[-3:] == "600"
     with Image.open(stored) as img:
         assert max(img.size) <= 1600 and GPS_TAG not in img.getexif()
-    url = get(owner_client, f"/visits/{v['id']}").json()["photo"]
+    second = upload(owner_client, v, jpeg(size=(80, 60)))
+    assert second.status_code == 201 and len(second.json()["photos"]) == 2 and len(files(media_root)) == 2
+    photos = get(owner_client, f"/visits/{v['id']}").json()["photos"]
+    assert [p["width"] for p in photos][1] == 80 and all(p["url"].startswith(f"/api/admin/v1/visits/{v['id']}/photos/") for p in photos)
+    url = photos[0]["url"]
     got = owner_client.get(url, headers=auth(make_token(email=OWNER)))
     assert got.status_code == 200 and "no-store" in got.headers["cache-control"]
     assert owner_client.get(url).status_code == 401
-    # A second upload replaces the first (still one file).
-    assert upload(owner_client, v, jpeg(size=(80, 60))).status_code == 201
-    assert len(files(media_root)) == 1 and files(media_root)[0] != stored
     assert upload(owner_client, v, b"not an image").status_code == 422
     assert upload(owner_client, v, b"x", content_type="text/plain").status_code == 415
+    # The list carries every visit's photos, and a photo only opens under its own visit.
+    other = new_visit(owner_client)
+    assert [len(x["photos"]) for x in get(owner_client, "/visits").json()["data"] if x["id"] in (v["id"], other["id"])] in ([0, 2], [2, 0])
+    assert owner_client.get(f"{API}/visits/{other['id']}/photos/{photos[0]['id']}", headers=auth(make_token(email=OWNER))).status_code == 404
     # Without the permission the photo is not served either.
     post(owner_client, "/accounts", {"email": NEW, "role": "editor"})
     assert owner_client.get(url, headers=auth(make_token(email=NEW))).status_code == 403
-    # Removing it deletes the file.
-    assert post(owner_client, f"/visits/{v['id']}/photo/delete").json()["photo"] is None
-    assert files(media_root) == []
-    assert post(owner_client, f"/visits/{v['id']}/photo/delete").json()["error"]["code"] == "no_photo"
+    # Removing one deletes only its file.
+    left = post(owner_client, f"/visits/{v['id']}/photos/{photos[0]['id']}/delete").json()["photos"]
+    assert [p["id"] for p in left] == [photos[1]["id"]] and len(files(media_root)) == 1
+    assert post(owner_client, f"/visits/{v['id']}/photos/{photos[0]['id']}/delete").json()["error"]["code"] == "not_found"
+    assert post(owner_client, f"/visits/{other['id']}/photos/{photos[1]['id']}/delete").json()["error"]["code"] == "not_found"
 
 
-def test_only_the_owner_deletes_a_visit_and_its_photo(owner_client, media_root, db_session):
+def test_a_visit_admits_at_most_eight_photos(owner_client, media_root):
+    v = new_visit(owner_client)
+    for _ in range(8):
+        assert upload(owner_client, v, jpeg(size=(60, 40))).status_code == 201
+    over = upload(owner_client, v, jpeg(size=(60, 40)))
+    assert over.status_code == 409 and over.json()["error"]["code"] == "too_many_photos" and len(files(media_root)) == 8
+
+
+def test_only_the_owner_deletes_a_visit_and_all_its_photos(owner_client, media_root, db_session):
     v = new_visit(owner_client)
     upload(owner_client, v, jpeg(size=(60, 40)))
-    assert len(files(media_root)) == 1
+    upload(owner_client, v, jpeg(size=(60, 40)))
+    assert len(files(media_root)) == 2
     assert post(owner_client, f"/visits/{v['id']}/delete").status_code == 204
     assert files(media_root) == [] and get(owner_client, f"/visits/{v['id']}").status_code == 404
     actions = [a for (a,) in db_session.execute(select(AuditEvent.action).where(AuditEvent.entity_type == "visit")
                                                 .order_by(AuditEvent.occurred_at))]
-    assert actions == ["visit.created", "visit.photo_set", "visit.deleted"]
+    assert actions == ["visit.created", "visit.photo_added", "visit.photo_added", "visit.deleted"]
 
 
 def test_without_a_media_folder_the_text_still_works(owner_client, monkeypatch):
     monkeypatch.setattr(get_settings(), "media_root", "")
     v = new_visit(owner_client)
     assert upload(owner_client, v, jpeg()).status_code >= 400
-    assert get(owner_client, f"/visits/{v['id']}").json()["photo"] is None
+    assert get(owner_client, f"/visits/{v['id']}").json()["photos"] == []
 
 
 def test_a_visit_can_be_to_an_artisan_who_is_not_registered(owner_client, db_session):

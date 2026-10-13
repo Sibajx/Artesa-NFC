@@ -228,6 +228,16 @@ export interface ProductionBoard {
 // Visit log (artisans and galleries). Only for people with the Visits permission.
 export type VisitKind = 'artesano' | 'galeria' | 'otro';
 
+export interface VisitPhoto {
+  id: string;
+  url: string;
+  width: number;
+  height: number;
+}
+
+// A visit holds up to this many private photos.
+export const MAX_VISIT_PHOTOS = 8;
+
 export interface Visit {
   id: string;
   visited_on: string;
@@ -240,7 +250,7 @@ export interface Visit {
   summary: string;
   agreements: string | null;
   consent_to_publish: boolean;
-  photo: string | null;
+  photos: VisitPhoto[];
   recorded_by: string;
   created_at: string;
   updated_at: string;
@@ -347,6 +357,35 @@ export interface SiteSlot {
 export interface SiteImagesState {
   media_enabled: boolean;
   slots: SiteSlot[];
+}
+
+// Entries of the home's collection block (Gestión → Hero → Colecciones).
+export interface CollectionEntry {
+  id: string;
+  position: number;
+  title: string;
+  body: string | null;
+  cta_label: string | null;
+  link: string | null;
+  active: boolean;
+  image: SiteImage | null;
+  updated_at: string;
+}
+
+export interface CollectionsState {
+  media_enabled: boolean;
+  max_entries: number;
+  default_cta: string;
+  default_link: string;
+  ratio: string;
+  items: CollectionEntry[];
+}
+
+export interface CollectionInput {
+  title: string;
+  body: string | null;
+  cta_label: string | null;
+  link: string | null;
 }
 
 export interface ArtisanDetail {
@@ -880,8 +919,9 @@ export const adminApi = {
   createVisit: (body: VisitInput) => request<Visit>('POST', '/visits', { body }),
   updateVisit: (id: string, body: Partial<VisitInput>) => request<Visit>('PATCH', `/visits/${encodeURIComponent(id)}`, { body }),
   uploadVisitPhoto: (id: string, file: Blob, contentType: string) =>
-    request<Visit>('POST', `/visits/${encodeURIComponent(id)}/photo`, { file: { data: file, contentType } }),
-  deleteVisitPhoto: (id: string) => request<Visit>('POST', `/visits/${encodeURIComponent(id)}/photo/delete`, { body: {} }),
+    request<Visit>('POST', `/visits/${encodeURIComponent(id)}/photos`, { file: { data: file, contentType } }),
+  deleteVisitPhoto: (id: string, photoId: string) =>
+    request<Visit>('POST', `/visits/${encodeURIComponent(id)}/photos/${encodeURIComponent(photoId)}/delete`, { body: {} }),
   deleteVisit: (id: string) => request<void>('POST', `/visits/${encodeURIComponent(id)}/delete`, { body: {} }),
   productionBoard: (signal?: AbortSignal) => get<ProductionBoard>('/production/board', undefined, signal),
   productionPiece: (id: string, signal?: AbortSignal) =>
@@ -951,6 +991,16 @@ export const adminApi = {
   siteImages: (signal?: AbortSignal) => get<SiteImagesState>('/hero/site-images', undefined, signal),
   uploadSiteImage: (slot: string, file: Blob, contentType: string) =>
     request<SiteImagesState>('POST', `/hero/site-images/${encodeURIComponent(slot)}`, { file: { data: file, contentType } }),
+  collections: (signal?: AbortSignal) => get<CollectionsState>('/hero/collections', undefined, signal),
+  createCollection: (body: { title: string }) => request<CollectionsState>('POST', '/hero/collections', { body }),
+  updateCollection: (id: string, body: Partial<CollectionInput> & { active?: boolean }) =>
+    request<CollectionsState>('PATCH', `/hero/collections/${encodeURIComponent(id)}`, { body }),
+  moveCollection: (id: string, direction: 'up' | 'down') =>
+    request<CollectionsState>('POST', `/hero/collections/${encodeURIComponent(id)}/move`, { body: { direction } }),
+  deleteCollection: (id: string) =>
+    request<CollectionsState>('DELETE', `/hero/collections/${encodeURIComponent(id)}`, { body: {} }),
+  uploadCollectionImage: (id: string, file: Blob, contentType: string) =>
+    request<CollectionsState>('POST', `/hero/collections/${encodeURIComponent(id)}/image`, { file: { data: file, contentType } }),
   clearSiteImage: (slot: string) =>
     request<SiteImagesState>('DELETE', `/hero/site-images/${encodeURIComponent(slot)}`, { body: {} }),
 

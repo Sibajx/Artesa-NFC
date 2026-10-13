@@ -8,6 +8,7 @@ import {
   formatPlace,
   availabilityLabel,
 } from "../../src/lib/format";
+import { nextIndex, safeLink } from "../../src/lib/collections";
 import { imagesWithRoles, pickHeroImage, pickModel } from "../../src/lib/media";
 import { ARTISAN_PREFIX, PIECE_PREFIX, slugFromPath, tokenFromPath } from "../../src/lib/routes";
 import { heroImage, model3d, piece } from "../fixtures/contract";
@@ -219,5 +220,84 @@ describe("getSiteImages (P-029)", () => {
       kind: "unavailable",
       reason: "server_error",
     });
+  });
+});
+
+describe("getCollections (the home's collection entries)", () => {
+  const config = apiConfigFor("artesanfc.com");
+  const clientFor = (status: number, body: unknown) =>
+    createApiClient({ config, fetch: async () => new Response(JSON.stringify(body), { status }) });
+  const entry = {
+    id: "c1",
+    title: "Barro negro",
+    body: null,
+    cta_label: "Ver la colección",
+    link: "/piezas/",
+    image: {
+      avif: "/media/a.avif",
+      webp: "/media/a.webp",
+      jpg: "/media/a.jpg",
+      width: 1200,
+      height: 1500,
+    },
+  };
+
+  it("returns the entries in order, or an empty list", async () => {
+    expect(
+      await clientFor(200, {
+        data: [entry, { ...entry, id: "c2", body: "Texto" }],
+      }).getCollections(),
+    ).toEqual({
+      kind: "ok",
+      data: { data: [entry, { ...entry, id: "c2", body: "Texto" }] },
+    });
+    expect(await clientFor(200, { data: [] }).getCollections()).toEqual({
+      kind: "ok",
+      data: { data: [] },
+    });
+  });
+
+  it("rejects a body that is not the contract", async () => {
+    expect(
+      (await clientFor(200, { data: [{ ...entry, image: null }] }).getCollections()).kind,
+    ).not.toBe("ok");
+    expect(
+      (await clientFor(200, { data: [{ ...entry, link: 3 }] }).getCollections()).kind,
+    ).not.toBe("ok");
+    expect((await clientFor(200, { data: {} }).getCollections()).kind).not.toBe("ok");
+    expect((await clientFor(500, {}).getCollections()).kind).not.toBe("ok");
+  });
+});
+
+describe("collection carousel helpers", () => {
+  it.each(["/piezas/", "/artesanos/", "/", "https://artesanfc.com/piezas/?x=1"])(
+    "follows %s",
+    (href) => expect(safeLink(href)).toBe(href),
+  );
+
+  it.each([
+    "javascript:alert(1)",
+    "//evil.example/x",
+    "http://example.com",
+    "data:text/html,x",
+    "/a b",
+    "/\\evil",
+    "https://",
+    "",
+    "   ",
+  ])("falls back for %j", (href) => expect(safeLink(href)).toBe("/piezas/"));
+
+  it("falls back for values that are not text", () => {
+    expect(safeLink(null)).toBe("/piezas/");
+    expect(safeLink(42, "/artesanos/")).toBe("/artesanos/");
+  });
+
+  it("moves between slides and wraps around", () => {
+    expect(nextIndex(0, 1, 3)).toBe(1);
+    expect(nextIndex(2, 1, 3)).toBe(0);
+    expect(nextIndex(0, -1, 3)).toBe(2);
+    expect(nextIndex(1, -1, 3)).toBe(0);
+    expect(nextIndex(0, 1, 0)).toBe(0);
+    expect(nextIndex(0, 1, 1)).toBe(0);
   });
 });
