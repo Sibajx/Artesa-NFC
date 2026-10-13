@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ApiError, adminApi } from '../api';
+import { MAX_VISIT_PHOTOS } from '../api';
 import type { Visit, VisitInput, VisitKind } from '../api';
 import { formatDate, writeErrorMessage } from '../format';
 import { useConfirm, useToast } from '../feedback-context';
@@ -10,7 +11,7 @@ import { ArtisanPicker } from '../ArtisanPicker';
 import type { Picked } from '../ArtisanPicker';
 
 // Visit log of artisans and galleries (Sol and Hariel, plus the owner). The
-// written summary is mandatory; the photo is one and optional, and private.
+// written summary is mandatory; photos are optional (up to 8), and private.
 
 const KINDS: { value: VisitKind; label: string }[] = [
   { value: 'artesano', label: 'Artesano' },
@@ -25,6 +26,7 @@ const CONFLICTS: Record<string, string> = {
   invalid_visit: 'La fecha de la visita no puede ser futura.',
   unsupported_type: 'Sube una foto JPEG, PNG o WebP.',
   too_large: 'La foto pesa más de 25 MB.',
+  too_many_photos: `Una visita admite hasta ${MAX_VISIT_PHOTOS} fotos. Quita una para subir otra.`,
   media_unavailable: 'El servidor todavía no tiene carpeta para fotos.',
 };
 
@@ -50,8 +52,10 @@ function VisitForm({ initial, artisans, onSaved, onCancel }: {
   const [summary, setSummary] = useState(initial?.summary ?? '');
   const [agreements, setAgreements] = useState(initial?.agreements ?? '');
   const [consent, setConsent] = useState(initial?.consent_to_publish ?? false);
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [fileKey, setFileKey] = useState(0); // a new key clears the file input itself
+  const [kept, setKept] = useState(initial?.photos ?? []);
+  const room = MAX_VISIT_PHOTOS - kept.length - files.length;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const toast = useToast();
@@ -65,8 +69,17 @@ function VisitForm({ initial, artisans, onSaved, onCancel }: {
     };
     try {
       const saved = initial ? await adminApi.updateVisit(initial.id, body) : await adminApi.createVisit(body);
-      if (file) await adminApi.uploadVisitPhoto(saved.id, file, file.type || 'image/jpeg');
-      toast(initial ? 'Visita actualizada' : 'Visita registrada');
+      const failed: string[] = [];
+      let reason = '';
+      for (const file of files) {
+        try { await adminApi.uploadVisitPhoto(saved.id, file, file.type || 'image/jpeg'); } catch (e) { failed.push(file.name); reason = message(e); }
+      }
+      if (failed.length > 0) {
+        // The visit itself is saved: closing the form keeps it from being created twice.
+        toast(`La visita se guardó, pero ${failed.length === 1 ? 'una foto no se subió' : `${failed.length} fotos no se subieron`} (${failed.join(', ')}): ${reason} Edita la visita para volver a subirlas.`);
+      } else {
+        toast(initial ? 'Visita actualizada' : 'Visita registrada');
+      }
       onSaved();
     } catch (e) {
       setError(message(e));
@@ -104,23 +117,44 @@ function VisitForm({ initial, artisans, onSaved, onCancel }: {
       <label className="text-xs font-medium text-botanica-grafito md:col-span-2">Acuerdos y siguientes pasos (opcional)
         <textarea rows={3} value={agreements} maxLength={3000} onChange={(e) => setAgreements(e.target.value)} className={`mt-1 ${field}`} />
       </label>
-      <label className="text-xs font-medium text-botanica-grafito md:col-span-2">
-        {initial?.photo ? 'Cambiar la foto (opcional)' : 'Una foto de la visita (opcional; no tiene que salir el artesano)'}
-        <input key={fileKey} type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className={`mt-1 ${field}`} />
-      </label>
-      {file && (
-        <div className="md:col-span-2 -mt-2">
-          <button type="button" className="btn-secondary !py-1.5 text-xs" disabled={busy}
-            onClick={() => { setFile(null); setFileKey((k) => k + 1); }}>Quitar la foto elegida</button>
-        </div>
-      )}
+      <div className="md:col-span-2 flex flex-col gap-2">
+        <label className="text-xs font-medium text-botanica-grafito">
+          Fotos de la visita (opcional; no tiene que salir el artesano; hasta {MAX_VISIT_PHOTOS})
+          <input key={fileKey} type="file" accept="image/*" multiple disabled={room <= 0}
+            onChange={(e) => { setFiles((prev) => [...prev, ...Array.from(e.target.files ?? [])].slice(0, MAX_VISIT_PHOTOS - kept.length)); setFileKey((k) => k + 1); }}
+            className={`mt-1 ${field}`} />
+        </label>
+        {room < 0 && <p role="alert" className="text-xs text-red-700">Son demasiadas fotos: quita {-room} para guardar.</p>}
+        {(kept.length > 0 || files.length > 0) && (
+          <ul className="flex flex-wrap gap-2" role="list" aria-label="Fotos de esta visita">
+            {kept.map((p) => (
+              <li key={p.id} className="relative">
+                <img src={p.url} alt="Foto guardada de la visita" loading="lazy" className="h-20 w-20 rounded-lg border border-botanica-gris/20 object-cover" />
+                <button type="button" disabled={busy} aria-label="Quitar esta foto guardada"
+                  className="absolute -right-1.5 -top-1.5 grid h-6 w-6 place-items-center rounded-full bg-botanica-negro text-xs text-white"
+                  onClick={() => { void (async () => {
+                    if (!initial) return;
+                    try { await adminApi.deleteVisitPhoto(initial.id, p.id); setKept((k) => k.filter((x) => x.id !== p.id)); toast('Foto quitada'); } catch (e) { setError(message(e)); }
+                  })(); }}>×</button>
+              </li>
+            ))}
+            {files.map((f, i) => (
+              <li key={`${f.name}-${i}`} className="flex max-w-[11rem] items-center gap-2 rounded-lg border border-botanica-gris/30 bg-botanica-hueso px-2 py-1 text-xs text-botanica-grafito">
+                <span className="truncate" title={f.name}>{f.name}</span>
+                <button type="button" disabled={busy} aria-label={`Quitar ${f.name}`} className="shrink-0 font-medium text-botanica-negro"
+                  onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))}>Quitar</button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
       <label className="flex items-start gap-2 text-sm text-botanica-grafito md:col-span-2">
         <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-1 accent-botanica-jade" />
         <span>La persona visitada autorizó que se publique algo de esta visita. <span className="text-botanica-gris">Solo se anota; por ahora nada de esto se publica.</span></span>
       </label>
       {error && <p role="alert" className="md:col-span-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
       <div className="md:col-span-2 flex flex-wrap gap-3">
-        <button type="submit" className="btn-primary" disabled={busy}>{initial ? 'Guardar cambios' : 'Registrar visita'}</button>
+        <button type="submit" className="btn-primary" disabled={busy || room < 0}>{initial ? 'Guardar cambios' : 'Registrar visita'}</button>
         <button type="button" className="btn-secondary" disabled={busy} onClick={onCancel}>Cancelar</button>
       </div>
     </form>
@@ -144,21 +178,21 @@ export default function Visitas() {
   const list = artisans.status === 'ready' ? artisans.data.data.map((a) => ({ id: a.id, full_name: a.full_name })) : [];
   const refresh = () => { setRevision((r) => r + 1); setCreating(false); setEditing(null); };
 
-  async function removePhoto(v: Visit) {
-    const answer = await confirm({ title: '¿Borrar la foto de esta visita?', body: 'No se puede recuperar.', confirmLabel: 'Borrar foto', tone: 'danger' });
+  async function removePhoto(v: Visit, photoId: string) {
+    const answer = await confirm({ title: '¿Borrar esta foto de la visita?', body: 'No se puede recuperar.', confirmLabel: 'Borrar foto', tone: 'danger' });
     if (answer === null) return;
-    try { await adminApi.deleteVisitPhoto(v.id); toast('Foto borrada'); setRevision((r) => r + 1); } catch (e) { setError(message(e)); }
+    try { await adminApi.deleteVisitPhoto(v.id, photoId); toast('Foto borrada'); setRevision((r) => r + 1); } catch (e) { setError(message(e)); }
   }
 
   async function remove(v: Visit) {
-    const answer = await confirm({ title: '¿Eliminar esta visita?', body: 'Se borra el registro y su foto. Queda anotado en la auditoría.', confirmLabel: 'Eliminar visita', tone: 'danger' });
+    const answer = await confirm({ title: '¿Eliminar esta visita?', body: 'Se borra el registro y sus fotos. Queda anotado en la auditoría.', confirmLabel: 'Eliminar visita', tone: 'danger' });
     if (answer === null) return;
     try { await adminApi.deleteVisit(v.id); toast('Visita eliminada'); setRevision((r) => r + 1); } catch (e) { setError(message(e)); }
   }
 
   return (
     <div className="max-w-4xl mx-auto pb-12 flex flex-col gap-6">
-      <PageHeader title="Visitas" subtitle="Bitácora de visitas a artesanos y galerías: qué se habló, qué se acordó y una foto.">
+      <PageHeader title="Visitas" subtitle="Bitácora de visitas a artesanos y galerías: qué se habló, qué se acordó y fotos.">
         {!creating && <button type="button" className="btn-primary" onClick={() => { setCreating(true); setEditing(null); }}>Nueva visita</button>}
       </PageHeader>
 
@@ -190,10 +224,18 @@ export default function Visitas() {
                 <VisitForm initial={v} artisans={list} onSaved={refresh} onCancel={() => setEditing(null)} />
               ) : (
                 <article className="flex flex-col gap-3 sm:flex-row sm:gap-5">
-                  {v.photo && (
-                    <a href={v.photo} target="_blank" rel="noopener noreferrer" className="shrink-0" aria-label="Abrir la foto de la visita">
-                      <img src={v.photo} alt={`Foto de la visita del ${formatDate(v.visited_on)}`} loading="lazy" className="h-32 w-32 rounded-xl border border-botanica-gris/20 object-cover" />
-                    </a>
+                  {v.photos.length > 0 && (
+                    <ul className="flex shrink-0 flex-wrap gap-2 sm:w-[17rem]" role="list" aria-label="Fotos de la visita">
+                      {v.photos.map((p, i) => (
+                        <li key={p.id} className="relative">
+                          <a href={p.url} target="_blank" rel="noopener noreferrer" aria-label={`Abrir la foto ${i + 1} de la visita`}>
+                            <img src={p.url} alt={`Foto ${i + 1} de la visita del ${formatDate(v.visited_on)}`} loading="lazy" className={`${v.photos.length === 1 ? 'h-32 w-32' : 'h-20 w-20'} rounded-xl border border-botanica-gris/20 object-cover`} />
+                          </a>
+                          <button type="button" aria-label={`Quitar la foto ${i + 1}`} onClick={() => void removePhoto(v, p.id)}
+                            className="absolute -right-1.5 -top-1.5 grid h-6 w-6 place-items-center rounded-full bg-botanica-negro text-xs text-white">×</button>
+                        </li>
+                      ))}
+                    </ul>
                   )}
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -214,7 +256,6 @@ export default function Visitas() {
                     <p className="mt-2 text-xs text-botanica-gris">Registró {v.recorded_by}</p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button type="button" className="btn-secondary !py-1.5 text-xs" onClick={() => { setEditing(v.id); setCreating(false); }}>Editar</button>
-                      {v.photo && <button type="button" className="btn-secondary !py-1.5 text-xs" onClick={() => void removePhoto(v)}>Quitar foto</button>}
                       {isOwner && <button type="button" className="btn-secondary !py-1.5 text-xs text-red-700 border-red-200" onClick={() => void remove(v)}>Eliminar</button>}
                     </div>
                   </div>

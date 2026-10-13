@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { blockNumberKeys } from './numbers';
+import { blockNumberKeys, typedDigits } from './numbers';
 
 const INPUT =
   'w-full px-3 py-2 border border-botanica-gris/30 rounded-md text-sm text-botanica-negro bg-white focus:outline-none focus:border-botanica-jade disabled:bg-botanica-hueso disabled:text-botanica-gris';
@@ -41,10 +41,11 @@ export function TextInput(props: FieldProps & { type?: 'text' | 'number' }) {
         id={id}
         type={type}
         inputMode={inputMode}
-        min={min}
+        min={type === 'number' ? (min ?? 0) : min}
         max={max}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        // Number fields are for whole numbers (a year, an edition): digits only, however they arrive.
+        onChange={(e) => onChange(type === 'number' ? typedDigits(e.target.value, max === undefined ? 9 : String(max).length) : e.target.value)}
         onKeyDown={type === 'number' ? blockNumberKeys : undefined}
         required={required}
         disabled={disabled}

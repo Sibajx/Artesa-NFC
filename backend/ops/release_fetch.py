@@ -257,9 +257,39 @@ def activate_ui(ui_root: Path, incoming: Path, commit12: str) -> tuple[str | Non
     return previous, commit12, extracted
 
 
+# Installed Gestión UI versions kept after a switch: the current one, the one it replaced
+# (the rollback target) and the newest ones up to this many in total.
+UI_KEEP = 5
+
+
+def ui_by_recency(ui_root: Path) -> list[str]:
+    """Every installed commit directory, newest installed first (directory mtime, then name)."""
+    _, installed = ui_dirs(ui_root)
+    return sorted(installed, key=lambda name: ((ui_root / name).stat().st_mtime_ns, name), reverse=True)
+
+
+def prune_ui(ui_root: Path, keep: int = UI_KEEP, protect: tuple[str, ...] = ()) -> list[str]:
+    """Delete installed UI versions beyond the ``keep`` newest. The current version and
+    everything in ``protect`` (the rollback target) are never deleted and count towards
+    ``keep``. Returns the commits removed. A version can always be fetched again."""
+    current, _ = ui_dirs(ui_root)
+    safe = {name for name in (current, *protect) if name}
+    kept = set(safe)
+    removed = []
+    for name in ui_by_recency(ui_root):
+        if name in kept:
+            continue
+        if len(kept) < max(keep, len(safe)):
+            kept.add(name)
+            continue
+        shutil.rmtree(ui_root / name, ignore_errors=True)
+        removed.append(name)
+    return removed
+
+
 def describe_ui(ui_root: Path) -> str:
-    current, installed = ui_dirs(ui_root)
+    current, _ = ui_dirs(ui_root)
     if current is None:
         return "Gestión UI: no current version"
-    others = [c for c in installed if c != current]
-    return f"Gestión UI: current {current}" + (f" (also installed: {', '.join(others[-3:])})" if others else "")
+    others = [c for c in ui_by_recency(ui_root) if c != current]
+    return f"Gestión UI: current {current}" + (f" (also installed, newest first: {', '.join(others[:3])})" if others else "")

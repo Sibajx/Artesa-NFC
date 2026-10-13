@@ -26,6 +26,7 @@ import type {
   DesignReviewOpen,
   HeroEnvelope,
   SiteImagesEnvelope,
+  CollectionsEnvelope,
   ListEnvelope,
   Piece,
   PieceSummary,
@@ -159,6 +160,27 @@ export const isSiteImagesEnvelope: Validator<SiteImagesEnvelope> = (p): p is Sit
       typeof f.height === "number",
   );
 
+export const isCollectionsEnvelope: Validator<CollectionsEnvelope> = (
+  p,
+): p is CollectionsEnvelope =>
+  isRecord(p) &&
+  Array.isArray(p.data) &&
+  p.data.every(
+    (c) =>
+      isRecord(c) &&
+      isString(c.id) &&
+      isString(c.title) &&
+      (c.body === null || isString(c.body)) &&
+      isString(c.cta_label) &&
+      isString(c.link) &&
+      isRecord(c.image) &&
+      isString(c.image.avif) &&
+      isString(c.image.webp) &&
+      isString(c.image.jpg) &&
+      typeof c.image.width === "number" &&
+      typeof c.image.height === "number",
+  );
+
 function isCertificateAuthentic(payload: unknown): payload is CertificateAuthentic {
   if (!isRecord(payload) || !isRecord(payload.authenticity)) return false;
   const auth = payload.authenticity;
@@ -255,6 +277,8 @@ export function createApiClient(options: ApiClientOptions = {}) {
     getHero: () => getJson("/hero", isHeroEnvelope),
     // P-029: photos of the public site that Gestión can replace (by slot).
     getSiteImages: () => getJson("/site-images", isSiteImagesEnvelope),
+    // The home's collection entries (Gestión → Hero → Colecciones).
+    getCollections: () => getJson("/collections", isCollectionsEnvelope),
 
     // POST /certificates/resolve (§7). Never logs the token, the URL or the
     // payload; the token only lives in this call's request body.

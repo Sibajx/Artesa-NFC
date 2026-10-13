@@ -1,4 +1,4 @@
-# ArtesaNFC — Backend (Sprint 3)
+# ArtesaNFC — Backend
 
 FastAPI + PostgreSQL backend for ArtesaNFC's public API. See
 [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md),
@@ -6,12 +6,12 @@ FastAPI + PostgreSQL backend for ArtesaNFC's public API. See
 [`../docs/API_CONTRACT.md`](../docs/API_CONTRACT.md) for the approved
 design this implements; this file only documents how to run it locally.
 
-## Local development workflow (Sprint 3, supported today)
+## Local development workflow (supported today)
 
 This is the actual sequence used to develop and verify this backend
 today. It intentionally runs migrations and the seed from the host
 Python environment, not from inside the Docker image — see
-[Docker scope](#docker-scope-for-sprint-3) below.
+[Docker scope](#docker-scope) below.
 
 1. **Environment file**
 
@@ -266,7 +266,7 @@ bin/artesa-deploy deploy  <release-id> --expect-commit <sha> --dry-run
   `tests/ops/rehearsal/run_rehearsal.py --pg-bindir <PostgreSQL 18 bin>` runs
   the real end-to-end rehearsal against disposable PostgreSQL 18 containers.
 
-## Docker scope for Sprint 3
+## Docker scope
 
 `docker-compose.yml` currently starts two services: `db` (PostgreSQL)
 and `api` (this backend, built from `Dockerfile`). The `api` image runs
@@ -282,7 +282,7 @@ fixed). To check the compose file: `docker compose config -q` (needs a
 `.env`, e.g. `cp .env.example .env`); `docker compose up -d db` does not need
 `DATABASE_URL`.
 
-This is intentional for Sprint 3 local development, not an oversight:
+This is intentional for local development, not an oversight:
 migrations and seeding are run from the host environment (steps 4–5
 above) against the same `db` service the `api` container also uses.
 This keeps the container image minimal for now and avoids adding
@@ -291,13 +291,22 @@ production is designed.
 
 **This is not a production deployment workflow.** No claim is made here
 about how migrations, seeding, or the API container should run in
-staging or production — that is out of scope for this document and for
-Sprint 3.
+staging or production — that is out of scope for this document. Production
+runs from versioned GitHub Releases with `artesa-deploy` and systemd (see
+[`../docs/DEPLOYMENT.md`](../docs/DEPLOYMENT.md)), not from this compose file.
 
-## Sprint boundary
+## Scope
 
-This backend implements Sprint 3 scope only: `Artisan`, `Piece`,
-`MediaAsset`, and the public read-only `/api/v1/artisans` and
-`/api/v1/pieces` endpoints. Certificates, NFC tags, ownership, and
-`audit_event` belong to Sprint 4 (`../docs/WORKFLOW.md` §14) and are not
-implemented here.
+The public API (`/api/v1`) serves artisans, pieces and their media, the
+hero and site images, certificate resolution and the owner's original
+(unlock, claim, PIN reset), the artisan's design review and the artisan's
+publication authorization. The administrative API (`/api/admin/v1`, behind
+Cloudflare Access) covers Gestión: catalogue, certification (NFC), designs of
+the original certificate, sales, production tracking, supplies, visits,
+training manuals, the hero, users and roles, and the audit log.
+
+The contract is `../docs/API_CONTRACT.md`; the architecture is
+`../docs/ARCHITECTURE.md`; the current state of every module is in
+`../docs/DOCUMENTACION_TECNICA.md`. Sprint 3 was the first slice of this
+backend (artisans, pieces and media); later sprints are recorded in
+`../docs/SPRINT_4.md` and `../docs/WORKFLOW.md` §14.

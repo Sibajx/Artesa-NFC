@@ -21,6 +21,7 @@ from app.core import permissions as perms
 from app.core.access import FORBIDDEN_ERROR, OWNER, AdminIdentity, require_admin, require_permission
 from app.core.config import get_settings
 from app.models.visit import Visit
+from app.models.visit_photo import VisitPhoto
 from app.services import private_photos, visits
 from app.services.content import Actor, ContentError
 
@@ -28,6 +29,13 @@ _NEEDS = [Depends(require_permission(perms.VISITS))]
 reads = APIRouter(prefix="/api/admin/v1/visits", tags=["admin", "visits"], dependencies=_NEEDS)
 writes = APIRouter(prefix="/api/admin/v1/visits", tags=["admin", "visits"], dependencies=[*_NEEDS, Depends(require_write_guard)])
 uploads = APIRouter(prefix="/api/admin/v1/visits", tags=["admin", "visits"], dependencies=[*_NEEDS, Depends(require_upload_guard)])
+
+
+class VisitPhotoOut(BaseModel):
+    id: uuid.UUID
+    url: str  # served only to people holding the Visits permission
+    width: int
+    height: int
 
 
 class VisitOut(BaseModel):
@@ -42,7 +50,7 @@ class VisitOut(BaseModel):
     summary: str
     agreements: str | None
     consent_to_publish: bool
-    photo: str | None  # URL, served only to people holding the Visits permission
+    photos: list[VisitPhotoOut]  # oldest first
     recorded_by: str
     created_at: datetime
     updated_at: datetime
@@ -76,16 +84,17 @@ class VisitPatch(BaseModel):
     consent_to_publish: bool | None = None
 
 
-def _out(v: Visit, name: str | None) -> VisitOut:
+def _out(v: Visit, name: str | None, photos: list[VisitPhoto]) -> VisitOut:
     return VisitOut(id=v.id, visited_on=v.visited_on, kind=v.kind, artisan_id=v.artisan_id, artisan_name=name or v.unregistered_artisan,
                     unregistered_artisan=v.unregistered_artisan, place=v.place,
                     attendees=v.attendees, summary=v.summary, agreements=v.agreements, consent_to_publish=v.consent_to_publish,
-                    photo=f"/api/admin/v1/visits/{v.id}/photo" if v.photo_path else None, recorded_by=v.recorded_by,
+                    photos=[VisitPhotoOut(id=p.id, url=f"/api/admin/v1/visits/{v.id}/photos/{p.id}", width=p.width, height=p.height)
+                            for p in photos], recorded_by=v.recorded_by,
                     created_at=v.created_at, updated_at=v.updated_at)
 
 
 def _one(db: Session, visit: Visit) -> VisitOut:
-    return _out(visit, visits.artisan_name(db, visit))
+    return _out(visit, visits.artisan_name(db, visit), visits.photos_of(db, [visit.id])[visit.id])
 
 
 def _root() -> Path | None:
@@ -95,7 +104,9 @@ def _root() -> Path | None:
 
 @reads.get("", response_model=VisitList)
 def list_visits(artisan_id: uuid.UUID | None = None, db: Session = Depends(get_db)) -> VisitList:
-    return VisitList(data=[_out(v, name) for v, name in visits.listing(db, artisan_id)])
+    rows = visits.listing(db, artisan_id)
+    photos = visits.photos_of(db, [v.id for v, _ in rows])
+    return VisitList(data=[_out(v, name, photos[v.id]) for v, name in rows])
 
 
 @reads.get("/{visit_id}", response_model=VisitOut)
@@ -106,13 +117,13 @@ def visit_detail(visit_id: uuid.UUID, db: Session = Depends(get_db)) -> VisitOut
         raise _fail(exc) from None
 
 
-@reads.get("/{visit_id}/photo")
-def visit_photo(visit_id: uuid.UUID, db: Session = Depends(get_db)) -> FileResponse:
+@reads.get("/{visit_id}/photos/{photo_id}")
+def visit_photo(visit_id: uuid.UUID, photo_id: uuid.UUID, db: Session = Depends(get_db)) -> FileResponse:
     root = _root()
     try:
         if root is None:
             raise visits.ContentNotFound("not_found", "Esa foto no existe.")
-        path = visits.photo_file(db, root, visit_id)
+        path = visits.photo_file(db, root, visit_id, photo_id)
     except ContentError as exc:
         raise _fail(exc) from None
     return FileResponse(path, media_type="image/jpeg", headers={
@@ -135,10 +146,11 @@ def update_visit(visit_id: uuid.UUID, body: VisitPatch, who: Actor = Depends(act
         raise _fail(exc) from None
 
 
-@writes.post("/{visit_id}/photo/delete", response_model=VisitOut)
-def delete_visit_photo(visit_id: uuid.UUID, who: Actor = Depends(actor), db: Session = Depends(get_db)) -> VisitOut:
+@writes.post("/{visit_id}/photos/{photo_id}/delete", response_model=VisitOut)
+def delete_visit_photo(visit_id: uuid.UUID, photo_id: uuid.UUID, who: Actor = Depends(actor),
+                       db: Session = Depends(get_db)) -> VisitOut:
     try:
-        return _one(db, visits.remove_photo(db, who, _root(), visit_id))
+        return _one(db, visits.remove_photo(db, who, _root(), visit_id, photo_id))
     except ContentError as exc:
         raise _fail(exc) from None
 
@@ -154,13 +166,13 @@ def delete_visit(visit_id: uuid.UUID, who: Actor = Depends(actor), db: Session =
     return Response(status_code=204)
 
 
-@uploads.post("/{visit_id}/photo", status_code=201, response_model=VisitOut)
+@uploads.post("/{visit_id}/photos", status_code=201, response_model=VisitOut)
 async def upload_visit_photo(visit_id: uuid.UUID, request: Request, who: Actor = Depends(actor),
                              db: Session = Depends(get_db)) -> VisitOut:
     root = _media_root()
     data = await _read_body(request, private_photos.MAX_PHOTO_BYTES)
     try:
-        visit = await run_in_threadpool(visits.set_photo, db, who, root, visit_id, data)
+        visit = await run_in_threadpool(visits.add_photo, db, who, root, visit_id, data)
         return _one(db, visit)
     except ContentError as exc:
         raise _fail(exc) from None

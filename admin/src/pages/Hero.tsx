@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { DragEvent } from 'react';
-import { blockNumberKeys } from '../numbers';
+import { blockNumberKeys, typedMeasure } from '../numbers';
 import { ApiError, MAX_UPLOAD_BYTES, adminApi, mediaUrl } from '../api';
-import type { HeroCampaign, HeroState, SiteImagesState, SiteSlot } from '../api';
+import type { CollectionEntry, CollectionsState, HeroCampaign, HeroState, SiteImagesState, SiteSlot } from '../api';
 import { writeErrorMessage } from '../format';
 import { useConfirm, useToast } from '../feedback-context';
 import { useLoad } from '../hooks';
@@ -41,7 +41,15 @@ function rangeLabel(c: HeroCampaign): string {
   return `${c.start_day} ${MONTHS[c.start_month - 1]} – ${c.end_day} ${MONTHS[c.end_month - 1]} (cada año)`;
 }
 
+const COLLECTION_CONFLICTS: Record<string, string> = {
+  invalid_collection: 'Escribe el título (al menos 3 letras).',
+  invalid_link: 'El enlace debe ser una página de este sitio (empieza con /) o una dirección que empiece con https://.',
+  image_required: 'Sube la foto antes de mostrar esta colección en el sitio.',
+  too_many_collections: 'Hay un máximo de 6 colecciones. Quita una para crear otra.',
+};
+
 function message(e: unknown): string {
+  if (e instanceof ApiError && e.code && COLLECTION_CONFLICTS[e.code]) return COLLECTION_CONFLICTS[e.code];
   return writeErrorMessage(e instanceof ApiError ? e : new ApiError('network', 0));
 }
 
@@ -112,7 +120,7 @@ function DropZone({ campaign, busy, onFile }: { campaign: HeroCampaign; busy: bo
           placeholder="0"
           value={startText}
           disabled={disabled}
-          onChange={(e) => setStartText(e.target.value)}
+          onChange={(e) => setStartText(typedMeasure(e.target.value))}
           className="w-20 rounded-lg border border-botanica-gris/30 px-2 py-1 text-center text-sm"
         />
       </label>
@@ -485,6 +493,153 @@ function SiteImages() {
   );
 }
 
+// The home's collection block: each entry is a photo with a title, a short text and a button.
+// With none, the site keeps its single built-in entry; with more than one it rotates between them.
+function CollectionCard({ entry, index, count, state, busy, run, onUpload }: {
+  entry: CollectionEntry; index: number; count: number; state: CollectionsState; busy: boolean;
+  run: (call: () => Promise<CollectionsState>, done: string) => Promise<boolean>;
+  onUpload: (file: File) => void;
+}) {
+  const confirm = useConfirm();
+  const input = useRef<HTMLInputElement>(null);
+  const [editing, setEditing] = useState<File | null>(null);
+  const [title, setTitle] = useState(entry.title);
+  const [body, setBody] = useState(entry.body ?? '');
+  const [cta, setCta] = useState(entry.cta_label ?? '');
+  const [link, setLink] = useState(entry.link ?? '');
+  const [rw, rh] = state.ratio.split(':').map(Number);
+  const dirty = title !== entry.title || body !== (entry.body ?? '') || cta !== (entry.cta_label ?? '') || link !== (entry.link ?? '');
+  const field = 'w-full px-3 py-2 border border-botanica-gris/30 rounded-md text-sm text-botanica-negro bg-white focus:outline-none focus:border-botanica-jade';
+
+  async function remove() {
+    const answer = await confirm({ title: `¿Quitar la colección «${entry.title}»?`, body: 'Se borra con su foto. El sitio deja de mostrarla.', confirmLabel: 'Quitar', tone: 'danger' });
+    if (answer !== null) await run(() => adminApi.deleteCollection(entry.id), 'Colección quitada');
+  }
+
+  return (
+    <section className="card-elevated flex flex-col gap-3" aria-label={`Colección ${index + 1}: ${entry.title}`}>
+      <header className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="font-serif text-xl text-botanica-negro">{index + 1}. {entry.title}</h3>
+        <div className="flex items-center gap-2">
+          <Badge tone={entry.active ? 'jade' : 'neutral'}>{entry.active ? 'En el sitio' : entry.image ? 'Oculta' : 'Sin foto'}</Badge>
+          <button type="button" className="btn-secondary !px-3 !py-1.5" disabled={busy || index === 0} aria-label="Subir de lugar"
+            onClick={() => void run(() => adminApi.moveCollection(entry.id, 'up'), 'Orden cambiado')}>↑</button>
+          <button type="button" className="btn-secondary !px-3 !py-1.5" disabled={busy || index === count - 1} aria-label="Bajar de lugar"
+            onClick={() => void run(() => adminApi.moveCollection(entry.id, 'down'), 'Orden cambiado')}>↓</button>
+        </div>
+      </header>
+      <div className="grid gap-4 sm:grid-cols-[10rem_1fr]">
+        <div className="flex flex-col gap-2">
+          <div className="w-40 overflow-hidden rounded-xl border border-botanica-gris/15 bg-botanica-hueso" style={{ aspectRatio: `${rw} / ${rh}` }}>
+            {entry.image ? (
+              <picture>
+                <source type="image/avif" srcSet={mediaUrl(`/media/${entry.image.avif}`)} />
+                <source type="image/webp" srcSet={mediaUrl(`/media/${entry.image.webp}`)} />
+                <img src={mediaUrl(`/media/${entry.image.jpg}`)} width={entry.image.width} height={entry.image.height}
+                  alt={`Foto de la colección ${entry.title}`} className="h-full w-full object-cover" />
+              </picture>
+            ) : <div className="flex h-full items-center justify-center p-3 text-center text-xs text-botanica-gris">Falta la foto</div>}
+          </div>
+          <button type="button" className="btn-secondary" disabled={!state.media_enabled || busy} onClick={() => input.current?.click()}>
+            {entry.image ? 'Cambiar foto' : 'Elegir foto'}
+          </button>
+          <input ref={input} type="file" accept={IMAGE_TYPES.join(',')} className="sr-only" aria-label={`Foto de ${entry.title}`}
+            onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; if (file) setEditing(file); }} />
+          <p className="text-xs text-botanica-gris">Proporción {state.ratio}, mínimo 600 px de ancho.</p>
+        </div>
+        <form className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault();
+          void run(() => adminApi.updateCollection(entry.id, { title, body: body.trim() || null, cta_label: cta.trim() || null, link: link.trim() || null }), 'Colección guardada'); }}>
+          <label className="text-xs font-medium text-botanica-grafito">Título
+            <input value={title} maxLength={80} required minLength={3} onChange={(e) => setTitle(e.target.value)} className={`mt-1 ${field}`} />
+          </label>
+          <label className="text-xs font-medium text-botanica-grafito">Texto corto (opcional)
+            <textarea rows={3} value={body} maxLength={240} onChange={(e) => setBody(e.target.value)} className={`mt-1 ${field}`} />
+          </label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="text-xs font-medium text-botanica-grafito">Texto del botón
+              <input value={cta} maxLength={40} placeholder={state.default_cta} onChange={(e) => setCta(e.target.value)} className={`mt-1 ${field}`} />
+            </label>
+            <label className="text-xs font-medium text-botanica-grafito">A dónde lleva
+              <input value={link} maxLength={300} placeholder={state.default_link} onChange={(e) => setLink(e.target.value)} className={`mt-1 ${field}`} />
+            </label>
+          </div>
+          <p className="text-xs text-botanica-gris">El enlace es una página del sitio (por ejemplo <code>/piezas/</code> o <code>/artesanos/</code>) o una dirección <code>https://</code>. Vacío: «{state.default_link}».</p>
+          <div className="flex flex-wrap gap-2">
+            <button type="submit" className="btn-primary" disabled={busy || !dirty}>Guardar cambios</button>
+            <button type="button" className="btn-secondary" disabled={busy || (!entry.active && !entry.image)}
+              onClick={() => void run(() => adminApi.updateCollection(entry.id, { active: !entry.active }), entry.active ? 'Colección oculta' : 'Colección en el sitio')}>
+              {entry.active ? 'Ocultar del sitio' : 'Mostrar en el sitio'}
+            </button>
+            <button type="button" className="btn-secondary text-red-700 border-red-200" disabled={busy} onClick={() => void remove()}>Quitar</button>
+          </div>
+        </form>
+      </div>
+      {editing && (
+        <PhotoEditor source={editing} fixedAspect={rw / rh} onCancel={() => setEditing(null)}
+          onDone={(blob) => { const name = editing.name.replace(/\.[^.]+$/, '') + '.jpg'; setEditing(null); onUpload(new File([blob], name, { type: 'image/jpeg' })); }} />
+      )}
+    </section>
+  );
+}
+
+function Collections() {
+  const loaded = useLoad('collections', (signal) => adminApi.collections(signal));
+  const [changed, setChanged] = useState<CollectionsState | null>(null);
+  const state = changed ?? (loaded.status === 'ready' ? loaded.data : null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [name, setName] = useState('');
+  const toast = useToast();
+
+  async function run(call: () => Promise<CollectionsState>, done: string): Promise<boolean> {
+    setBusy(true);
+    setError(null);
+    try { setChanged(await call()); toast(done); return true; } catch (e) { setError(message(e)); return false; } finally { setBusy(false); }
+  }
+
+  async function upload(entry: CollectionEntry, file: File) {
+    if (!IMAGE_TYPES.includes(file.type)) { toast('Sube una foto JPEG, PNG o WebP.', 'error'); return; }
+    if (file.size > MAX_UPLOAD_BYTES) { toast('La foto pesa más de 25 MB.', 'error'); return; }
+    await run(() => adminApi.uploadCollectionImage(entry.id, file, file.type), 'Foto subida');
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <header>
+        <h2 className="text-3xl font-serif text-botanica-negro tracking-tight mb-1">Colecciones de la portada</h2>
+        <p className="text-botanica-grafito">
+          Cada colección es una foto con su título, un texto corto y un botón. El sitio las muestra en la entrada a la colección:
+          con una sola se ve fija; con más de una rota sola cada pocos segundos y trae flechas. Sin ninguna, se ve la entrada de siempre.
+          Una colección solo sale en el sitio si tiene foto y está «en el sitio».
+        </p>
+      </header>
+      {loaded.status === 'loading' && <Loading label="Cargando las colecciones..." />}
+      {loaded.status === 'error' && <div className="card-elevated"><ErrorState error={loaded.error} /></div>}
+      {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
+      {state && (
+        <>
+          <form className="card-elevated flex flex-wrap items-end gap-3" onSubmit={(e) => { e.preventDefault();
+            void run(() => adminApi.createCollection({ title: name }), 'Colección creada').then((ok) => { if (ok) setName(''); }); }}>
+            <label className="min-w-[14rem] flex-1 text-xs font-medium text-botanica-grafito">Nueva colección: ¿cómo se llama?
+              <input value={name} maxLength={80} required minLength={3} onChange={(e) => setName(e.target.value)}
+                className="mt-1 w-full px-3 py-2 border border-botanica-gris/30 rounded-md text-sm text-botanica-negro bg-white" placeholder="Ej. Barro negro de San Bartolo" />
+            </label>
+            <button type="submit" className="btn-primary" disabled={busy || state.items.length >= state.max_entries}>Crear colección</button>
+            <span className="text-xs text-botanica-gris" role="status">{state.items.length} de {state.max_entries}</span>
+          </form>
+          <div className="grid gap-6 lg:grid-cols-2">
+            {state.items.map((entry, i) => (
+              <CollectionCard key={`${entry.id}-${entry.updated_at}`} entry={entry} index={i} count={state.items.length} state={state} busy={busy}
+                run={run} onUpload={(f) => void upload(entry, f)} />
+            ))}
+          </div>
+          {state.items.length === 0 && <p className="card-elevated p-8 text-center text-botanica-gris">Todavía no hay colecciones: el sitio muestra su entrada de siempre.</p>}
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function Hero() {
   const loaded = useLoad('hero', (signal) => adminApi.hero(signal));
   // The latest answer (from a change or a poll) wins over the first load.
@@ -562,6 +717,9 @@ export default function Hero() {
           <CampaignCard key={c.id} campaign={c} state={state} busy={busy} run={run} />
         ))}
       </div>
+
+      <hr className="border-botanica-gris/20" />
+      <Collections />
 
       <hr className="border-botanica-gris/20" />
       <SiteImages />
