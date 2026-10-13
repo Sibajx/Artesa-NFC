@@ -109,7 +109,13 @@ export interface CertificateAuthentic {
   };
   readonly piece: Piece;
   readonly artisan: Artisan;
-  readonly authenticity_metadata: { readonly notes: string | null };
+  readonly authenticity_metadata: {
+    readonly notes: string | null;
+    // PEND-030. Optional so an older API keeps matching.
+    readonly verified_by?: string | null;
+    readonly verified_on?: string | null;
+    readonly edition?: string | null;
+  };
 }
 
 export interface CertificateUnavailable {

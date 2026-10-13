@@ -403,16 +403,23 @@ consideradas seguras para presentación pública de autenticidad.
 Cualquier clave almacenada internamente que no esté en esta lista
 permanece interna y nunca se serializa.
 
-Allowlist inicial (mínima):
+Allowlist (ampliada el 2026-10-13, PEND-030, por petición del PO):
 
 | Clave pública | Tipo | Descripción |
 |---|---|---|
-| `notes` | string \| `null` | Nota breve, curada por administración, sobre el contexto de la certificación (ej. "certificado en el marco del caso piloto de Cuilápam"). `null` si no hay nota. |
+| `notes` | string \| `null` | Nota breve, curada por administración, sobre el contexto de la certificación (ej. "certificado en el marco del caso piloto de Cuilápam"). `null` si no hay nota. Máximo 280 caracteres. |
+| `verified_by` | string \| `null` | Cómo y quién verificó la pieza, en una línea (ej. "Verificada en persona en el taller por Sol y Alexis"). Máximo 160 caracteres. |
+| `verified_on` | fecha `YYYY-MM-DD` \| `null` | Día de esa verificación; nunca futura. |
+| `edition` | string \| `null` | "Pieza única" o "3 de 10". Máximo 60 caracteres. |
 
-No se define ninguna otra clave pública en esta revisión. Ampliar esta
-allowlist con una clave nueva es un cambio **no disruptivo** (sección
-13) y se documenta actualizando esta tabla, no inventando contenido de
-producto por adelantado.
+Cada clave se valida por tipo al salir: lo que no tenga el tipo esperado sale
+como `null`. Las claves nuevas son aditivas: un cliente que no las conoce las
+ignora. Gestión las escribe con `PUT /api/admin/v1/custody/pieces/{id}/authenticity`
+(permiso `nfc`, certificado activo; auditado como `custody.authenticity_set`) y
+una rotación del certificado las conserva. Son datos de **la certificación**, no
+de la pieza (técnica, materiales, año y medidas ya viven en la pieza). Ampliar
+esta allowlist con otra clave sigue siendo un cambio **no disruptivo** (sección
+13) y se documenta actualizando esta tabla.
 
 ### Fuera de alcance de este endpoint (pertenece a `SECURITY.md`)
 

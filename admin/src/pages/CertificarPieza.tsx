@@ -7,6 +7,7 @@ import { useConfirm, useToast } from '../feedback-context';
 import { useLoad } from '../hooks';
 import { NfcError, lockTag, nfcSupported, readTag, writeUrl } from '../nfc';
 import { Badge, ErrorState, Loading } from '../ui';
+import DatosCertificado from '../DatosCertificado';
 import TarjetaComprador from '../TarjetaComprador';
 
 // ADR-030 phase 2: certify a piece and write its NFC tag from Gestión
@@ -345,6 +346,10 @@ function Wizard({ state, reload, error, setError }: WizardProps) {
             ))}
           </ul>
         </section>
+      )}
+
+      {state.certificate_active && phase.step === 'idle' && (
+        <DatosCertificado key={state.piece_id} pieceId={state.piece_id} current={state.authenticity ?? null} reload={reload} />
       )}
 
       {(state.certificate_active || state.card) && phase.step === 'idle' && (

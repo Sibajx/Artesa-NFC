@@ -450,6 +450,14 @@ export interface CustodyTag {
   locked_at: string | null;
 }
 
+// PEND-030: what the public certificate says about the verification and the edition.
+export interface CustodyAuthenticity {
+  verified_by: string | null;
+  verified_on: string | null;
+  edition: string | null;
+  notes: string | null;
+}
+
 export interface CustodyState {
   piece_id: string;
   public_code: string;
@@ -472,6 +480,7 @@ export interface CustodyState {
   card: { status: 'active' | 'blocked'; issued_at: string; failed_attempts: number; locked_until: string | null } | null;
   claim: { owner_email: string; claimed_at: string; verified_until: string | null } | null;
   reported_stolen_at: string | null;
+  authenticity?: CustodyAuthenticity | null;
 }
 
 // The only API response that carries the buyer's card key (ADR-030). Shown
@@ -829,6 +838,8 @@ export const adminApi = {
   custodyProgram: (id: string, tagId: string, uid: string) =>
     request<CustodyState>('POST', `/custody/pieces/${encodeURIComponent(id)}/program`, { body: { tag_id: tagId, uid } }),
   custodyLock: (id: string, uid: string) => request<CustodyState>('POST', `/custody/pieces/${encodeURIComponent(id)}/lock`, { body: { uid } }),
+  custodyAuthenticity: (id: string, body: CustodyAuthenticity) =>
+    request<CustodyAuthenticity>('PUT', `/custody/pieces/${encodeURIComponent(id)}/authenticity`, { body }),
   custodyRevoke: (id: string, reason: string) => request<CustodyState>('POST', `/custody/pieces/${encodeURIComponent(id)}/revoke`, { body: { reason } }),
   custodyReleaseTag: (id: string, tagId: string) =>
     request<CustodyState>('POST', `/custody/pieces/${encodeURIComponent(id)}/tags/${encodeURIComponent(tagId)}/release`, { body: {} }),

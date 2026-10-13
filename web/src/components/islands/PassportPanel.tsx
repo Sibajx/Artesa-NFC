@@ -6,7 +6,8 @@
 //   must not reveal whether a certificate or NFC tag exists
 //   (API_CONTRACT.md §5, ADR-005/006).
 // - "certificate" (/c/{token}, after `authentic`): adds the certificate
-//   status, version, issue date and curated notes (§7 allowlist).
+//   status, version, issue date, edition, how and when it was verified, and
+//   curated notes (§7 allowlist).
 // Rows without data are omitted; nothing is invented. Never shows a token,
 // token hash, NFC UID or internal id — none of them exist in these payloads.
 import type { ReactNode } from "react";
@@ -76,6 +77,13 @@ export function PassportPanel({ piece, artisan, certificate }: Props) {
       String(certificate.authenticity.certificate_version),
     );
     push("cert-issued", "Emitido", formatDate(certificate.authenticity.issued_at));
+    const meta = certificate.authenticity_metadata;
+    push("cert-edition", "Edición", meta.edition);
+    push(
+      "cert-verified",
+      "Verificación",
+      joinPresent([meta.verified_by, formatDate(meta.verified_on)], " · "),
+    );
   }
 
   return (
