@@ -636,7 +636,7 @@ def render(params: dict, *, version: int, approved_by: str | None = None, approv
         out.append(f'<circle class="m-wave{extra}" cx="{W / 2}" cy="{seal_y}" r="{seal_r}" fill="none" '
                    f'stroke="{roles["accent"]}" stroke-width="3" opacity="0"/>')
 
-    facts = [("Código", params.get("public_code") or ""), ("Diseño", f"versión {version}")]
+    facts = [("Código", params.get("public_code") or "")]
     if approved_by:
         facts.append(("Aprobado por", f"{approved_by}{' · ' + approved_on if approved_on else ''}"))
     fy = H - 300
