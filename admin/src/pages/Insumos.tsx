@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ApiError, adminApi } from '../api';
-import { blockNumberKeys } from '../numbers';
+import { blockNumberKeys, typedMeasure } from '../numbers';
 import type { Supply, SupplyDetail, SupplyMovement } from '../api';
 import { formatDateTime, writeErrorMessage } from '../format';
 import { useToast } from '../feedback-context';
@@ -77,7 +77,7 @@ function NewSupply({ onCreated }: { onCreated: (d: SupplyDetail) => void }) {
         <input required value={unit} maxLength={30} onChange={(e) => setUnit(e.target.value)} placeholder="pieza, ml, g, rollo" className={`mt-1 ${input}`} />
       </label>
       <label className="text-xs font-medium text-botanica-grafito">Aviso al bajar de
-        <input type="number" inputMode="decimal" min="0" step="any" onKeyDown={blockNumberKeys} value={min} onChange={(e) => setMin(e.target.value)} className={`mt-1 ${input}`} />
+        <input type="number" inputMode="decimal" min="0" step="any" onKeyDown={blockNumberKeys} value={min} onChange={(e) => setMin(typedMeasure(e.target.value))} className={`mt-1 ${input}`} />
       </label>
       <button type="submit" className="btn-primary" disabled={busy || !name.trim()}>Agregar</button>
       {error && <p role="alert" className="md:col-span-4 text-sm text-red-700">{error}</p>}
@@ -163,11 +163,11 @@ function Detail({ id, onChanged }: { id: string; onChanged: () => void }) {
             </select>
           </label>
           <label className="text-xs font-medium text-botanica-grafito">Cantidad ({s.unit})
-            <input required type="number" inputMode="decimal" min="0" step="any" onKeyDown={blockNumberKeys} value={quantity} onChange={(e) => setQuantity(e.target.value)} className={`mt-1 ${input}`} />
+            <input required type="number" inputMode="decimal" min="0" step="any" onKeyDown={blockNumberKeys} value={quantity} onChange={(e) => setQuantity(typedMeasure(e.target.value))} className={`mt-1 ${input}`} />
           </label>
           {kind === 'purchase' && (
             <label className="text-xs font-medium text-botanica-grafito">Costo por unidad (MXN, opcional)
-              <input type="number" min="0" step="any" onKeyDown={blockNumberKeys} value={cost} onChange={(e) => setCost(e.target.value)} className={`mt-1 ${input}`} />
+              <input type="number" min="0" step="any" onKeyDown={blockNumberKeys} value={cost} onChange={(e) => setCost(typedMeasure(e.target.value))} className={`mt-1 ${input}`} />
             </label>
           )}
           {kind === 'use' && (

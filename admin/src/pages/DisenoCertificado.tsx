@@ -159,8 +159,8 @@ export default function DisenoCertificado() {
       {versions.length > 1 && (
         <nav aria-label="Versiones" className="flex flex-wrap gap-2">
           {versions.map((d) => (
-            <button key={d.id} type="button" onClick={() => setSelected(d.id)}
-              className={`rounded-full border px-3 py-1 text-xs ${d.id === current?.id ? 'border-botanica-jade bg-botanica-jade/10 text-botanica-negro' : 'border-botanica-gris/30 text-botanica-grafito'}`}>
+            <button key={d.id} type="button" onClick={() => setSelected(d.id)} aria-current={d.id === current?.id ? 'true' : undefined}
+              className={`chip-btn rounded-full border px-3 py-1 text-xs ${d.id === current?.id ? 'border-botanica-jade bg-botanica-jade/10 text-botanica-negro' : 'border-botanica-gris/30 text-botanica-grafito'}`}>
               v{d.version} · {STATUS[d.status].label}
             </button>
           ))}
@@ -309,7 +309,7 @@ function EditorForm({ design, onChanged, setError, piecePalette, contact }: {
         <div role="group" aria-label="Tamaño de la vista previa" className="mb-3 flex gap-2 text-sm">
           {(['escritorio', 'celular'] as const).map((v) => (
             <button key={v} type="button" aria-pressed={viewport === v} onClick={() => setViewport(v)}
-              className={`rounded-full border px-3 py-1 ${viewport === v ? 'border-botanica-jade bg-botanica-jade/10 font-medium text-botanica-negro' : 'border-botanica-gris/30 text-botanica-grafito'}`}>
+              className={`chip-btn rounded-full border px-3 py-1 ${viewport === v ? 'border-botanica-jade bg-botanica-jade/10 font-medium text-botanica-negro' : 'border-botanica-gris/30 text-botanica-grafito'}`}>
               {v === 'escritorio' ? 'Escritorio' : 'Celular'}
             </button>
           ))}
@@ -401,9 +401,9 @@ function EditorForm({ design, onChanged, setError, piecePalette, contact }: {
             <fieldset className="flex flex-col gap-2">
               <legend className="text-xs font-medium text-botanica-grafito mb-1">Edición</legend>
               <div className="grid gap-4 sm:grid-cols-2">
-                <TextInput id="d-ed-number" type="number" label="Pieza número" value={editionText.number}
+                <TextInput id="d-ed-number" type="number" inputMode="numeric" min={1} max={9999} label="Pieza número" value={editionText.number}
                   onChange={(v) => setEdition({ ...editionText, number: v })} />
-                <TextInput id="d-ed-total" type="number" label="De un total de" value={editionText.total}
+                <TextInput id="d-ed-total" type="number" inputMode="numeric" min={1} max={9999} label="De un total de" value={editionText.total}
                   onChange={(v) => setEdition({ ...editionText, total: v })} />
               </div>
               <p className={`text-xs ${editionFilled && !editionValid ? 'text-red-700' : 'text-botanica-grafito'}`}>
@@ -469,6 +469,7 @@ function EditorForm({ design, onChanged, setError, piecePalette, contact }: {
               <button type="button" className="btn-primary" disabled={!dirty || busy}
                 onClick={() => void run(() => adminApi.updateDesign(design.id, params, design.updated_at), 'Diseño guardado')}>Guardar</button>
               {dirty && <button type="button" className="btn-secondary" disabled={busy} onClick={() => setParams(design.params)}>Deshacer cambios</button>}
+              {dirty && <p className="basis-full text-xs text-botanica-grafito">Guarda los cambios para poder enviarlo al artesano o registrar la aprobación.</p>}
               <button type="button" className="btn-secondary" disabled={busy || dirty} onClick={() => void submit()}>
                 {design.status === 'in_review' ? 'Generar otro enlace de revisión' : 'Enviar al artesano'}
               </button>

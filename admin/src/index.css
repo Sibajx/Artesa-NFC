@@ -338,6 +338,13 @@
   outline-offset: 2px;
 }
 
+/* Un botón deshabilitado se ve apagado (antes solo el primario): si no, parece activo y "no se ilumina". */
+.btn-secondary:disabled,
+.btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .btn-primary,
   .btn-secondary,
@@ -789,4 +796,26 @@
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+/* Píldoras que eligen una opción (versiones, tamaño de la vista previa, etapas): al pasar el cursor
+   se iluminan como los botones; la que ya está elegida conserva su color. */
+.chip-btn {
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    box-shadow 200ms ease;
+}
+
+.chip-btn:hover:not(:disabled):not([aria-pressed="true"]):not([aria-selected="true"]):not([aria-current="true"]) {
+  background-color: var(--marigold);
+  border-color: var(--marigold);
+  color: #1a0f05;
+  box-shadow: 0 0 22px -4px color-mix(in srgb, var(--marigold) 65%, transparent);
+}
+
+.chip-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
