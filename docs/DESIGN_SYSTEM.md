@@ -485,15 +485,21 @@ AUTENTICIDAD
 
 ## 22. Decisiones pendientes
 
-- Logo final y variantes.
-- Diseño definitivo del menú abierto.
-- Composición exacta del hero.
-- Tratamiento del buscador.
-- Footer final.
-- Reloj/opening si se conserva.
-- Nivel máximo de personalización de certificados.
-- Librería de animaciones.
-- Tecnología exacta del visor 3D.
+Revisado el 2026-10-13 (PEND-044) contra el código. Lo que el sitio ya hace se
+anota como **resuelto en la práctica**: es el estado del código, no una nueva
+aprobación; si el PO quiere reabrir alguno, se reabre.
+
+| Punto | Estado |
+|---|---|
+| Logo final y variantes | **Abierto** (decisión del PO). |
+| Diseño definitivo del menú abierto | **Abierto** (decisión del PO). |
+| Composición exacta del hero | Resuelto en la práctica: hero por temporadas con video y póster, administrado desde Gestión (P-028). |
+| Tratamiento del buscador | **Abierto** para el sitio público. Gestión ya tiene su búsqueda global (Ctrl+K o `/`). |
+| Footer final | Resuelto en la práctica: el pie de `BaseLayout.astro` está en producción. Falta solo la aprobación formal. |
+| Reloj/opening si se conserva | **Abierto** (decisión del PO). |
+| Nivel máximo de personalización de certificados | Resuelto en la práctica: "Diseño del certificado" de Gestión, con revisión del artesano (ADR-030 fase 5). |
+| Librería de animaciones | Resuelto: Motion 13.4.0, cargada bajo demanda. |
+| Tecnología exacta del visor 3D | Resuelto en la práctica: `@google/model-viewer` 4.3.1 sobre `three`, en un chunk que se carga solo cuando se pide (ADR-020). |
 
 ## 23. Definition of Done — Issue #2
 

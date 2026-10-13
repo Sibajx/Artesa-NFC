@@ -73,6 +73,7 @@ const LABELS: Record<string, string> = {
   'custody.programmed': 'Grabó el chip',
   'custody.locked': 'Bloqueó el chip',
   'custody.revoked': 'Revocó el certificado',
+  'custody.authenticity_set': 'Editó la verificación y la edición del certificado',
   'custody.uid_released': 'Liberó un chip dado de baja para volver a usarlo',
   'custody.denied': 'Intentó entrar a Certificación sin permiso',
   'custody.card_issued': 'Generó la tarjeta del comprador',

@@ -87,5 +87,10 @@ export const certificate: CertificateAuthentic = {
   authenticity: { status: "authentic", certificate_version: 1, issued_at: "2026-01-10T00:00:00Z" },
   piece,
   artisan,
-  authenticity_metadata: { notes: "Nota de prueba." },
+  authenticity_metadata: {
+    notes: "Nota de prueba.",
+    verified_by: "Verificada en persona por el equipo.",
+    verified_on: "2026-10-01",
+    edition: "3 de 10",
+  },
 };
