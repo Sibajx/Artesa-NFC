@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { DragEvent } from 'react';
-import { blockNumberKeys } from '../numbers';
+import { blockNumberKeys, typedMeasure } from '../numbers';
 import { ApiError, MAX_UPLOAD_BYTES, adminApi, mediaUrl } from '../api';
 import type { HeroCampaign, HeroState, SiteImagesState, SiteSlot } from '../api';
 import { writeErrorMessage } from '../format';
@@ -112,7 +112,7 @@ function DropZone({ campaign, busy, onFile }: { campaign: HeroCampaign; busy: bo
           placeholder="0"
           value={startText}
           disabled={disabled}
-          onChange={(e) => setStartText(e.target.value)}
+          onChange={(e) => setStartText(typedMeasure(e.target.value))}
           className="w-20 rounded-lg border border-botanica-gris/30 px-2 py-1 text-center text-sm"
         />
       </label>

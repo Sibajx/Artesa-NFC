@@ -51,7 +51,7 @@ export default function Produccion() {
         {TABS.map((t) => (
           <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} title={t.hint}
             onClick={() => { setTab(t.key); setSelected(null); }}
-            className={`shrink-0 rounded-full border px-4 py-2 text-sm font-medium ${tab === t.key
+            className={`chip-btn shrink-0 rounded-full border px-4 py-2 text-sm font-medium ${tab === t.key
               ? 'border-botanica-jade bg-botanica-jade text-[var(--on-accent)]'
               : 'border-botanica-gris/30 bg-white text-botanica-grafito hover:border-botanica-jade'}`}>
             {t.label} <span className="ml-1 tabular-nums opacity-80">{counts[t.key]}</span>
