@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Text, func
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -13,6 +13,7 @@ from app.models.enums import PublicationStatus, publication_status_enum
 
 class Artisan(Base):
     __tablename__ = "artisan"
+    __table_args__ = (CheckConstraint("length(btrim(slug)) > 0", name="ck_artisan_slug_not_blank"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     slug: Mapped[str] = mapped_column(Text, unique=True, nullable=False)

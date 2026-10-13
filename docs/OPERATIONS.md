@@ -380,8 +380,13 @@ la regla A (la más amplia).
 
 ## 12. Fuera del alcance de este cambio
 
-No se corrigen aquí (siguen abiertos): los constraints de base de datos
-(F-12). El volumen de logs y su retención pasó a §9.1 (2026-10-13).
+Los constraints de base de datos (F-12) se cerraron el 2026-10-13 (PEND-024): se
+auditó el esquema y la migración `e7c1f3a9d5b2` añade 11 `CHECK` (versión del
+certificado >= 1, posiciones >= 0, ancho y alto de imágenes > 0, año de creación
+entre 1 y 9999, slugs no vacíos) y un índice en `owner_verification.claim_id`.
+Solo dicen lo que el código ya garantiza; se comprobó en producción, en solo
+lectura, que ninguna fila los viola. El volumen de logs y su retención pasó a
+§9.1 (2026-10-13).
 
 Cerrados el 2026-10-08:
 
