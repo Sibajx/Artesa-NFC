@@ -22,6 +22,8 @@ class Visit(Base):
         CheckConstraint("kind IN ('artesano', 'galeria', 'otro')", name="ck_visit_kind"),
         CheckConstraint("length(btrim(summary)) >= 10", name="ck_visit_summary"),
         CheckConstraint("(photo_path IS NULL) = (photo_width IS NULL)", name="ck_visit_photo_consistent"),
+        CheckConstraint("(photo_width IS NULL OR photo_width > 0) AND (photo_height IS NULL OR photo_height > 0)",
+                        name="ck_visit_photo_dimensions"),
         CheckConstraint("artisan_id IS NULL OR unregistered_artisan IS NULL", name="ck_visit_artisan_exclusive"),
         CheckConstraint("unregistered_artisan IS NULL OR length(btrim(unregistered_artisan)) >= 2",
                         name="ck_visit_unregistered_name"),

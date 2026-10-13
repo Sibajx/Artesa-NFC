@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, Text, func
+from sqlalchemy import CheckConstraint, DateTime, Integer, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -15,6 +15,7 @@ from app.db.base import Base
 
 class SiteImage(Base):
     __tablename__ = "site_image"
+    __table_args__ = (CheckConstraint("width > 0 AND height > 0", name="ck_site_image_dimensions"),)
 
     slot: Mapped[str] = mapped_column(Text, primary_key=True)
     avif: Mapped[str] = mapped_column(Text, nullable=False)

@@ -59,6 +59,8 @@ ID de pieza != UID NFC != token privado
 **Estado:** Aceptado para MVP  
 **Decisión:** el MVP certifica autenticidad. Propiedad y transferencias se diseñan para futuro.
 
+**Actualización 2026-10-13 (PEND-031):** lo diseñado para futuro ya existe por ADR-030: tarjeta rascable del comprador, reclamo con PIN y correo, reposición de tarjeta, bloqueo, reporte de robo y transferencia a un nuevo dueño desde Gestión (`app/services/ownership.py`, `/api/admin/v1/custody/pieces/{id}/transfer`). Lo que sigue fuera de alcance es una transferencia iniciada por el propio dueño desde la página pública.
+
 ## ADR-011 — Piezas únicas
 
 **Estado:** Aceptado  

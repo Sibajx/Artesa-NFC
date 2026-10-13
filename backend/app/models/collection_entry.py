@@ -22,6 +22,7 @@ class CollectionEntry(Base):
     __tablename__ = "collection_entry"
     __table_args__ = (
         CheckConstraint("length(btrim(title)) >= 3", name="ck_collection_entry_title"),
+        CheckConstraint("position >= 0", name="ck_collection_entry_position"),
         CheckConstraint("(avif IS NULL) = (jpg IS NULL) AND (webp IS NULL) = (jpg IS NULL) "
                         "AND (width IS NULL) = (jpg IS NULL) AND (height IS NULL) = (jpg IS NULL)",
                         name="ck_collection_entry_image_consistent"),
