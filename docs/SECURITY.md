@@ -454,6 +454,12 @@ mal configurados. No requieren distinguir "malformado" de "no
 encontrado" con el mismo rigor anti-enumeración que el certificado —
 son datos ya públicos por diseño.
 
+**Implementado en el origen (2026-10-13, PEND-005 y PEND-025):** el límite de
+120/min por IP aplica a todos los `GET`/`HEAD` bajo `/api/v1/` y, si una IP
+sigue enviando estando limitada, un enfriamiento de 10 minutos
+(`app/core/rate_limit.py`; detalle y variables en `OPERATIONS.md` §9). Es un
+respaldo en memoria del límite de Cloudflare, no su sustituto.
+
 ### 5.3 Login administrativo en Cloudflare Access
 
 ArtesaNFC no implementa un endpoint de login: Cloudflare Access autentica fuera

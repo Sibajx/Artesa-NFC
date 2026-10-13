@@ -104,6 +104,10 @@
     "c3e9a5d7b1f2": {
       "class": "additive",
       "note": "Adds the collection_entry table (the entries of the home's collection block: photo, title, text and link, with order and an active flag). Nothing existing changes and no row is seeded; older code ignores it, so a code-only rollback is compatible (the home keeps its single built-in entry). The downgrade drops the table; the image files under publico/sitio/colecciones/ stay on disk."
+    },
+    "d5b8e2f4a6c1": {
+      "class": "additive",
+      "note": "Adds the nullable column certificate.replaces_certificate_id (the certificate a rotation replaces), its foreign key to certificate.id, an index and a check that a certificate does not replace itself. Nothing existing changes and no row is rewritten; older code ignores the column, so a code-only rollback is compatible. The downgrade drops the column, so the links already recorded are lost."
     }
   }
 }

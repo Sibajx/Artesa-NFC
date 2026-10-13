@@ -1,0 +1,20 @@
+# PEND-006: volume and retention of the origin's logs (docs/OPERATIONS.md
+# section 9.1). Uvicorn's access log carries the visitor's IP, and the approved
+# policy keeps clear IPs at most 30 days (docs/SECURITY.md section 12.3), so
+# the journal is capped by age as well as by size.
+#
+# Install on the host (needs sudo; the PO runs it):
+#   sudo install -D -m 0644 journald-artesa.conf.example /etc/systemd/journald.conf.d/artesa.conf
+#   sudo systemctl restart systemd-journald
+#   journalctl --disk-usage
+[Journal]
+Storage=persistent
+# Age: nothing older than 30 days survives, whatever the size.
+MaxRetentionSec=30day
+# Size: the journal never takes more than this, nor leaves less than the free
+# space below on the disk.
+SystemMaxUse=500M
+SystemKeepFree=2G
+# Bursts (a loop of errors) are throttled instead of flooding the disk.
+RateLimitIntervalSec=30s
+RateLimitBurst=2000
