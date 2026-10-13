@@ -271,7 +271,7 @@ export const aboutCopy = {
         bio: "Hábil en manufactura y herramientas, con certificaciones internacionales en infraestructura, hardware e instalaciones eléctricas y electrónicas. En ArtesaNFC cierra tratos, lleva la logística y las entregas, y capacita a los artesanos para preparar sus piezas para el NFC.",
         quote: "Avanzar no es llegar a la meta, sino hacer que cada paso valga.",
         initials: "H",
-        photo: null,
+        photo: "/media/equipo/hariel.jpg",
         channels: [
           { kind: "email", label: "Correo", href: "mailto:nicolashariel2103@gmail.com" },
           { kind: "instagram", label: "Instagram", href: "https://www.instagram.com/hariel__03" },
