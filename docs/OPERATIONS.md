@@ -279,12 +279,36 @@ El servidor está detrás de un FortiGate que intercepta su HTTPS hacia
 
 - La capa **primaria** es Cloudflare (regla C): ve la IP real del visitante,
   actúa antes del Tunnel y del origen y no requiere código.
-- **No** se implementa un limitador en memoria en FastAPI en esta fase.
+- **Actualización 2026-10-13 (PEND-005 / PEND-025, decisión del PO):** además
+  de Cloudflare, el origen tiene su propio respaldo en memoria
+  (`app/core/rate_limit.py`): como máximo **120 `GET`/`HEAD` por minuto por IP**
+  bajo `/api/v1/` (`PUBLIC_RATE_LIMIT_PER_MINUTE`; `0` lo apaga) y, si una IP
+  sigue enviando estando limitada (**30** rechazos en un minuto,
+  `PUBLIC_ABUSE_REJECTIONS`), un enfriamiento de **10 minutos**
+  (`PUBLIC_ABUSE_COOLDOWN_SECONDS`) en el que todo se rechaza. Responde `429`
+  con el sobre estándar y `Retry-After`. No cuenta `/health`, `/media/`,
+  `/api/admin/` ni los `POST`. El estado vive en el proceso: es correcto con el
+  único worker de Uvicorn de producción y se reinicia con el servicio. Si algún
+  día hubiera más de un worker, el límite efectivo se multiplica y habría que
+  moverlo a un almacén compartido. Detrás de una red compartida (escuela, oficina)
+  muchos visitantes comparten IP: si molesta, subir el límite.
 - El rate limiting es control de costo y de abuso, no la defensa contra
   fuerza bruta: el token tiene 256 bits de entropía (`SECURITY.md` §2.1).
 - Si el plan de Cloudflare no permitiera una regla utilizable, se reabre la
   decisión (por ejemplo un limitador por proceso en la app, correcto solo con un
   único worker) y se actualiza `SECURITY.md` §5.5; no se improvisa en producción.
+
+### 9.1 Volumen y retención de logs (PEND-006)
+
+El servicio escribe a **journald** (sin `StandardOutput` propio). La política
+de `SECURITY.md` §12.3 (IP en claro: máximo 30 días) se aplica con un drop-in
+de journald: `backend/ops/systemd/journald-artesa.conf.example` fija
+`MaxRetentionSec=30day`, `SystemMaxUse=500M`, `SystemKeepFree=2G` y un tope de
+ráfaga. Se instala a mano en el host (`sudo install -D -m 0644 … /etc/systemd/journald.conf.d/artesa.conf`
+y `sudo systemctl restart systemd-journald`); verificar con
+`journalctl --disk-usage` y `journalctl --since '31 days ago' | head`. Lo que
+no cubre: `audit_event.ip_address` (tabla append-only; ver `SECURITY.md` §12.3)
+y los logs del borde de Cloudflare, que dependen del plan.
 
 ## 10. Checklist de verificación externa
 
@@ -356,8 +380,13 @@ la regla A (la más amplia).
 
 ## 12. Fuera del alcance de este cambio
 
-No se corrigen aquí (siguen abiertos): los constraints de base de datos
-(F-12) y el volumen de logs y su retención (`SECURITY.md` §12.3).
+Los constraints de base de datos (F-12) se cerraron el 2026-10-13 (PEND-024): se
+auditó el esquema y la migración `e7c1f3a9d5b2` añade 11 `CHECK` (versión del
+certificado >= 1, posiciones >= 0, ancho y alto de imágenes > 0, año de creación
+entre 1 y 9999, slugs no vacíos) y un índice en `owner_verification.claim_id`.
+Solo dicen lo que el código ya garantiza; se comprobó en producción, en solo
+lectura, que ninguna fila los viola. El volumen de logs y su retención pasó a
+§9.1 (2026-10-13).
 
 Cerrados el 2026-10-08:
 

@@ -7,6 +7,7 @@ import { useConfirm, useToast } from '../feedback-context';
 import { useLoad } from '../hooks';
 import { NfcError, lockTag, nfcSupported, readTag, writeUrl } from '../nfc';
 import { Badge, ErrorState, Loading } from '../ui';
+import DatosCertificado from '../DatosCertificado';
 import TarjetaComprador from '../TarjetaComprador';
 
 // ADR-030 phase 2: certify a piece and write its NFC tag from Gestión
@@ -55,7 +56,13 @@ type Phase =
   | { step: 'confirm'; purpose: 'issue' | 'replace'; uid: string }
   | { step: 'writing'; issued: CustodyIssued }
   | { step: 'verifying'; issued: CustodyIssued }
-  | { step: 'locking' };
+  | { step: 'locking' }
+  // The chip is (or may be) physically locked but the server has not recorded it.
+  | { step: 'lock-record'; uid: string };
+
+function normalizeUid(uid: string): string {
+  return uid.replace(/[:\-\s]/g, '').toUpperCase();
+}
 
 function message(e: unknown): string {
   if (e instanceof NfcError) return e.message;
@@ -163,6 +170,74 @@ function Wizard({ state, reload, error, setError }: WizardProps) {
     }
   }
 
+  // Fallback when Web NFC cannot write: the URL goes to the clipboard so it can
+  // be written with NFC Tools. It is the certificate secret: nothing else shows it.
+  async function copyUrl(issued: CustodyIssued) {
+    try {
+      await navigator.clipboard.writeText(issued.url);
+      toast('URL copiada. Pégala en NFC Tools y limpia el portapapeles después.');
+    } catch {
+      setError('No se pudo copiar la URL. Reintenta la grabación desde aquí.');
+    }
+  }
+
+  async function markWrittenExternally(issued: CustodyIssued) {
+    const uid = issued.uid ?? live?.uid;
+    if (!uid) {
+      setError('No se conoce el número del chip. Vuelve a empezar leyendo el chip.');
+      return;
+    }
+    const answer = await confirm({
+      title: '¿Ya grabaste la URL con NFC Tools?',
+      body: `Se registrará el chip ${uid} como grabado sin leerlo de vuelta. Antes, escanéalo con otro teléfono: debe abrir el certificado de esta pieza.`,
+      confirmLabel: 'Sí, ya lo grabé',
+    });
+    if (answer === null) return;
+    try {
+      await adminApi.custodyProgram(state.piece_id, issued.tag_id, uid);
+      toast('Chip registrado como grabado ✓');
+      setError(null);
+      setPhase({ step: 'idle' });
+      reload();
+    } catch (e) {
+      setError(message(e));
+    }
+  }
+
+  async function markWrittenAndLockedExternally(issued: CustodyIssued) {
+    const uid = issued.uid ?? live?.uid;
+    if (!uid) {
+      setError('No se conoce el número del chip. Vuelve a empezar leyendo el chip.');
+      return;
+    }
+    const answer = await confirm({
+      title: '¿Grabaste y bloqueaste el chip con otra app?',
+      body: `Se registrará el chip ${uid} como grabado y bloqueado para siempre, sin leerlo. Antes, escanéalo con otro teléfono: debe abrir el certificado de esta pieza. Si no está bloqueado de verdad, el sistema creerá que sí.`,
+      confirmLabel: 'Sí, grabado y bloqueado',
+      tone: 'danger',
+    });
+    if (answer === null) return;
+    try {
+      await adminApi.custodyProgram(state.piece_id, issued.tag_id, uid);
+    } catch (e) {
+      setError(message(e));
+      return;
+    }
+    // Programmed is already recorded: a failure here is retried with "Ya lo bloqueé".
+    try {
+      await adminApi.custodyLock(state.piece_id, uid);
+      toast('Chip registrado como grabado y bloqueado ✓');
+    } catch (e) {
+      setError(`Se registró como grabado, pero falta el bloqueo: usa "Ya lo bloqueé: solo registrar". ${message(e)}`);
+      setPhase({ step: 'idle' });
+      reload();
+      return;
+    }
+    setError(null);
+    setPhase({ step: 'idle' });
+    reload();
+  }
+
   async function lock() {
     // Irreversible: the code must be typed, so it cannot happen by a slip.
     const typed = await confirm({
@@ -179,16 +254,60 @@ function Wizard({ state, reload, error, setError }: WizardProps) {
     }
     setError(null);
     setPhase({ step: 'locking' });
+    let uid: string;
     try {
-      await lockTag();
-      const back = await readTag();
-      await adminApi.custodyLock(state.piece_id, back.uid);
-      toast('Chip bloqueado ✓');
-      reload();
+      // Read first: never do the irreversible step on a different chip.
+      uid = (await readTag()).uid;
     } catch (e) {
       setError(message(e));
+      setPhase({ step: 'idle' });
+      return;
     }
-    setPhase({ step: 'idle' });
+    if (live && live.uid && normalizeUid(uid) !== normalizeUid(live.uid)) {
+      setError(BLOCKERS.uid_mismatch + ' El chip no se bloqueó.');
+      setPhase({ step: 'idle' });
+      return;
+    }
+    try {
+      await lockTag();
+    } catch (e) {
+      // A chip that is already read-only also fails here: offer to just record it.
+      setError(`${message(e)} Si el chip ya se había bloqueado, usa "Ya lo bloqueé: solo registrar".`);
+      setPhase({ step: 'idle' });
+      return;
+    }
+    await recordLock(uid);
+  }
+
+  async function recordLock(uid: string) {
+    setError(null);
+    try {
+      await adminApi.custodyLock(state.piece_id, uid);
+      toast('Chip bloqueado ✓');
+      setPhase({ step: 'idle' });
+      reload();
+    } catch (e) {
+      setError(`El chip ya está bloqueado, pero falta registrarlo. ${message(e)}`);
+      setPhase({ step: 'lock-record', uid });
+    }
+  }
+
+  // The chip was locked earlier (e.g. with an external app) but the server never
+  // heard about it. No NFC needed: the registered UID is the one recorded.
+  async function recordExistingLock() {
+    const uid = live?.uid;
+    if (!uid) {
+      setError('No se conoce el número del chip. Revisa la pieza.');
+      return;
+    }
+    const answer = await confirm({
+      title: '¿Ya bloqueaste el chip con otra app?',
+      body: `Se registrará el chip ${uid} como bloqueado para siempre, sin leerlo. Confirma que el bloqueo se hizo de verdad: si no, el sistema creerá que está protegido y no lo está.`,
+      confirmLabel: 'Sí, ya está bloqueado',
+      tone: 'danger',
+    });
+    if (answer === null) return;
+    await recordLock(uid);
   }
 
   async function revoke(reason: string) {
@@ -271,10 +390,23 @@ function Wizard({ state, reload, error, setError }: WizardProps) {
           <>
             <Step title="Grabando…" body="Mantén el chip junto al teléfono. Si falló, vuelve a acercarlo y pulsa Reintentar." pulse={!error} />
             {error && <button type="button" className="btn-primary" onClick={() => void write(phase.issued)}>Reintentar grabación</button>}
+            {error && (
+              <div className="flex flex-wrap gap-2">
+                <button type="button" className="btn-secondary" onClick={() => void copyUrl(phase.issued)}>Copiar URL para NFC Tools</button>
+                <button type="button" className="btn-secondary" onClick={() => void markWrittenExternally(phase.issued)}>Ya lo grabé con NFC Tools</button>
+                <button type="button" className="btn-secondary" onClick={() => void markWrittenAndLockedExternally(phase.issued)}>Grabado y bloqueado con otra app</button>
+              </div>
+            )}
           </>
         )}
         {phase.step === 'verifying' && <Step title="Verificando…" body="Leyendo de vuelta para comprobar lo grabado." pulse />}
         {phase.step === 'locking' && <Step title="Bloqueando…" body="Mantén el chip junto al teléfono." pulse />}
+        {phase.step === 'lock-record' && (
+          <>
+            <Step title="Chip bloqueado, falta registrarlo" body="El bloqueo físico ya se hizo. Solo falta guardarlo en el sistema; no hace falta acercar el chip." />
+            <div><button type="button" className="btn-primary" onClick={() => void recordLock(phase.uid)}>Registrar bloqueo</button></div>
+          </>
+        )}
 
         {phase.step === 'idle' && (
           <>
@@ -300,6 +432,7 @@ function Wizard({ state, reload, error, setError }: WizardProps) {
                 <div className="flex flex-wrap gap-2">
                   <button type="button" className="btn-secondary" disabled={!supported} onClick={() => void lock()}>Bloquear chip</button>
                   <button type="button" className="btn-secondary" disabled={!supported} onClick={() => void emit('reissue', null, 'other')}>Regrabar el mismo chip</button>
+                  <button type="button" className="btn-secondary" onClick={() => void recordExistingLock()}>Ya lo bloqueé: solo registrar</button>
                 </div>
               </>
             )}
@@ -345,6 +478,10 @@ function Wizard({ state, reload, error, setError }: WizardProps) {
             ))}
           </ul>
         </section>
+      )}
+
+      {state.certificate_active && phase.step === 'idle' && (
+        <DatosCertificado key={state.piece_id} pieceId={state.piece_id} current={state.authenticity ?? null} reload={reload} />
       )}
 
       {(state.certificate_active || state.card) && phase.step === 'idle' && (

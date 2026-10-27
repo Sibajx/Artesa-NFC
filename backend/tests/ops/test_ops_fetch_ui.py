@@ -210,3 +210,38 @@ def test_ui_checks_the_sidecar_and_index(s):
 def test_ui_changes_state_only_from_a_terminal(s):
     stage_ui(s, "aaaaaaaaaaaa", ui_tarball({"index.html": b"x"}))
     assert run(s, ["ui", "aaaaaaaaaaaa"], tty=False) == int(rc.Exit.NO_TTY_OR_ABORT)
+
+
+def test_ui_listing_is_newest_first_and_retention_keeps_current_previous_and_the_newest(s):
+    ui_root = s.root / "shared" / "admin-ui"
+    commits = [c * 12 for c in "abcdef01"]
+    for i, commit12 in enumerate(commits):  # installed in this order; names are NOT in install order
+        stage_ui(s, commit12, ui_tarball({"index.html": commit12.encode()}))
+    order = ["c", "a", "1", "b", "0", "d", "f", "e"]  # install order, oldest first
+    shuffled = [c * 12 for c in order]
+    for i, commit12 in enumerate(shuffled):
+        assert run(s, ["ui", commit12]) == 0
+        os.utime(ui_root / commit12, ns=(10**18 + i * 10**9, 10**18 + i * 10**9))
+    # status lists the three newest installed, newest first, not the last three by name
+    assert run(s, ["ui", shuffled[-1]]) == 0
+    assert rf.ui_by_recency(ui_root)[:3] == [shuffled[-1], shuffled[-2], shuffled[-3]]
+    assert run(s, ["ui"]) == 0 and "newest first: " + ", ".join(rf.ui_by_recency(ui_root)[1:4]) in s.sink.text
+    # retention: 8 installed, keep 5 -> the three oldest are gone, never the current or previous
+    left = sorted(p.name for p in ui_root.iterdir() if p.is_dir() and not p.is_symlink())
+    assert len(left) == rf.UI_KEEP and shuffled[-1] in left and shuffled[-2] in left
+    assert not any((ui_root / c).exists() for c in shuffled[:3])
+    assert os.readlink(ui_root / "current") == shuffled[-1]
+
+
+def test_prune_never_deletes_the_current_or_the_rollback_target_even_when_old(tmp_path):
+    ui_root = tmp_path / "admin-ui"
+    ui_root.mkdir()
+    names = [c * 12 for c in "abcdef1"]
+    for i, name in enumerate(names):
+        (ui_root / name).mkdir()
+        os.utime(ui_root / name, ns=(10**18 + i * 10**9,) * 2)
+    os.symlink(names[0], ui_root / "current")  # the OLDEST is current (a rollback)
+    removed = rf.prune_ui(ui_root, keep=3, protect=(names[1],))  # and the second oldest is the rollback target
+    assert names[0] not in removed and names[1] not in removed
+    assert sorted(p.name for p in ui_root.iterdir() if p.is_dir() and not p.is_symlink()) == sorted([names[0], names[1], names[6]])
+    assert rf.prune_ui(ui_root, keep=3, protect=(names[1],)) == []  # idempotent

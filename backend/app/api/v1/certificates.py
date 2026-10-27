@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import ipaddress
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -31,7 +32,7 @@ from app.schemas.certificate import (
     PinResetResult,
 )
 from app.schemas.piece import piece_to_public
-from app.services import designs, ownership
+from app.services import authenticity, designs, ownership
 from app.services import mailer
 from app.services.certificates import hash_certificate_token, is_syntactically_plausible_token
 
@@ -97,11 +98,8 @@ def _public_parts(db: Session, certificate: Certificate) -> dict:
     piece_summaries = fetch_piece_summaries(db, artisan_pieces)
 
     # API_CONTRACT.md section 7: authenticity_metadata is an explicit
-    # allowlist projection (only `notes`), never the raw JSONB column.
-    metadata = certificate.authenticity_metadata or {}
-    notes = metadata.get("notes")
-    if not isinstance(notes, str):
-        notes = None
+    # allowlist projection (app/services/authenticity.py), never the raw JSONB.
+    public_metadata = authenticity.project(certificate.authenticity_metadata)
 
     return {
         "authenticity": AuthenticityAuthentic(
@@ -111,7 +109,7 @@ def _public_parts(db: Session, certificate: Certificate) -> dict:
         ),
         "piece": piece_to_public(piece, piece_media),
         "artisan": artisan_to_public(artisan, artisan_media, piece_summaries),
-        "authenticity_metadata": AuthenticityMetadataPublic(notes=notes),
+        "authenticity_metadata": AuthenticityMetadataPublic(**dataclasses.asdict(public_metadata)),
     }
 
 

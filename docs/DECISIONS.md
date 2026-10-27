@@ -59,6 +59,8 @@ ID de pieza != UID NFC != token privado
 **Estado:** Aceptado para MVP  
 **Decisión:** el MVP certifica autenticidad. Propiedad y transferencias se diseñan para futuro.
 
+**Actualización 2026-10-13 (PEND-031):** lo diseñado para futuro ya existe por ADR-030: tarjeta rascable del comprador, reclamo con PIN y correo, reposición de tarjeta, bloqueo, reporte de robo y transferencia a un nuevo dueño desde Gestión (`app/services/ownership.py`, `/api/admin/v1/custody/pieces/{id}/transfer`). Lo que sigue fuera de alcance es una transferencia iniciada por el propio dueño desde la página pública.
+
 ## ADR-011 — Piezas únicas
 
 **Estado:** Aceptado  
@@ -503,3 +505,28 @@ El token siempre fue de **256 bits** (32 bytes del CSPRNG, Base64url sin
 padding, 43 caracteres): es el estándar de SECURITY.md §2.1, que este ADR cita
 "sin cambios", y es lo que hace `backend/app/services/certificates.py`
 (`_TOKEN_BYTES = 32`). Se corrigió la cifra; la decisión no cambia.
+
+## Decisiones vigentes registradas a posteriori (RD-001 a RD-012)
+
+**Estado:** Registro (2026-10-12)
+
+Estas doce decisiones ya estaban en vigor y descritas en otros documentos, pero
+no tenían ADR. Se registran aquí para que el índice de decisiones esté completo;
+**no son decisiones nuevas**. Donde el documento de origen declara una
+aprobación, se cita; donde no, se dice.
+
+| ID | Decisión | Origen | Aprobación |
+|---|---|---|---|
+| RD-001 | Producción = Cloudflare → Tunnel (`cloudflared`) → Uvicorn en `127.0.0.1:8000` → PostgreSQL. Nginx no está desplegado; su ejemplo queda como referencia. | `OPERATIONS.md` §1-§2, `ARCHITECTURE.md` §2-§3 | No consta fecha ni quién |
+| RD-002 | La API pública es la única autoridad de publicación (F-08): el frontend muestra una pieza o artesano solo tras un `200` válido; `404` y los errores dan estados neutros con `noindex`. | `ARCHITECTURE.md` §5, `SPRINT_4.md` §17 | Declarada aprobada por el Product Owner |
+| RD-003 | El límite de peticiones de `POST /certificates/resolve` lo hace Cloudflare (regla C), no FastAPI; si el plan de Cloudflare no lo permitiera, se reabre. | `OPERATIONS.md` §2, §9, `SECURITY.md` §5.5 | "Decidido" en el documento |
+| RD-004 | `APP_ENV` y `DATABASE_URL` son obligatorios (falla cerrado): sin ellos nada arranca; producción exige `https://artesanfc.com` en CORS y `DEBUG=false`; el seed solo corre en `local` y `test`. | `ARCHITECTURE.md` §11, `backend/README.md` | Hallazgos F-02 y F-05 |
+| RD-005 | `token_hash = SHA-256(token)`, sin clave ni pepper: el token ya tiene 256 bits; pasar a un hash con clave sería una migración de seguridad aparte. | `SECURITY.md` §3.1, §21.2 | Alexis, 2026-09-16 |
+| RD-006 | Un único estado público `unavailable` para cualquier token no resoluble (inexistente, revocado, malformado o no publicado), contra la enumeración. | `API_CONTRACT.md` §7, §15.4, `SECURITY.md` §4 | Alexis, 2026-09-16 |
+| RD-007 | Una pieza puede tener varios certificados y tags históricos, pero como máximo uno activo de cada tipo (índices únicos parciales); los certificados `revoked` no se borran y un reemplazo es una fila nueva. | `DATA_MODEL.md` §2.3, §4, §14, `SECURITY.md` §20 | Alexis, 2026-09-16 |
+| RD-008 | El prototipo Worker/D1 sale del repositorio (F-07); sigue en Git y el rollback es un `git revert`. La limpieza del panel de Cloudflare fue un seguimiento aparte (cerrado el 2026-10-05). | `ARCHITECTURE.md` §1, §15 | Hallazgo F-07 |
+| RD-009 | Sin `/docs`, `/redoc` ni `/openapi.json` en `staging` y `production`; `/health` consulta la base (200/503, `no-store`); `POST /certificates/resolve` limita el cuerpo a 1024 bytes. | `OPERATIONS.md` §5-§7, `backend/app/main.py` | No consta fecha ni quién |
+| RD-010 | La base de la API se elige por hostname exacto en un único archivo de configuración (F-01): `localhost` y `127.0.0.1` → local; `artesanfc.com` → `https://api.artesanfc.com/api/v1`; otro → sin API. Hoy vive en `web/src/lib/api-config.ts` (y en `frontend/` para el rollback). | `ARCHITECTURE.md` §11, `SPRINT_4.md` §15, `web/src/lib/api-config.ts` | Hallazgo F-01 |
+| RD-011 | CORS solo con orígenes explícitos (`CORS_ALLOWED_ORIGINS`), métodos `GET` y `POST`, sin credenciales y nunca `*`; en producción solo `https://artesanfc.com` (y opcionalmente `www`). | `SECURITY.md` §10, `backend/app/main.py` | "Política aprobada" en el documento |
+| RD-012 | El frontend original (`frontend/`) no tenía paso de compilación. **Sustituida por ADR-028** (Astro en `web/`); `frontend/` se conserva solo como rollback. | `SPRINT_2.md` §7, `ARCHITECTURE.md` §5, ADR-028 | Superada por ADR-028 |
+

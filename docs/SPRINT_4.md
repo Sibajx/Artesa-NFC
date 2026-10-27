@@ -163,7 +163,7 @@ Todo contra PostgreSQL 16 y FastAPI reales; navegador Chromium
 | Área | Resultado |
 |---|---|
 | Migraciones (BD limpia) | `upgrade head` → `895974720462`; 6 tablas, 7 enums; `downgrade` paso a paso hasta base sin enums huérfanos; re-`upgrade` idéntico; `alembic check`: sin drift. |
-| Downgrade con datos | Con un tag `retired` que conserva `locked_at`, `downgrade -1` falla de forma atómica (`CheckViolation`), revisión y datos intactos. Limitación conocida; no se mutaron datos históricos. |
+| Downgrade con datos | Con un tag `retired` que conserva `locked_at`, `downgrade -1` falla de forma atómica (`CheckViolation`), revisión y datos intactos. Limitación conocida; no se mutaron datos históricos. **Resuelta 2026-10-13 (PEND-035):** el `downgrade` pone `locked_at` en `NULL` en los tags `replaced`/`retired` antes de restaurar la restricción estrecha (se pierde esa historia al retroceder, a propósito). |
 | Resolve real (HTTP) | 47/47 verificaciones: auténtico; token alterado / desconocido / longitud / alfabeto / vacío / 200 chars; revocado; pieza no publicada; artesano no publicado; rotación. **Todas las causas `unavailable` son idénticas byte a byte** (status, cuerpo, content-type, longitud, cache-control). |
 | Log del API | 0 apariciones de token, `token_hash`, prefijos, UID o contraseña. |
 | API pública | 4 endpoints `GET` correctos, sin campos de certificado/NFC/privados; 404 canónico; no existen endpoints de certificado/NFC/admin. |

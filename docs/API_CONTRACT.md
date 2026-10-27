@@ -403,16 +403,23 @@ consideradas seguras para presentación pública de autenticidad.
 Cualquier clave almacenada internamente que no esté en esta lista
 permanece interna y nunca se serializa.
 
-Allowlist inicial (mínima):
+Allowlist (ampliada el 2026-10-13, PEND-030, por petición del PO):
 
 | Clave pública | Tipo | Descripción |
 |---|---|---|
-| `notes` | string \| `null` | Nota breve, curada por administración, sobre el contexto de la certificación (ej. "certificado en el marco del caso piloto de Cuilápam"). `null` si no hay nota. |
+| `notes` | string \| `null` | Nota breve, curada por administración, sobre el contexto de la certificación (ej. "certificado en el marco del caso piloto de Cuilápam"). `null` si no hay nota. Máximo 280 caracteres. |
+| `verified_by` | string \| `null` | Cómo y quién verificó la pieza, en una línea (ej. "Verificada en persona en el taller por Sol y Alexis"). Máximo 160 caracteres. |
+| `verified_on` | fecha `YYYY-MM-DD` \| `null` | Día de esa verificación; nunca futura. |
+| `edition` | string \| `null` | "Pieza única" o "3 de 10". Máximo 60 caracteres. |
 
-No se define ninguna otra clave pública en esta revisión. Ampliar esta
-allowlist con una clave nueva es un cambio **no disruptivo** (sección
-13) y se documenta actualizando esta tabla, no inventando contenido de
-producto por adelantado.
+Cada clave se valida por tipo al salir: lo que no tenga el tipo esperado sale
+como `null`. Las claves nuevas son aditivas: un cliente que no las conoce las
+ignora. Gestión las escribe con `PUT /api/admin/v1/custody/pieces/{id}/authenticity`
+(permiso `nfc`, certificado activo; auditado como `custody.authenticity_set`) y
+una rotación del certificado las conserva. Son datos de **la certificación**, no
+de la pieza (técnica, materiales, año y medidas ya viven en la pieza). Ampliar
+esta allowlist con otra clave sigue siendo un cambio **no disruptivo** (sección
+13) y se documenta actualizando esta tabla.
 
 ### Fuera de alcance de este endpoint (pertenece a `SECURITY.md`)
 
@@ -585,15 +592,20 @@ raíz de la respuesta:
 }
 ```
 
-- En el MVP, `data` contiene siempre el conjunto completo (sin límite
-  artificial), y `meta.total` simplemente refleja `data.length`.
-- No se implementa paginación real todavía; `meta` se reserva para
-  cuando el catálogo lo justifique.
+- Sin parámetros, `data` contiene siempre el conjunto completo (sin límite
+  artificial), `meta.total` refleja `data.length` y `meta.next_cursor` es `null`.
+- **Paginación opcional por cursor (2026-10-13, PEND-029)** en
+  `GET /api/v1/artisans` y `GET /api/v1/pieces`: `limit` (1 a 100) y `cursor`.
+  Con `limit`, `data` trae a lo más esa cantidad, ordenada por `slug`, y
+  `meta.next_cursor` es el cursor opaco de la página siguiente (`null` en la
+  última); `meta.total` cuenta el conjunto filtrado completo. El cursor se pasa
+  tal cual en `?cursor=`; uno inválido da `400` (`invalid_cursor`) y un `limit`
+  fuera de rango `422`. Es una adición no disruptiva (sección 13): quien no
+  manda `limit` no nota nada.
 
-### Dirección futura preferida (documentada, no congelada)
+### Dirección elegida (implementada como opcional)
 
-Si el catálogo crece lo suficiente para requerir paginación, la
-dirección preferida es **paginación por cursor** (`meta.next_cursor` +
+La dirección preferida, ahora implementada de forma opcional (arriba), es **paginación por cursor** (`meta.next_cursor` +
 parámetro de query `cursor`), por ser estable ante inserciones
 concurrentes a diferencia de offset/limit. Esto es una **preferencia
 documentada, no un contrato congelado**: el diseño exacto del cursor
@@ -1034,7 +1046,7 @@ verificada para `GET|HEAD /media/*` el 2026-09-30 (`OPERATIONS.md` §8).
 
 ### 14.4 Hero por temporada (P-028, 2026-10-09)
 
-**Público.** `GET /api/v1/hero` → `{"data": null}` o `{"data": {"slug", "name", "reason": "forced"|"date"|"default", "video": {"mp4", "webm"|null}, "poster"}}`. Las URLs son rutas `/media/hero/{slug}/{hash}.{mp4|webm|jpg}` contra el origen de la API. `Cache-Control: public, max-age=300`. `data: null` = el sitio conserva su hero incluido. Elige, en orden: la temporada **forzada** (si no pasó su fecha de fin), una **publicada** cuyo rango anual cubre hoy en `America/Mexico_City` (si varias, la que empezó más tarde), el hero normal **publicado**.
+**Público.** `GET /api/v1/hero` → `{"data": null}` o `{"data": {"slug", "name", "reason": "forced"|"date"|"default", "video": {"mp4", "webm"|null}, "poster"}}`. Las URLs son rutas `/media/hero/{slug}/{hash}.{mp4|webm|jpg}` contra el origen de la API. `Cache-Control: public, max-age=30`. `data: null` = el sitio conserva su hero incluido. Elige, en orden: la temporada **forzada** (si no pasó su fecha de fin), una **publicada** cuyo rango anual cubre hoy en `America/Mexico_City` (si varias, la que empezó más tarde), el hero normal **publicado**.
 
 **Gestión** (`/api/admin/v1/hero`, solo los roles `hero` y `designer_hero` (Diseñador y Hero) y el dueño; los demás reciben 403). Escrituras con `X-Artesa-Admin: 1` y JSON; sin `If-Match` (dos personas, cambios simples). Todas devuelven el estado completo.
 
@@ -1054,7 +1066,7 @@ Errores: `no_video`, `already_processing`, `ffmpeg_unavailable`, `unsupported_me
 
 Fotos fijas de la página pública que el dueño y los roles `hero` y `designer_hero` pueden cambiar desde Gestión → Hero → «Imágenes del sitio». Cada **ranura** es un lugar de la página; hoy solo existe `collection-entry` («Entrada a la colección», proporción 4:5, hasta 1200×1500). Una ranura sin foto conserva la imagen provisional incluida en el sitio.
 
-**Público.** `GET /api/v1/site-images` → `{"data": {"<ranura>": {"avif", "webp", "jpg", "width", "height"}}}`; solo aparecen las ranuras con foto. Las URLs son rutas `/media/sitio/{ranura}/{hash}.{avif|webp|jpg}` contra el origen de la API. `Cache-Control: public, max-age=300`.
+**Público.** `GET /api/v1/site-images` → `{"data": {"<ranura>": {"avif", "webp", "jpg", "width", "height"}}}`; solo aparecen las ranuras con foto. Las URLs son rutas `/media/sitio/{ranura}/{hash}.{avif|webp|jpg}` contra el origen de la API. `Cache-Control: public, max-age=30`.
 
 **Gestión** (`/api/admin/v1/hero/site-images`, mismo rol que las temporadas; los demás reciben 403):
 
@@ -1063,6 +1075,23 @@ Fotos fijas de la página pública que el dueño y los roles `hero` y `designer_
 | `GET /hero/site-images` | Estado: `media_enabled` y `slots[]` (`slot`, `label`, `ratio`, `image` o `null`). |
 | `POST /hero/site-images/{ranura}` | Sube la foto **como cuerpo** (`image/jpeg`, `image/png` o `image/webp`, hasta 25 MB, con `X-Artesa-Admin: 1`). Se recorta al centro a la proporción de la ranura, se limita a su ancho máximo y se guarda en AVIF + WebP + JPEG sin metadatos. Mínimo 600 px de ancho en esa proporción. 200 con el estado completo. |
 | `DELETE /hero/site-images/{ranura}` | Vuelve a la imagen provisional y borra los archivos. |
+
+### Colecciones de la portada (entrada a la colección del inicio)
+
+**Público.** `GET /api/v1/collections` → `{"data": [{"id", "title", "body", "cta_label", "link", "image": {"avif", "webp", "jpg", "width", "height"}}]}`. Solo las colecciones **activas con foto**, en orden; lista vacía = el inicio conserva su entrada incorporada. `cta_label` y `link` ya traen su valor por omisión (`Ver la colección`, `/piezas/`). `Cache-Control: public, max-age=30`. El sitio rota entre ellas cuando hay más de una; `link` es una página del sitio (empieza con `/`) o una dirección `https://`, y el sitio vuelve a validarlo.
+
+**Gestión** (`/api/admin/v1/hero/collections`, mismo rol que las temporadas):
+
+| Ruta | Qué hace |
+|---|---|
+| `GET /hero/collections` | Estado: `media_enabled`, `max_entries` (6), `default_cta`, `default_link`, `ratio` (`4:5`) e `items[]` en orden. |
+| `POST /hero/collections` | Crea una colección con `{"title"}` (3 a 80 letras); nace oculta y sin foto. `409 too_many_collections` pasado el máximo. |
+| `PATCH /hero/collections/{id}` | Cambia `title`, `body` (hasta 240), `cta_label` (hasta 40), `link` o `active`. `409 invalid_link`; `409 image_required` si se activa sin foto. |
+| `POST /hero/collections/{id}/image` | Sube la foto como cuerpo (igual que las imágenes del sitio: se recorta a 4:5, se convierte a AVIF, WebP y JPEG, sin metadatos). Reemplaza y borra la anterior. |
+| `POST /hero/collections/{id}/move` | `{"direction": "up" \| "down"}`: intercambia con la vecina. |
+| `DELETE /hero/collections/{id}` | La quita y borra sus archivos. |
+
+Auditoría: `collection_entry.created`, `.updated`, `.image_set`, `.moved` y `.deleted`.
 
 Errores: `unsupported_type` (422), `empty_file` (422), `too_small` (422), `image_too_large` (422), `too_large` (413), `unsupported_media_type` (415), `avif_unavailable` (503), `media_unavailable` (503), `not_found` (404, ranura desconocida).
 

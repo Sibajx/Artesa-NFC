@@ -47,6 +47,9 @@ class Certificate(Base):
         # DATA_MODEL.md section 7: composite index to resolve a piece's full
         # certificate history (active + revoked + draft) without a table scan.
         Index("ix_certificate_piece_id_status", "piece_id", "status"),
+        CheckConstraint("version >= 1", name="ck_certificate_version"),
+        # PEND-032: a replacement points at the certificate it succeeds.
+        CheckConstraint("replaces_certificate_id <> id", name="ck_certificate_replaces_not_self"),
         # DATA_MODEL.md section 4 restriction C' / section 6: at most one
         # active certificate per piece, historical rows preserved. Same
         # pattern already approved for nfc_tag.
@@ -63,6 +66,14 @@ class Certificate(Base):
         UUID(as_uuid=True),
         ForeignKey("piece.id", ondelete="RESTRICT"),
         nullable=False,
+        index=True,
+    )
+    # PEND-032: set by a rotation on the new certificate; null for the first
+    # certificate of a piece, for one issued after a plain revocation, and for
+    # every certificate replaced before the column existed.
+    replaces_certificate_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("certificate.id", ondelete="RESTRICT", name="fk_certificate_replaces_certificate_id_certificate"),
         index=True,
     )
     token_hash: Mapped[str | None] = mapped_column(Text, unique=True)

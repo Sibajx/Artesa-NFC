@@ -8,6 +8,10 @@ export const typedPrice = (raw: string): string => raw.replace(/[^0-9.,$\s]/g, '
 /** Keep only what a measure can contain: digits and one kind of decimal separator. */
 export const typedMeasure = (raw: string): string => raw.replace(/[^0-9.,]/g, '');
 
+/** Only digits (whole numbers: a year, a number in an edition), cut to ``max`` characters.
+ *  It also removes "-", "+", "e" and "." however they arrive: typed, pasted or dropped. */
+export const typedDigits = (raw: string, max = 9): string => raw.replace(/\D/g, '').slice(0, max);
+
 /** "$1,250.50" or "1250,5" to cents; null when it is not a valid amount. */
 export function priceCents(raw: string): number | null {
   const cleaned = raw.replace(/[$\s]/g, '').replace(/,(?=\d{3}(\D|$))/g, '').replace(',', '.');
@@ -44,7 +48,9 @@ export function todayLocal(now: Date = new Date()): string {
   return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 }
 
-/** `type="number"` still lets "e", "+" and "-" through; this keeps them out of the keyboard. */
+/** `type="number"` still lets "e", "+" and "-" through the keyboard (this keeps them out) and a
+ *  paste or the arrow keys can still reach a negative number: pair it with `min` and with
+ *  `typedMeasure` / `typedDigits` in `onChange`. */
 export function blockNumberKeys(e: { key: string; preventDefault: () => void }): void {
   if (e.key === 'e' || e.key === 'E' || e.key === '+' || e.key === '-') e.preventDefault();
 }

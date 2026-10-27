@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import copy
 import hashlib
 import re
 import secrets
@@ -317,7 +318,14 @@ def rotate_certificate(
 
         revoke_certificate(db, active_certificate, reason=reason)
 
-        new_certificate = Certificate(piece_id=piece_id, status=CertificateStatus.draft)
+        new_certificate = Certificate(
+            piece_id=piece_id,
+            status=CertificateStatus.draft,
+            replaces_certificate_id=active_certificate.id,
+            # PEND-030: the verification and the edition belong to the piece's
+            # certification, not to one token; a new token keeps them.
+            authenticity_metadata=copy.deepcopy(active_certificate.authenticity_metadata),
+        )
         db.add(new_certificate)
         db.flush()
 

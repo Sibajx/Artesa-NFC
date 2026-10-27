@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { mockApi, reply } from "./support";
 
 test.describe("home", () => {
-  test("has at most four blocks and only asks for the hero campaign and the site images", async ({
+  test("has at most four blocks and only asks for the hero campaign, the collections and the site images", async ({
     page,
   }) => {
     const api = await mockApi(page);
@@ -17,11 +17,83 @@ test.describe("home", () => {
       "/piezas/",
     );
     await page.waitForTimeout(500);
-    // The only requests are the hero's (P-028) and the site images' (P-029);
-    // both answer 404 here, so the built-in hero and image stay.
-    expect(api.requests.filter((r) => r !== "GET /hero" && r !== "GET /site-images")).toEqual([]);
+    // The only requests are the hero's (P-028), the collections' and the site images' (P-029);
+    // all answer 404 here, so the built-in hero, block and image stay.
+    expect(
+      api.requests.filter(
+        (r) => r !== "GET /hero" && r !== "GET /collections" && r !== "GET /site-images",
+      ),
+    ).toEqual([]);
     await expect(page.locator('[data-provisional="hero"]')).toBeVisible();
     await expect(page.locator(".collection__media .placeholder-note")).toBeVisible();
+  });
+
+  test("rotates between the collections Gestión published, with arrows, dots and a pause", async ({
+    page,
+  }) => {
+    const entry = (id: string, title: string, link: string) => ({
+      id,
+      title,
+      body: `Texto de ${title}`,
+      cta_label: `Ver ${title}`,
+      link,
+      image: {
+        avif: `/media/sitio/colecciones/${id}/a.avif`,
+        webp: `/media/sitio/colecciones/${id}/a.webp`,
+        jpg: `/media/sitio/colecciones/${id}/a.jpg`,
+        width: 1200,
+        height: 1500,
+      },
+    });
+    await mockApi(page, {
+      "/collections": reply(200, {
+        data: [
+          entry("c1", "Barro negro", "/piezas/"),
+          entry("c2", "Textiles", "javascript:alert(1)"),
+        ],
+      }),
+    });
+    await page.goto("/");
+    const nav = page.getByRole("group", { name: "Colecciones" });
+    await expect(nav).toBeVisible();
+    await expect(page.locator("#collection-title")).toHaveText("Barro negro");
+    await expect(page.getByRole("button", { name: /Ver la colección \d/ })).toHaveCount(2);
+    await page.getByRole("button", { name: "Colección siguiente" }).click();
+    await expect(page.locator("#collection-title")).toHaveText("Textiles");
+    // An unsafe link is never followed: the button falls back to the default page.
+    await expect(page.locator(".collection__links .button")).toHaveAttribute("href", "/piezas/");
+    await expect(page.locator("[data-collection-status]")).toContainText("Colección 2 de 2");
+    await page.getByRole("button", { name: "Colección anterior" }).click();
+    await expect(page.locator("#collection-title")).toHaveText("Barro negro");
+    const pause = nav.getByRole("button", { name: /Pausar|Reproducir/ });
+    await pause.click();
+    await expect(pause).toHaveAttribute("aria-pressed", "true");
+  });
+
+  test("with a single collection the block is fixed: no arrows, no dots", async ({ page }) => {
+    await mockApi(page, {
+      "/collections": reply(200, {
+        data: [
+          {
+            id: "c1",
+            title: "Barro negro",
+            body: null,
+            cta_label: "Ver la colección",
+            link: "/piezas/",
+            image: {
+              avif: "/m/a.avif",
+              webp: "/m/a.webp",
+              jpg: "/m/a.jpg",
+              width: 1200,
+              height: 1500,
+            },
+          },
+        ],
+      }),
+    });
+    await page.goto("/");
+    await expect(page.locator("#collection-title")).toHaveText("Barro negro");
+    await expect(page.getByRole("group", { name: "Colecciones" })).toBeHidden();
   });
 
   test("shows the season's poster and video when Gestión has one for today", async ({ page }) => {

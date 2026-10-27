@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -36,6 +36,10 @@ class AuthenticityUnavailable(BaseModel):
 
 class AuthenticityMetadataPublic(BaseModel):
     notes: str | None
+    # PEND-030: how and when the piece was verified, and its edition.
+    verified_by: str | None = None
+    verified_on: date | None = None
+    edition: str | None = None
 
 
 class CertificateResolveAuthentic(BaseModel):

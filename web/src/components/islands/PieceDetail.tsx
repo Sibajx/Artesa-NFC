@@ -9,6 +9,7 @@ import { artisanPath, PIECE_PREFIX, slugFromPath } from "@/lib/routes";
 import { setIndexable, setMetadata } from "@/lib/seo";
 import type { Artisan, Piece } from "@/lib/types";
 import { MediaImage } from "./MediaImage";
+import { ZoomButton } from "./ZoomButton";
 import { PassportPanel } from "./PassportPanel";
 import { PieceCard } from "./PieceCard";
 import { PieceViewer } from "./PieceViewer";
@@ -101,6 +102,7 @@ export function PieceView({ piece }: { piece: Piece }) {
             ) : (
               <div className="piece__photo media-frame">
                 <MediaImage media={hero} fallbackAlt={piece.name} loading="eager" />
+                <ZoomButton media={hero} fallbackAlt={piece.name} />
               </div>
             )}
             <span className="hud-frame" aria-hidden="true"></span>
@@ -173,6 +175,7 @@ export function PieceView({ piece }: { piece: Piece }) {
                       fallbackAlt={piece.name}
                       sizes="(min-width: 700px) 520px, 78vw"
                     />
+                    <ZoomButton media={media} fallbackAlt={piece.name} />
                   </div>
                 </li>
               ))}
@@ -197,6 +200,7 @@ export function PieceView({ piece }: { piece: Piece }) {
             {process.map((media) => (
               <li key={`${media.position}-${media.url}`} className="media-frame">
                 <MediaImage media={media} fallbackAlt={`Proceso de ${piece.name}`} />
+                <ZoomButton media={media} fallbackAlt={`Proceso de ${piece.name}`} />
               </li>
             ))}
           </ul>

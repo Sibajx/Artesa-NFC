@@ -43,6 +43,7 @@ class ProductionStep(Base):
 
 class ProductionPhoto(Base):
     __tablename__ = "production_photo"
+    __table_args__ = (CheckConstraint("width > 0 AND height > 0", name="ck_production_photo_dimensions"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     step_id: Mapped[uuid.UUID] = mapped_column(

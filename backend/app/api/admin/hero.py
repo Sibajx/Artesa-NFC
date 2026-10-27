@@ -11,6 +11,7 @@ import os
 import uuid
 from datetime import date, datetime
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response
 from fastapi.concurrency import run_in_threadpool
@@ -22,7 +23,7 @@ from app.api.deps import get_db
 from app.core import permissions as perms
 from app.core.access import FORBIDDEN_ERROR, AdminIdentity, require_admin
 from app.core.config import get_settings
-from app.services import hero, site_images
+from app.services import collections, hero, site_images
 from app.services.content import Actor, ContentError
 
 UPLOAD_TYPES = frozenset({"video/mp4", "video/webm", "video/quicktime", "application/octet-stream"})
@@ -354,3 +355,120 @@ def clear_site_image(slot: str, who: Actor = Depends(actor), db: Session = Depen
     except ContentError as exc:
         raise _fail(exc) from None
     return _site_state(db)
+
+
+# --- Colecciones: the entries of the home's collection block --------------------------------------------------------
+
+
+class CollectionOut(BaseModel):
+    id: uuid.UUID
+    position: int
+    title: str
+    body: str | None
+    cta_label: str | None
+    link: str | None
+    active: bool
+    image: SiteImageOut | None
+    updated_at: datetime
+
+
+class CollectionsState(BaseModel):
+    media_enabled: bool
+    max_entries: int
+    default_cta: str
+    default_link: str
+    ratio: str
+    items: list[CollectionOut]
+
+
+class CollectionBody(BaseModel):
+    title: str = Field(max_length=200)
+    body: str | None = Field(default=None, max_length=1000)
+    cta_label: str | None = Field(default=None, max_length=200)
+    link: str | None = Field(default=None, max_length=1000)
+
+
+class CollectionPatch(BaseModel):
+    title: str | None = Field(default=None, max_length=200)
+    body: str | None = Field(default=None, max_length=1000)
+    cta_label: str | None = Field(default=None, max_length=200)
+    link: str | None = Field(default=None, max_length=1000)
+    active: bool | None = None
+
+
+class CollectionMove(BaseModel):
+    direction: Literal["up", "down"]
+
+
+def _collections_state(db: Session) -> CollectionsState:
+    return CollectionsState(
+        media_enabled=get_settings().media_enabled, max_entries=collections.MAX_ENTRIES,
+        default_cta=collections.DEFAULT_CTA, default_link=collections.DEFAULT_LINK,
+        ratio=f"{collections.RATIO[0]}:{collections.RATIO[1]}",
+        items=[CollectionOut(
+            id=e.id, position=e.position, title=e.title, body=e.body, cta_label=e.cta_label, link=e.link, active=e.active,
+            image=SiteImageOut(avif=e.avif, webp=e.webp, jpg=e.jpg, width=e.width, height=e.height,
+                               updated_by=e.updated_by, updated_at=e.updated_at) if e.jpg else None,
+            updated_at=e.updated_at) for e in collections.listing(db)])
+
+
+@reads.get("/collections", response_model=CollectionsState)
+def get_collections(db: Session = Depends(get_db)) -> CollectionsState:
+    return _collections_state(db)
+
+
+@writes.post("/collections", status_code=201, response_model=CollectionsState)
+def create_collection(body: CollectionBody, who: Actor = Depends(actor), db: Session = Depends(get_db)) -> CollectionsState:
+    try:
+        collections.create(db, who, body.model_dump())
+    except ContentError as exc:
+        raise _fail(exc) from None
+    return _collections_state(db)
+
+
+@writes.patch("/collections/{entry_id}", response_model=CollectionsState)
+def update_collection(entry_id: uuid.UUID, body: CollectionPatch, who: Actor = Depends(actor),
+                      db: Session = Depends(get_db)) -> CollectionsState:
+    try:
+        collections.update(db, who, entry_id, body.model_dump(exclude_unset=True))
+    except ContentError as exc:
+        raise _fail(exc) from None
+    return _collections_state(db)
+
+
+@writes.post("/collections/{entry_id}/move", response_model=CollectionsState)
+def move_collection(entry_id: uuid.UUID, body: CollectionMove, who: Actor = Depends(actor),
+                    db: Session = Depends(get_db)) -> CollectionsState:
+    try:
+        collections.move(db, who, entry_id, body.direction)
+    except ContentError as exc:
+        raise _fail(exc) from None
+    return _collections_state(db)
+
+
+@writes.delete("/collections/{entry_id}", response_model=CollectionsState)
+def delete_collection(entry_id: uuid.UUID, who: Actor = Depends(actor), db: Session = Depends(get_db)) -> CollectionsState:
+    try:
+        collections.delete(db, who, _public_root(), entry_id)
+    except ContentError as exc:
+        raise _fail(exc) from None
+    return _collections_state(db)
+
+
+@images.post("/collections/{entry_id}/image", response_model=CollectionsState)
+async def upload_collection_image(entry_id: uuid.UUID, request: Request, who: Actor = Depends(actor),
+                                  db: Session = Depends(get_db)) -> CollectionsState:
+    root = _public_root()
+    if root is None:
+        raise HTTPException(status_code=503, detail={"code": "media_unavailable",
+                                                     "message": "El servidor no tiene carpeta de medios configurada."})
+    try:
+        collections.get(db, entry_id)
+    except ContentError as exc:
+        raise _fail(exc) from None
+    data = await _read_bytes(request, site_images.MAX_BYTES)
+    try:
+        await run_in_threadpool(collections.set_image, db, who, root, entry_id, data)
+    except ContentError as exc:
+        raise _fail(exc) from None
+    return _collections_state(db)

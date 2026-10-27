@@ -16,7 +16,10 @@ from app.db.base import Base
 
 class AdminRoleProfile(Base):
     __tablename__ = "admin_role_profile"
-    __table_args__ = (CheckConstraint("'view' = ANY(permissions)", name="ck_admin_role_profile_view"),)
+    __table_args__ = (
+        CheckConstraint("'view' = ANY(permissions)", name="ck_admin_role_profile_view"),
+        CheckConstraint("position >= 0", name="ck_admin_role_profile_position"),
+    )
 
     slug: Mapped[str] = mapped_column(Text, primary_key=True)
     name: Mapped[str] = mapped_column(Text, nullable=False, unique=True)

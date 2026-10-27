@@ -1,6 +1,6 @@
 # ArtesaNFC — Project Charter
 
-**Estado:** Aprobado para Sprint 0  
+**Estado:** Vigente (carta aprobada para Sprint 0; el estado actual del proyecto está en `DOCUMENTACION_TECNICA.md`)  
 **Dominio oficial:** `artesanfc.com`  
 **Fecha de referencia:** 2026-09-16
 

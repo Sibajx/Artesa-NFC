@@ -29,6 +29,6 @@ class SiteImagesEnvelope(BaseModel):
 
 @router.get("", response_model=SiteImagesEnvelope)
 def current_site_images(response: Response, db: Session = Depends(get_db)) -> SiteImagesEnvelope:
-    response.headers["Cache-Control"] = "public, max-age=300"
+    response.headers["Cache-Control"] = "public, max-age=30"
     return SiteImagesEnvelope(data={slot: SiteImagePublic(**site_images.public_view(row))
                                     for slot, row in site_images.all_images(db).items()})

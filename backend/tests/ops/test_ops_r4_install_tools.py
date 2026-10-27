@@ -72,7 +72,9 @@ def test_tool_version_is_1_4_0():
     # 1.8.0 = B-032: artesa-backup puts the Finanzas SQLite in the bundle (backup_sqlite.py)
     # 1.9.0 = artesa-deploy fetch (GitHub Releases) and ui (Gestión switch) -- release_fetch.py
     # 1.10.0 = N-01: shared/.env CORS_ALLOWED_ORIGINS may only list artesanfc.com (and www)
-    assert rc.TOOL_VERSION == "1.10.0"
+    # 1.11.0 = PEND-093/094: `artesa-backup status` reports D10 COMPLETE once the off-host copy is
+    # verified; `artesa-deploy ui` lists versions newest first and keeps only the newest five.
+    assert rc.TOOL_VERSION == "1.11.0"
     assert ad.target_tool_version(OPS_DIR) == rc.TOOL_VERSION
 
 

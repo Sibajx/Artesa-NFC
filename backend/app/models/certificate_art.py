@@ -19,6 +19,7 @@ class CertificateArt(Base):
     __table_args__ = (
         CheckConstraint("mime_type IN ('image/png', 'image/jpeg')", name="ck_certificate_art_mime_type"),
         CheckConstraint("sha256 ~ '^[0-9a-f]{64}$'", name="ck_certificate_art_sha256"),
+        CheckConstraint("width > 0 AND height > 0", name="ck_certificate_art_dimensions"),
     )
 
     sha256: Mapped[str] = mapped_column(Text, primary_key=True)

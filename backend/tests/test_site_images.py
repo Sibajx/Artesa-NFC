@@ -48,7 +48,7 @@ def test_a_slot_without_a_photo_keeps_the_provisional_image(hero_client):
     assert r.status_code == 200 and r.json()["media_enabled"] is True
     assert r.json()["slots"] == [{"slot": SLOT, "label": "Entrada a la colección", "ratio": "4:5", "image": None}]
     public = hero_client.get("/api/v1/site-images")
-    assert public.json() == {"data": {}} and public.headers["cache-control"] == "public, max-age=300"
+    assert public.json() == {"data": {}} and public.headers["cache-control"] == "public, max-age=30"
 
 
 def test_a_photo_is_cropped_converted_and_served(hero_client, db_session):
