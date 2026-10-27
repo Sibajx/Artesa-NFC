@@ -225,7 +225,7 @@ describe("getSiteImages (P-029)", () => {
 });
 
 describe("getCollections (the home's collection entries)", () => {
-  const config = apiConfigFor("artesanfc.com");
+  const config = apiConfigFor("info.artesanfc.com");
   const clientFor = (status: number, body: unknown) =>
     createApiClient({ config, fetch: async () => new Response(JSON.stringify(body), { status }) });
   const entry = {
