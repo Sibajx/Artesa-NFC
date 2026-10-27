@@ -16,12 +16,13 @@ describe("api-config (same allowlist as frontend/assets/js/api-config.js)", () =
   it.each([
     ["localhost", "http://127.0.0.1:8000/api/v1"],
     ["127.0.0.1", "http://127.0.0.1:8000/api/v1"],
-    ["artesanfc.com", "https://api.artesanfc.com/api/v1"],
-    ["ARTESANFC.COM", "https://api.artesanfc.com/api/v1"],
+    ["info.artesanfc.com", "https://api.artesanfc.com/api/v1"],
+    ["INFO.ARTESANFC.COM", "https://api.artesanfc.com/api/v1"],
     ["staging.artesanfc.com", "https://api.artesanfc.com/api/v1"],
   ])("%s → %s", (host, base) => expect(resolveApiBase(host)).toBe(base));
 
   it.each([
+    "artesanfc.com",
     "www.artesanfc.com",
     "artesanfc.pages.dev",
     "artesanfc.com.evil.example",
@@ -32,7 +33,7 @@ describe("api-config (same allowlist as frontend/assets/js/api-config.js)", () =
   ])("%s is unresolved", (host) => expect(resolveApiBase(host)).toBeNull());
 
   it("resolves media against the API origin only", () => {
-    const prod = apiConfigFor("artesanfc.com");
+    const prod = apiConfigFor("info.artesanfc.com");
     expect(resolveMediaUrl("/media/a.jpg", prod)).toBe("https://api.artesanfc.com/media/a.jpg");
     expect(resolveMediaUrl("https://cdn.example/a.jpg", prod)).toBe("https://cdn.example/a.jpg");
     expect(resolveMediaUrl("javascript:alert(1)", prod)).toBeNull();
@@ -148,7 +149,7 @@ describe("palette (ADR-030 phase 4)", () => {
 });
 
 describe("getHero (P-028)", () => {
-  const config = apiConfigFor("artesanfc.com");
+  const config = apiConfigFor("info.artesanfc.com");
   const clientFor = (status: number, body: unknown) =>
     createApiClient({
       config,
@@ -186,7 +187,7 @@ describe("getHero (P-028)", () => {
 });
 
 describe("getSiteImages (P-029)", () => {
-  const config = apiConfigFor("artesanfc.com");
+  const config = apiConfigFor("info.artesanfc.com");
   const clientFor = (status: number, body: unknown) =>
     createApiClient({
       config,

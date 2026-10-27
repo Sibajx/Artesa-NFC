@@ -23,7 +23,7 @@ function modelViewerStyleHashes() {
 }
 
 export default defineConfig({
-  site: "https://artesanfc.com",
+  site: "https://info.artesanfc.com",
   output: "static",
   trailingSlash: "ignore",
   build: {

@@ -29,7 +29,9 @@ PRODUCTION_FRONTEND_ORIGIN = "https://artesanfc.com"
 # N-01: the only browser origins production may allow. The apex is required;
 # www is tolerated (the deploy rehearsals use it). Anything else -- localhost,
 # plain http, a preview host -- refuses to start.
-PRODUCTION_ALLOWED_ORIGINS = frozenset({PRODUCTION_FRONTEND_ORIGIN, "https://www.artesanfc.com"})
+PRODUCTION_ALLOWED_ORIGINS = frozenset(
+    {PRODUCTION_FRONTEND_ORIGIN, "https://www.artesanfc.com", "https://info.artesanfc.com"}
+)
 
 _ACCESS_TEAM_DOMAIN_RE = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.cloudflareaccess\.com")
 _ACCESS_AUD_RE = re.compile(r"[0-9a-f]{64}")

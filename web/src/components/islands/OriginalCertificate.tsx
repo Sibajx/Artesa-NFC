@@ -116,7 +116,7 @@ export function OriginalCertificate({ token }: { token: string }) {
         Certificado original
       </h2>
       <p className="muted">
-        Raspa tu tarjeta y escribe la clave. Solo escríbela aquí, en <strong>artesanfc.com</strong>:
+        Raspa tu tarjeta y escribe la clave. Solo escríbela aquí, en <strong>info.artesanfc.com</strong>:
         nadie de ArtesaNFC te la pedirá por mensaje.
       </p>
       <form className="original__form" onSubmit={(e) => void submit(e)}>

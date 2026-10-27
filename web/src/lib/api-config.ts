@@ -19,7 +19,7 @@ const LOOPBACK_HOSTS: readonly string[] = ["localhost", "127.0.0.1", "[::1]", ":
 const API_BASE_BY_HOST: Readonly<Record<string, string>> = {
   localhost: LOCAL_API_BASE,
   "127.0.0.1": LOCAL_API_BASE,
-  "artesanfc.com": PRODUCTION_API_BASE,
+  "info.artesanfc.com": PRODUCTION_API_BASE,
   // Staging of the Astro app (web/README.md, "Staging paso a paso"): reads
   // the production API, so the backend must list https://staging.artesanfc.com
   // in CORS_ALLOWED_ORIGINS. Without that CORS entry it degrades to the

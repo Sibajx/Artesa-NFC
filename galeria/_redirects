@@ -1,0 +1,11 @@
+# ArtesaNFC galería — artesanfc.com.
+#
+# El panel para artesanos vive en info.artesanfc.com. Estas rutas las usan las
+# etiquetas NFC ya impresas (artesanfc.com/c/{token}), los correos de
+# autorización y los enlaces de revisión de diseño. Un 301 conserva la ruta y
+# el navegador conserva el fragmento (#token), así que nada de eso se rompe.
+/c/*            https://info.artesanfc.com/c/:splat            301
+/revision/*     https://info.artesanfc.com/revision/:splat     301
+/autorizacion/* https://info.artesanfc.com/autorizacion/:splat 301
+/piezas/*       https://info.artesanfc.com/piezas/:splat       301
+/artesanos/*    https://info.artesanfc.com/artesanos/:splat    301
