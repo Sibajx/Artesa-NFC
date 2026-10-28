@@ -230,6 +230,11 @@ def test_production_requires_the_artesanfc_origin_explicitly(origins):
     assert_no_secrets(info.value, "db.internal.example")
 
 
+@pytest.mark.parametrize("origins", [f"{PROD_ORIGIN},https://info.artesanfc.com", "https://artesanfc.com,https://www.artesanfc.com,https://info.artesanfc.com"])
+def test_production_accepts_the_info_subdomain_origin(origins):
+    assert _settings(cors_allowed_origins=origins).cors_allowed_origins_list
+
+
 def test_production_rejects_debug_true():
     with pytest.raises(UnsafeConfigurationError, match="DEBUG must be false"):
         _settings(debug=True)

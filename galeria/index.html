@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ArtesaNFC · Galería de artesanía oaxaqueña</title>
+  <meta name="description" content="Galería de artesanía oaxaqueña: cada pieza con su origen, su proceso y la persona que la hizo.">
+  <meta name="robots" content="index, follow">
+  <meta name="color-scheme" content="light">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Manrope:wght@400;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="assets/css/site.css">
+</head>
+<body>
+
+  <a class="skip-link" href="#main">Saltar al contenido</a>
+
+  <header class="site-header">
+    <a class="wordmark" href="/">ArtesaNFC</a>
+    <nav class="site-nav" aria-label="Principal">
+      <a href="#galeria">Galería</a>
+      <a href="#nosotros">Nosotros</a>
+      <a href="https://info.artesanfc.com/">Para artesanos</a>
+    </nav>
+    <a class="button button--small" href="#hazte-miembro">Hazte miembro</a>
+  </header>
+
+  <main id="main">
+
+    <section class="hero" aria-labelledby="hero-title">
+      <h1 id="hero-title" class="hero__title">
+        Cada pieza guarda
+        <span class="hero__media">
+          <img src="assets/barro-negro-de-oaxaca.jpg" alt="Piezas de barro negro expuestas en un taller de San Bartolo Coyotepec" width="1920" height="1440">
+        </span>
+        su origen.
+      </h1>
+      <div class="hero__body">
+        <div class="hero__copy">
+          <p class="hero__lead">
+            Una galería de artesanía oaxaqueña. Cada obra llega con su
+            historia, su proceso y el nombre de quien la hizo.
+          </p>
+          <a class="button" href="#galeria">Ver la galería</a>
+        </div>
+        <figure class="hero__still">
+          <img src="assets/weavingloomzaa.jpg" alt="Telar de cintura en uso en el mercado de Zaachila" width="1920" height="1285">
+        </figure>
+      </div>
+    </section>
+
+    <section id="galeria" class="gallery" aria-labelledby="gallery-title">
+      <header class="section-head">
+        <h2 id="gallery-title" class="section-title">Piezas</h2>
+        <p class="section-note">Pasa el cursor sobre una imagen para verla en gris.</p>
+      </header>
+
+      <ul class="grid" role="list">
+        <li class="work work--wide">
+          <figure>
+            <img src="assets/barro-negro-y-normal-san-bartolo-coyotepec.jpg" alt="Tienda con barro negro y barro pintado apilado en estantes" width="1920" height="2564" loading="lazy">
+            <figcaption>
+              <span class="work__title">Barro negro y barro pintado</span>
+              <span class="work__place">San Bartolo Coyotepec, Oaxaca</span>
+            </figcaption>
+          </figure>
+        </li>
+        <li class="work">
+          <figure>
+            <img src="assets/woman-on-a-backstrap-loom-in-oaxaca.jpg" alt="Mujer tejiendo en telar de cintura sentada en una silla al aire libre" width="1920" height="1312" loading="lazy">
+            <figcaption>
+              <span class="work__title">Telar de cintura</span>
+              <span class="work__place">Oaxaca</span>
+            </figcaption>
+          </figure>
+        </li>
+        <li class="work">
+          <figure>
+            <img src="assets/national-museum-of-ethnology-osaka-alebrije-wood.jpg" alt="Alebrijes de madera pintados, de animales de patas largas y cuerpo de colores, exhibidos sobre una mesa negra" width="1920" height="1440" loading="lazy">
+            <figcaption>
+              <span class="work__title">Alebrijes de madera</span>
+              <span class="work__place">Oaxaca, exhibidos en Osaka</span>
+            </figcaption>
+          </figure>
+        </li>
+        <li class="work work--wide">
+          <figure>
+            <img src="assets/ollas-de-barro-negro-a-la-venta.jpg" alt="Ollas de barro negro acomodadas para la venta" width="1920" height="2571" loading="lazy">
+            <figcaption>
+              <span class="work__title">Ollas de barro negro</span>
+              <span class="work__place">San Bartolo Coyotepec, Oaxaca</span>
+            </figcaption>
+          </figure>
+        </li>
+      </ul>
+    </section>
+
+    <section id="nosotros" class="about" aria-labelledby="about-title">
+      <div class="about__copy">
+        <h2 id="about-title" class="section-title">Nosotros</h2>
+        <p class="about__text">
+          Unimos cada pieza con quien la hizo, cómo y dónde. La historia
+          viaja en una etiqueta NFC, junto al objeto.
+        </p>
+      </div>
+      <figure class="about__still">
+        <img src="assets/woman-on-a-backstrap-loom-in-oaxaca.jpg" alt="Mujer tejiendo en telar de cintura sentada en una silla al aire libre" width="1920" height="1312" loading="lazy">
+      </figure>
+    </section>
+
+    <section id="hazte-miembro" class="membership" aria-labelledby="membership-title">
+      <div class="membership__copy">
+        <h2 id="membership-title" class="membership__title">Hazte miembro, pues.</h2>
+        <p class="membership__text">
+          Entras a la comunidad que cuida el oficio. Recibes novedades de las
+          piezas, de quienes las hacen y de los talleres que visitamos, y ayudas
+          a que el artesano se quede con lo que vale su trabajo.
+        </p>
+        <a class="button" href="#hazte-miembro">Quiero ser miembro</a>
+      </div>
+      <figure class="membership__still">
+        <img src="assets/national-museum-of-ethnology-osaka-wood-carving.jpg" alt="Figuras de madera talladas y pintadas a mano de perro y animales, de Oaxaca" width="1920" height="1440" loading="lazy">
+      </figure>
+    </section>
+
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__main">
+      <p class="wordmark">ArtesaNFC</p>
+      <nav class="site-footer__nav" aria-label="Pie de página">
+        <a href="#galeria">Galería</a>
+        <a href="#nosotros">Nosotros</a>
+        <a href="https://info.artesanfc.com/">Panel para artesanos</a>
+      </nav>
+    </div>
+    <p class="credits">Fotografías: <a href="https://commons.wikimedia.org/wiki/File:Barro_Negro_y_normal-San_Bartolo_Coyotepec-Oaxaca-Mexico.jpg">“Barro Negro y normal-San Bartolo Coyotepec-Oaxaca-Mexico”</a> de User:Gengiskanhg, <a href="https://creativecommons.org/licenses/by-sa/3.0/">CC BY-SA 3.0</a>, vía Wikimedia Commons; <a href="https://commons.wikimedia.org/wiki/File:Barro_negro_de_Oaxaca.JPG">“Barro negro de Oaxaca”</a> de Slevinr, <a href="https://creativecommons.org/licenses/by/3.0">CC BY 3.0</a>, vía Wikimedia Commons; <a href="https://commons.wikimedia.org/wiki/File:Woman_on_a_backstrap_loom_in_Oaxaca.jpg">“Woman on a backstrap loom in Oaxaca”</a> de David.Clay.Photography, <a href="https://creativecommons.org/licenses/by-sa/4.0">CC BY-SA 4.0</a>, vía Wikimedia Commons; <a href="https://commons.wikimedia.org/wiki/File:WeavingLoomZaa.JPG">“WeavingLoomZaa”</a> de AlejandroLinaresGarcia, <a href="https://creativecommons.org/licenses/by-sa/4.0">CC BY-SA 4.0</a>, vía Wikimedia Commons; <a href="https://commons.wikimedia.org/wiki/File:Ollas_de_barro_negro_a_la_venta_en_San_Bartolo_Coyotepec,_Oaxaca.jpg">“Ollas de barro negro a la venta en San Bartolo Coyotepec, Oaxaca”</a> de Juanscott, <a href="https://creativecommons.org/licenses/by-sa/4.0">CC BY-SA 4.0</a>, vía Wikimedia Commons; <a href="https://commons.wikimedia.org/wiki/File:National_Museum_of_Ethnology,_Osaka_-_Alebrije,_wood_carvings_from_State_of_Oaxaca,_Mexico.jpg">“National Museum of Ethnology, Osaka - Alebrije, wood carvings from State of Oaxaca, Mexico”</a> de Yanajin33, <a href="https://creativecommons.org/licenses/by-sa/3.0">CC BY-SA 3.0</a>, vía Wikimedia Commons; <a href="https://commons.wikimedia.org/wiki/File:National_Museum_of_Ethnology,_Osaka_-_Wood_carving_(nahual)_-_Oaxaca_in_Mexico_-_Made_by_Ang%C3%A9lico_Jim%C3%A9nez,_Isa%C3%ADas_Jim%C3%A9nez_and_Manuel_Jim%C3%A9nez_-_Collected_in_2010.jpg">“National Museum of Ethnology, Osaka - Wood carving (nahual)”</a> de Yanajin33, <a href="https://creativecommons.org/licenses/by-sa/3.0">CC BY-SA 3.0</a>, vía Wikimedia Commons.</p>
+  </footer>
+
+</body>
+</html>
