@@ -14,9 +14,21 @@ const links = [
   { href: "/nosotros/", label: "Nosotros" },
 ];
 const isCurrent = (href: string) => path.startsWith(href);
+// La galería pública vive en artesanfc.com; este sitio (info.) es el panel.
+// Quien llega aquí desde una pieza de la galería necesita un camino de vuelta
+// que no sea el botón «atrás» del navegador (2026-11-01).
+const GALLERY_URL = "https://artesanfc.com/";
 ---
 
 <header class="site-header" data-tone={tone} data-initial-tone={tone} data-hidden="false">
+  <div class="site-header__back">
+    <div class="container">
+      <a href={GALLERY_URL}>
+        <span aria-hidden="true">←</span> Volver a la galería
+        <span class="site-header__back-host">artesanfc.com</span>
+      </a>
+    </div>
+  </div>
   <div class="site-header__inner container">
     <a class="site-header__logo" href="/" aria-label="ArtesaNFC, inicio">
       ArtesaNFC
@@ -69,6 +81,50 @@ const isCurrent = (href: string) => path.startsWith(href);
 
   .site-header:focus-within {
     transform: none;
+  }
+
+  /* Franja de regreso a la galería: siempre barro, sobre portadas claras y
+     oscuras, para que se distinga de la barra y se reconozca. */
+  .site-header__back {
+    background: var(--color-clay);
+    color: var(--color-text-inverse);
+    font-size: var(--text-small);
+  }
+
+  .site-header__back a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5em;
+    min-height: 36px;
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .site-header__back a:hover {
+    text-decoration: underline;
+    text-underline-offset: 0.25em;
+  }
+
+  .site-header__back a span[aria-hidden] {
+    transition: transform var(--duration-ui) var(--ease-out);
+  }
+
+  .site-header__back a:hover span[aria-hidden] {
+    transform: translateX(-4px);
+  }
+
+  .site-header__back-host {
+    opacity: 0.6;
+  }
+
+  .site-header__back-host::before {
+    content: "· ";
+  }
+
+  @media (max-width: 420px) {
+    .site-header__back-host {
+      display: none;
+    }
   }
 
   .site-header__inner {

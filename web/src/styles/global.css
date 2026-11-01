@@ -83,6 +83,9 @@
   /* Accessibility — DESIGN_SYSTEM.md §17 */
   --touch-target-min: 44px;
 
+  /* Cabecera fija: franja «Volver a la galería» (36px) + barra (64px). */
+  --header-h: 100px;
+
   color-scheme: light;
 }
 
