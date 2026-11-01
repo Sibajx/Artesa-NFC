@@ -53,3 +53,48 @@ export function paletteRoles(colors: readonly string[]): PaletteRoles | null {
   if (!accent || !dark || !light) return null;
   return { accent, dark, light };
 }
+
+// 2026-11 — the piece page hero is a field of the piece's own colour, like
+// its chapter on artesanfc.com (galeria/assets/js/render.js chapterColours):
+// the most vivid palette colour, toned towards wood, then darkened until the
+// cream text on it reads at AA (4.5:1). null when the palette is unusable;
+// the page then keeps its default field.
+
+const WOOD = "#5c3f28";
+const NIGHT = "#0d0b0a";
+const CREAM = "#efe3cc";
+
+function mix(a: string, b: string, amount: number): string {
+  const x = rgb(a);
+  const y = rgb(b);
+  return (
+    "#" +
+    x
+      .map((c, i) => Math.round((c + ((y[i] ?? 0) - c) * amount) * 255))
+      .map((v) => v.toString(16).padStart(2, "0"))
+      .join("")
+  );
+}
+
+export function contrastRatio(a: string, b: string): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((p, q) => q - p) as [number, number];
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+export function pieceField(
+  visualTheme: Readonly<Record<string, unknown>> | null | undefined,
+): string | null {
+  const vivid = paletteOf(visualTheme)
+    .map((c) => {
+      const [r, g, b] = rgb(c);
+      return { c, v: Math.max(r, g, b), s: saturation(c) };
+    })
+    .filter((x) => x.s > 0.25 && x.v > 0.3)
+    .sort((p, q) => q.s * q.v - p.s * p.v)[0];
+  if (!vivid) return null;
+  let field = mix(vivid.c, WOOD, 0.28);
+  for (let i = 0; i < 12 && contrastRatio(field, CREAM) < 4.5; i += 1) {
+    field = mix(field, NIGHT, 0.12);
+  }
+  return field;
+}

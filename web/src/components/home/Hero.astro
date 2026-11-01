@@ -5,18 +5,14 @@
 // Save-Data. The video is an enhancement added by the script below, never
 // the only carrier of information (it is aria-hidden and has no audio).
 //
-// 2026-10 visible-technology layer (culture first): a canvas "field of
-// threads", a scan sweep, a rotating seal (Origen · Oficio · Autoría) around
-// an NFC wave, and the greca band. All decorative and aria-hidden; the title,
-// message and CTA stay plain HTML that works without JS or motion.
+// 2026-11: same language as artesanfc.com — the photograph carries the
+// hero; the canvas threads, scan sweep and rotating seal were removed.
 import ResponsivePicture from "@/components/ui/ResponsivePicture.astro";
 import Greca from "@/components/home/Greca.astro";
 import { heroMedia, homeCopy } from "@/content/site";
 
 const { hero } = homeCopy;
 const titleWords = hero.title.split(" ");
-const sealText = "ORIGEN · OFICIO · AUTORÍA · PIEZA ÚNICA · ";
-const sealLength = (2 * Math.PI * 78).toFixed(1);
 const sources = JSON.stringify({
   desktop: heroMedia.desktopVideo,
   mobile: heroMedia.mobileVideo.length > 0 ? heroMedia.mobileVideo : heroMedia.desktopVideo,
@@ -48,31 +44,6 @@ const hasVideo = heroMedia.desktopVideo.length > 0;
       />
     )}
     <div class="hero__scrim"></div>
-    <canvas class="hero__field" aria-hidden="true" data-hero-field></canvas>
-    <div class="hero__scan" aria-hidden="true"></div>
-  </div>
-
-  <div class="hero__seal" aria-hidden="true">
-    <svg viewBox="0 0 200 200" focusable="false">
-      <defs>
-        <path id="hero-seal-circle" d="M100 100m-78 0a78 78 0 1 1 156 0a78 78 0 1 1-156 0"></path>
-      </defs>
-      <circle class="hero__seal-ring" cx="100" cy="100" r="92"></circle>
-      <circle class="hero__seal-ring hero__seal-ring--dash" cx="100" cy="100" r="64"></circle>
-      <g class="hero__seal-text">
-        <text>
-          <textPath href="#hero-seal-circle" textLength={sealLength} lengthAdjust="spacing">
-            {sealText}
-          </textPath>
-        </text>
-      </g>
-      <g class="hero__seal-waves">
-        <path d="M92 86a20 20 0 0 1 0 28"></path>
-        <path d="M101 78a32 32 0 0 1 0 44"></path>
-        <path d="M110 70a44 44 0 0 1 0 60"></path>
-      </g>
-      <circle class="hero__seal-core" cx="84" cy="100" r="4"></circle>
-    </svg>
   </div>
 
   <div class="hero__content container">
@@ -86,7 +57,7 @@ const hasVideo = heroMedia.desktopVideo.length > 0;
       ))}
     </h1>
     <p class="hero__subtitle lead">{hero.subtitle}</p>
-    <a class="button button--glow" href={hero.cta.href}>
+    <a class="button" href={hero.cta.href}>
       {hero.cta.label}
     </a>
   </div>
@@ -111,7 +82,6 @@ const hasVideo = heroMedia.desktopVideo.length > 0;
   // never with prefers-reduced-motion, Save-Data, or a 2G-class connection.
   // Sources are attached here (preload="none" + no <source> in the HTML), so
   // a visitor who does not get the video downloads none of it.
-  import { startHeroField } from "@/scripts/hero-field";
   import { createApiClient } from "@/lib/api";
   import { currentApiConfig, resolveMediaUrl } from "@/lib/api-config";
 
@@ -138,9 +108,6 @@ const hasVideo = heroMedia.desktopVideo.length > 0;
     toggle.setAttribute("aria-pressed", String(!playing));
     toggle.textContent = playing ? "Pausar video" : "Reproducir video";
   }
-
-  const field = document.querySelector<HTMLCanvasElement>("[data-hero-field]");
-  if (field) startHeroField(field);
 
   type VideoSource = { src: string; type: string };
 
@@ -475,12 +442,10 @@ const hasVideo = heroMedia.desktopVideo.length > 0;
     min-height: var(--touch-target-min);
     padding: 0 1em;
     border: 1px solid color-mix(in srgb, var(--color-text-inverse) 60%, transparent);
-    border-radius: 999px;
+    border-radius: 0;
     background: rgb(0 0 0 / 0.3);
-    font-size: var(--text-micro);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    font-weight: 600;
+    font-size: var(--text-small);
+    font-weight: 500;
     cursor: pointer;
   }
 </style>

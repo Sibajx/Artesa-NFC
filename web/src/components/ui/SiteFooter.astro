@@ -32,9 +32,11 @@ const { minimal } = Astro.props;
 
 <style>
   .site-footer {
-    background: var(--color-surface-dark);
+    /* Grana con el nombre grande, como el pie de artesanfc.com (2026-11). */
+    background: var(--color-grana);
     color: var(--color-text-inverse);
     padding-block: var(--space-lg);
+    overflow: hidden;
   }
 
   .site-footer__inner {
@@ -43,8 +45,11 @@ const { minimal } = Astro.props;
   }
 
   .site-footer__mark {
+    margin: 0;
     font-family: var(--font-display);
-    font-size: 2rem;
+    font-size: clamp(4.5rem, 21vw, 19rem);
+    line-height: 0.85;
+    letter-spacing: -0.02em;
   }
 
   .site-footer__line {

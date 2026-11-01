@@ -1,0 +1,308 @@
+/* ArtesaNFC web — mismo idioma visual que artesanfc.com (2026-11).
+   La galería pública (galeria/) y este panel se sentían de dos épocas
+   distintas: aquí había noche, constelaciones, etiquetas monoespaciadas en
+   mayúsculas y brillos. Esta capa deja:
+   - portadas como campos de color sólido, igual que los capítulos de la
+     galería (la pieza toma el suyo de su propia paleta, PieceDetail.tsx);
+   - Instrument Serif para títulos y Manrope en minúsculas normales para
+     todo lo demás, sin monoespaciada;
+   - botones de museo: rectángulo de 1px con flecha;
+   - contenido sobre papel, sin tarjetas oscuras, brillos ni holografías.
+   `:root` delante de cada regla gana a las hojas anteriores sin depender
+   del orden en que el empaquetador las junte. */
+
+/* ---------- letra y etiquetas ---------- */
+
+:root .eyebrow,
+:root .hud-label {
+  display: block;
+  font-family: var(--font-ui);
+  font-size: var(--text-small);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: inherit;
+  opacity: 0.78;
+}
+
+:root .hud-label::before,
+:root .hud-frame,
+:root .hud-coords,
+:root .night-hero__grid,
+:root .vitrine__seal,
+:root .crew-card__chip {
+  display: none;
+}
+
+:root .editorial-link {
+  font-size: var(--text-body);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* ---------- botones de museo ---------- */
+
+:root .button,
+:root .button--glow {
+  gap: 14px;
+  min-height: 50px;
+  padding: 0 22px;
+  border: 1px solid currentColor;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: inherit;
+  font-size: var(--text-body);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  transition:
+    background-color var(--duration-micro) ease,
+    color var(--duration-micro) ease,
+    transform 120ms var(--ease-out);
+}
+
+:root .button::after {
+  content: "→";
+  transition: transform var(--duration-ui) var(--ease-out);
+}
+
+:root .button:hover {
+  background: var(--color-text);
+  color: var(--color-bg);
+}
+
+:root .on-dark .button:hover,
+:root .on-dark .button--glow:hover {
+  background: var(--color-text-inverse);
+  color: var(--color-text);
+}
+
+:root .button:hover::after,
+:root .button:focus-visible::after {
+  transform: translateX(5px);
+}
+
+:root .button:active {
+  transform: scale(0.98);
+}
+
+/* ---------- portadas: campos de color ---------- */
+
+:root .night-hero {
+  background: var(--field, var(--color-grana));
+  color: var(--color-text-inverse);
+}
+
+:root .night-hero--grana {
+  --field: var(--color-grana);
+}
+
+:root .night-hero--agave {
+  --field: var(--color-agave);
+}
+
+:root .night-hero--barro {
+  --field: var(--color-clay);
+}
+
+:root .night-hero--madera {
+  --field: var(--color-wood);
+}
+
+:root .night-hero .lead,
+:root .vitrine-page .night-hero .lead {
+  color: inherit;
+  opacity: 0.9;
+}
+
+:root .night-hero__title {
+  max-width: 14ch;
+  line-height: 0.98;
+}
+
+/* ---------- vitrinas: piezas sobre papel ---------- */
+
+:root .vitrine-page {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+:root .vitrine-page .muted,
+:root .vitrine-page .lead,
+:root .vitrine-page .status-view,
+:root .vitrine-page .piece-card__meta {
+  color: var(--color-text-muted);
+}
+
+:root .vitrine-page .piece-card {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+:root .vitrine-page .piece-card__media::after {
+  content: none;
+}
+
+:root .vitrine-page .piece-card__code,
+:root .piece-card__code {
+  font-family: var(--font-ui);
+  letter-spacing: 0.02em;
+  color: var(--color-text-muted);
+}
+
+/* La foto se vuelve gris bajo el cursor, como en la galería (Uffizi). */
+@media (hover: hover) and (pointer: fine) {
+  :root .piece-card img,
+  :root .hands__portrait img {
+    transition: filter 400ms ease;
+  }
+
+  :root .piece-card:hover img,
+  :root .hands__item:hover .hands__portrait img {
+    filter: grayscale(1);
+  }
+}
+
+/* ---------- ficha de pieza ---------- */
+
+:root .vitrine {
+  box-shadow: none;
+}
+
+:root .dossier .piece__photo {
+  border: 10px solid var(--color-soft-white);
+}
+
+:root .chip {
+  padding: 0;
+  border: 0;
+  font-family: var(--font-ui);
+  font-size: var(--text-small);
+  letter-spacing: 0;
+  text-transform: none;
+  color: inherit;
+  opacity: 0.85;
+}
+
+:root .chip::before {
+  background: currentColor;
+}
+
+/* El registro como cédula de museo: papel, una regla de tinta arriba,
+   pares etiqueta/valor en dos columnas y nada más. */
+:root .dossier .passport {
+  overflow: visible;
+  color: var(--color-text);
+  background: var(--color-soft-white);
+  border: 0;
+  border-top: 2px solid var(--color-text);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+:root .dossier .passport::before {
+  content: none;
+}
+
+:root .dossier .passport .eyebrow,
+:root .dossier .passport__row dt {
+  font-family: var(--font-ui);
+  font-size: var(--text-small);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--color-text-muted);
+}
+
+:root .dossier .passport__row {
+  border-color: var(--color-rule);
+}
+
+:root .dossier .passport a {
+  color: inherit;
+}
+
+:root .dossier .passport .muted {
+  color: var(--color-text-muted);
+}
+
+:root .film li::before,
+:root .film li::after {
+  content: none;
+}
+
+:root .maker {
+  border: 0;
+  border-top: 1px solid var(--color-text);
+  border-radius: 0;
+  background: none;
+  padding-inline: 0;
+}
+
+/* ---------- nosotros: personas como cédulas ---------- */
+
+:root .crew-card {
+  color: var(--color-text);
+  background: var(--color-soft-white);
+  border: 0;
+  border-top: 2px solid var(--color-text);
+  border-radius: 0;
+  box-shadow: none;
+  transform: none;
+}
+
+:root .crew-card__role {
+  font-family: var(--font-ui);
+  font-size: var(--text-small);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--color-clay);
+}
+
+:root .crew-card__bio {
+  color: var(--color-text-muted);
+}
+
+:root .crew-card__quote {
+  color: var(--color-text);
+  border-left-color: var(--color-clay);
+}
+
+:root .crew-card__avatar {
+  background: var(--color-clay);
+  color: var(--color-text-inverse);
+}
+
+:root .contact-links a,
+:root .contact-links span {
+  border-radius: 0;
+}
+
+:root .placeholder-note {
+  border-radius: 0;
+  letter-spacing: 0;
+  text-transform: none;
+  font-weight: 500;
+}
+
+/* ---------- artesano: contadores y técnicas ---------- */
+
+:root .stats dt {
+  font-family: var(--font-ui);
+  font-size: var(--text-small);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+:root .stats dd {
+  color: inherit;
+}
+
+:root .craft-tags li {
+  border-radius: 0;
+}

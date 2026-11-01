@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { availabilityLabel, displayName, excerpt, formatPlace } from "@/lib/format";
 import { imagesWithRoles, pickHeroImage, pickModel, pickPortrait } from "@/lib/media";
 import { artisanPath, PIECE_PREFIX, slugFromPath } from "@/lib/routes";
+import { pieceField } from "@/lib/palette";
 import { setIndexable, setMetadata } from "@/lib/seo";
 import type { Artisan, Piece } from "@/lib/types";
 import { MediaImage } from "./MediaImage";
@@ -19,6 +20,12 @@ import { useApi } from "./useApi";
 import { useDarkZone } from "./useDarkZone";
 
 const NOT_FOUND = { kind: "not_found" } as const;
+
+// Like a chapter of artesanfc.com: the hero takes the piece's own colour.
+function fieldStyle(theme: Piece["visual_theme"]): React.CSSProperties | undefined {
+  const field = pieceField(theme);
+  return field ? ({ "--field": field } as React.CSSProperties) : undefined;
+}
 
 export default function PieceDetail() {
   const slug = slugFromPath(window.location.pathname, PIECE_PREFIX);
@@ -88,13 +95,16 @@ export function PieceView({ piece }: { piece: Piece }) {
   const availability = availabilityLabel(piece.availability_status);
   const summary = piece.description ? excerpt(piece.description) : null;
 
-  // "Expediente" (2026-10): the piece in a lit vitrine with a rotating seal,
-  // its holographic passport, a film strip of photos, its story as a quote
-  // and the maker's card.
+  // The piece on a field of its own colour (2026-11, same language as
+  // artesanfc.com), its register as a museum label, a film strip of photos,
+  // its story and the maker.
   return (
     <article className="piece dossier" aria-labelledby="piece-title">
-      <header className="night-hero on-dark dossier-hero" data-header-dark-zone>
-        <div className="night-hero__grid" aria-hidden="true"></div>
+      <header
+        className="night-hero on-dark dossier-hero"
+        data-header-dark-zone
+        style={fieldStyle(piece.visual_theme)}
+      >
         <div className="container dossier-hero__grid piece__intro">
           <div className="vitrine piece__media">
             {model ? (
@@ -105,29 +115,6 @@ export function PieceView({ piece }: { piece: Piece }) {
                 <ZoomButton media={hero} fallbackAlt={piece.name} />
               </div>
             )}
-            <span className="hud-frame" aria-hidden="true"></span>
-            <svg
-              className="vitrine__seal"
-              viewBox="0 0 100 100"
-              aria-hidden="true"
-              focusable="false"
-            >
-              <defs>
-                <path
-                  id="piece-seal-path"
-                  d="M50 50m-36 0a36 36 0 1 1 72 0a36 36 0 1 1-72 0"
-                ></path>
-              </defs>
-              <circle cx="50" cy="50" r="48"></circle>
-              <g className="vitrine__seal-text">
-                <text>
-                  <textPath href="#piece-seal-path" textLength="226" lengthAdjust="spacing">
-                    {`PIEZA ÚNICA · ${piece.public_code} · `}
-                  </textPath>
-                </text>
-              </g>
-              <path d="M44 42a10 10 0 0 1 0 16M50 37a17 17 0 0 1 0 26M56 32a24 24 0 0 1 0 36"></path>
-            </svg>
           </div>
           <div className="dossier-hero__text piece__heading rise">
             <p className="hud-label">{[artisanName, place].filter(Boolean).join(" · ")}</p>

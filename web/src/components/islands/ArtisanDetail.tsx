@@ -81,12 +81,10 @@ function ArtisanView({ artisan }: { artisan: Artisan }) {
 
   return (
     <article className="artisan" aria-labelledby="artisan-title">
-      <header className="night-hero on-dark portrait-hero" data-header-dark-zone>
-        <div className="night-hero__grid" aria-hidden="true"></div>
+      <header className="night-hero night-hero--madera on-dark portrait-hero" data-header-dark-zone>
         <div className="container portrait-hero__grid">
           <figure className="portrait-hero__frame artisan__portrait">
             <MediaImage media={portrait} fallbackAlt={name} loading="eager" />
-            <span className="hud-frame" aria-hidden="true"></span>
           </figure>
           <div className="portrait-hero__text artisan__heading rise">
             <p className="hud-label">{place ?? "Artesano"}</p>

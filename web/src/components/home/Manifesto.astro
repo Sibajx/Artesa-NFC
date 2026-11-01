@@ -152,13 +152,7 @@ const pixels = MASK.flatMap((row, y) =>
 
 <style>
   .manifesto {
-    background:
-      radial-gradient(
-        ellipse at 100% 0%,
-        color-mix(in srgb, var(--color-fiber) 22%, transparent),
-        transparent 50%
-      ),
-      var(--color-bg);
+    background: var(--color-bg);
   }
 
   .manifesto__grid {
@@ -179,16 +173,9 @@ const pixels = MASK.flatMap((row, y) =>
     display: grid;
     gap: var(--space-md);
     padding: clamp(20px, 4vw, 40px);
-    background:
-      radial-gradient(
-        circle at 30% 30%,
-        color-mix(in srgb, var(--color-cempasuchil) 12%, transparent),
-        transparent 60%
-      ),
-      var(--color-night);
+    /* 2026-11: campo de barro, como un capítulo de artesanfc.com. */
+    background: var(--color-clay);
     color: var(--color-text-inverse);
-    border-radius: 4px;
-    box-shadow: 0 30px 60px -30px rgb(13 11 10 / 0.6);
   }
 
   .reader__head {

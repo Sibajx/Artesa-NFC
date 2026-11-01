@@ -9,9 +9,9 @@
 :root {
   /* Base palette — DESIGN_SYSTEM.md §3 */
   --color-bg: #e8d9bf; /* Café con leche — was Warm White #f5f3ee (2026-10: no white backgrounds) */
-  --color-surface-dark: #111111; /* Carbon */
-  --color-text: #171717; /* Ink */
-  --color-text-inverse: #f7f7f4; /* Soft White */
+  --color-surface-dark: #0d0b0a; /* Tinta, como artesanfc.com (2026-11) */
+  --color-text: #0d0b0a; /* Tinta */
+  --color-text-inverse: #efe3cc; /* Papel, la tinta clara de artesanfc.com */
   --color-text-muted: #54504a; /* Graphite, darkened for AA on the cream backgrounds (5.2:1 on paper) */
   --color-soft-white: #efe3cc; /* Raised cream (cards, hovers on dark); never pure white */
 
@@ -31,8 +31,9 @@
      Used for glows, traces and HUD labels on dark surfaces only; text on
      light surfaces keeps the base palette. */
   --color-cempasuchil: #f2a33a;
-  --color-grana: #d6336c;
-  --color-anil: #5b6ee1;
+  --color-grana: #8f2a1d; /* 2026-11: la grana de artesanfc.com */
+  --color-anil: #33452c; /* 2026-11: agave, en lugar del añil */
+  --color-agave: #33452c;
   --color-night: #0d0b0a; /* warmer than Carbon, for the tech scenes */
   --color-night-raised: #1a1512;
   --glow-cempasuchil: 0 0 18px color-mix(in srgb, var(--color-cempasuchil) 55%, transparent);

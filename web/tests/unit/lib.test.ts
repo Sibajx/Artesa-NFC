@@ -123,7 +123,7 @@ describe("media", () => {
   });
 });
 
-import { paletteOf, paletteRoles } from "@/lib/palette";
+import { contrastRatio, paletteOf, paletteRoles, pieceField } from "@/lib/palette";
 
 describe("palette (ADR-030 phase 4)", () => {
   it("accepts 3-5 hex colours and ignores anything else", () => {
@@ -300,5 +300,19 @@ describe("collection carousel helpers", () => {
     expect(nextIndex(1, -1, 3)).toBe(0);
     expect(nextIndex(0, 1, 0)).toBe(0);
     expect(nextIndex(0, 1, 1)).toBe(0);
+  });
+});
+
+describe("pieceField (2026-11)", () => {
+  it("takes the most vivid colour and keeps cream text at AA", () => {
+    const field = pieceField({ palette: ["#111111", "#e8a33a", "#efe4cf"] });
+    expect(field).toMatch(/^#[0-9a-f]{6}$/);
+    expect(contrastRatio(field!, "#efe3cc")).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("is null when the palette has no vivid colour or is invalid", () => {
+    expect(pieceField({ palette: ["#111111", "#777777", "#eeeeee"] })).toBeNull();
+    expect(pieceField({ palette: "rojo" })).toBeNull();
+    expect(pieceField(null)).toBeNull();
   });
 });

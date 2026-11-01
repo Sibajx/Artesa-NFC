@@ -362,13 +362,8 @@ const { certificate } = collection;
 
 <style>
   .collection {
-    background:
-      radial-gradient(
-        ellipse at 15% 80%,
-        color-mix(in srgb, var(--color-grana) 14%, transparent),
-        transparent 50%
-      ),
-      var(--color-night);
+    /* 2026-11: campo de agave, como un capítulo de artesanfc.com. */
+    background: var(--color-agave);
     color: var(--color-text-inverse);
   }
 
@@ -422,18 +417,12 @@ const { certificate } = collection;
     display: grid;
     gap: var(--space-sm);
     padding: 22px;
-    border-radius: 14px;
+    /* 2026-11: cédula de museo en papel, sin holograma. */
     overflow: hidden;
-    color: var(--color-text-inverse);
-    background: linear-gradient(
-      160deg,
-      color-mix(in srgb, var(--color-night-raised) 92%, transparent),
-      color-mix(in srgb, var(--color-night) 96%, transparent)
-    );
-    border: 1px solid color-mix(in srgb, var(--color-cempasuchil) 45%, transparent);
-    box-shadow:
-      0 30px 60px -20px rgb(0 0 0 / 0.7),
-      0 0 30px -8px color-mix(in srgb, var(--color-cempasuchil) 40%, transparent);
+    color: var(--color-text);
+    background: var(--color-soft-white);
+    border-top: 2px solid var(--color-text);
+    box-shadow: 0 24px 40px -28px rgb(13 11 10 / 0.6);
     transform: rotateX(var(--rx)) rotateY(var(--ry));
     transform-style: preserve-3d;
     transition: transform var(--duration-editorial) var(--ease-out);
@@ -466,7 +455,7 @@ const { certificate } = collection;
       0 0,
       var(--mx) var(--my);
     mix-blend-mode: screen;
-    opacity: 0.55;
+    opacity: 0;
   }
 
   .cert__head {
