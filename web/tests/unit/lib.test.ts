@@ -307,7 +307,7 @@ describe("pieceField (2026-11)", () => {
   it("takes the most vivid colour and keeps cream text at AA", () => {
     const field = pieceField({ palette: ["#111111", "#e8a33a", "#efe4cf"] });
     expect(field).toMatch(/^#[0-9a-f]{6}$/);
-    expect(contrastRatio(field!, "#efe3cc")).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(field ?? "#000000", "#efe3cc")).toBeGreaterThanOrEqual(4.5);
   });
 
   it("is null when the palette has no vivid colour or is invalid", () => {
