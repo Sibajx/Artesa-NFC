@@ -5,7 +5,7 @@
    stays below the fold while the state changes loading → content, so the
    swap causes no layout shift above it. */
 .page-top {
-  padding-top: calc(64px + var(--space-lg));
+  padding-top: calc(var(--header-h) + var(--space-lg));
   min-height: 100svh;
 }
 
