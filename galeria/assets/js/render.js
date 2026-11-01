@@ -8,6 +8,8 @@
 // Todo texto que viene de la API pasa por esc(); toda URL de media pasa por
 // mediaUrl() y todo color por color(). Nada de la API entra crudo al HTML.
 
+import { FOTOS } from "./fotos.js";
+
 export const API_ORIGIN = "https://api.artesanfc.com";
 export const API_BASE = `${API_ORIGIN}/api/v1`;
 export const INFO_ORIGIN = "https://info.artesanfc.com";
@@ -75,8 +77,19 @@ function hsv(hex) {
   return { h, s: max ? d / max : 0, v: max };
 }
 
-export const INK_DARK = "#140d0b";
-export const INK_LIGHT = "#ffffff";
+export const INK_DARK = "#0d0b0a"; // noche
+export const INK_LIGHT = "#efe3cc"; // crema alzada: nunca blanco puro
+const WOOD = "#5c3f28";
+
+// Entona un color hacia la madera (como un tinte natural sobre fibra): el
+// rojo de una paleta deja de ser rojo de pantalla y se vuelve grana.
+export function toWood(hex, amount = 0.28) {
+  const c = color(hex);
+  if (!c) return hex;
+  const a = [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+  const b = [1, 3, 5].map((i) => parseInt(WOOD.slice(i, i + 2), 16));
+  return "#" + a.map((v, i) => Math.round(v * (1 - amount) + b[i] * amount).toString(16).padStart(2, "0")).join("");
+}
 
 export function inkFor(field) {
   return contrast(field, INK_DARK) >= contrast(field, INK_LIGHT) ? INK_DARK : INK_LIGHT;
@@ -95,11 +108,14 @@ export function chapterColours(palette, previousField) {
   const pick =
     ranked.find((x) => prevHue === null || Math.min(Math.abs(x.h - prevHue), 360 - Math.abs(x.h - prevHue)) > 28) ||
     null;
-  const field = pick ? pick.c : previousField === "#2c1a12" ? "#5b3a24" : "#2c1a12";
+  // `source` es el color sin entonar: el siguiente capítulo compara su tono
+  // con este, no con el entonado (que tira todo hacia el naranja de la madera).
+  const source = pick ? pick.c : previousField === "#2c1a12" ? "#5b3a24" : "#2c1a12";
+  const field = toWood(source);
   const ink = inkFor(field);
   const darkest = colours.slice().sort((a, b) => luminance(a) - luminance(b))[0];
   const detail = darkest && contrast(field, darkest) >= 3 && darkest !== field ? darkest : ink;
-  return { field, ink, detail };
+  return { field, ink, detail, source };
 }
 
 /* ---------- datos ---------- */
@@ -141,7 +157,13 @@ function img(media, { alt, sizes = "100vw", eager = false, cls = "" } = {}) {
   if (!src) return "";
   const w = Number(media.format?.width) || 1200;
   const h = Number(media.format?.height) || 1600;
-  return `<img${cls ? ` class="${cls}"` : ""} src="${esc(src)}" alt="${esc(alt ?? media.alt_text ?? "")}" width="${w}" height="${h}" sizes="${esc(sizes)}" decoding="async"${eager ? ' fetchpriority="high"' : ' loading="lazy"'}>`;
+  // Copias WebP reducidas que deja scripts/fotos.py al publicar (solo rutas
+  // propias assets/fotos/…); la original queda como la opción más grande.
+  const copies = (FOTOS[media.url] || []).filter(
+    ([cw, u]) => Number.isInteger(cw) && cw < w && /^assets\/fotos\/[a-f0-9]{12}-\d+\.webp$/.test(u),
+  );
+  const srcset = copies.length ? ` srcset="${esc([...copies.map(([cw, u]) => `${u} ${cw}w`), `${src} ${w}w`].join(", "))}"` : "";
+  return `<img${cls ? ` class="${cls}"` : ""} src="${esc(src)}"${srcset} alt="${esc(alt ?? media.alt_text ?? "")}" width="${w}" height="${h}" sizes="${esc(sizes)}" decoding="async"${eager ? ' fetchpriority="high"' : ' loading="lazy"'}>`;
 }
 
 /* ---------- secciones ---------- */
@@ -164,8 +186,8 @@ export function renderWall(details) {
   };
   let prev = null;
   details.forEach((p) => {
-    const { field, ink } = chapterColours(p.visual_theme?.palette, prev);
-    prev = field;
+    const { field, ink, source } = chapterColours(p.visual_theme?.palette, prev);
+    prev = source;
     const href = `#pieza-${esc(p.slug)}`;
     const name = cleanName(p.name);
     const cover = p.media?.[0] ?? p.cover_media;
@@ -206,8 +228,8 @@ export function renderChapters(details) {
   let prev = null;
   return details
     .map((p, i) => {
-      const { field, ink, detail } = chapterColours(p.visual_theme?.palette, prev);
-      prev = field;
+      const { field, ink, detail, source } = chapterColours(p.visual_theme?.palette, prev);
+      prev = source;
       const name = cleanName(p.name);
       const cover = p.media?.[0] ?? p.cover_media;
       const facts = [

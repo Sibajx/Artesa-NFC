@@ -143,34 +143,46 @@ function setupStages() {
 
 /* ---------- barra que toma el color del capítulo ---------- */
 
-let barObserver = null;
+// Un solo cálculo por cuadro y solo se escribe cuando cambia el capítulo: el
+// scroll no vuelve a leer estilos ni a reiniciar la transición de color.
+let barState = null;
 function setupBar() {
   const bar = document.querySelector("[data-bar]");
   const hero = document.querySelector(".hero");
   if (!bar) return;
-  barObserver?.disconnect();
-  const fields = [...document.querySelectorAll("[data-field]")];
+  const fields = [...document.querySelectorAll("[data-field]")].map((el) => {
+    const cs = getComputedStyle(el);
+    return { el, bg: cs.getPropertyValue("--field").trim(), ink: cs.getPropertyValue("--ink").trim() };
+  });
+  const first = !barState;
+  barState = { bar, hero, fields, current: null, shown: null, ticking: false };
   const update = () => {
-    const line = bar.offsetHeight / 2;
-    const under = fields.find((f) => {
-      const r = f.getBoundingClientRect();
+    const st = barState;
+    st.ticking = false;
+    const line = 28;
+    const under = st.fields.find((f) => {
+      const r = f.el.getBoundingClientRect();
       return r.top <= line && r.bottom > line;
     });
-    if (under) {
-      const cs = getComputedStyle(under);
-      bar.style.setProperty("--bar-bg", cs.getPropertyValue("--field").trim());
-      bar.style.setProperty("--bar-ink", cs.getPropertyValue("--ink").trim());
+    if (under && under !== st.current) {
+      st.current = under;
+      st.bar.style.setProperty("--bar-bg", under.bg);
+      st.bar.style.setProperty("--bar-ink", under.ink);
     }
-    const heroBottom = hero ? hero.getBoundingClientRect().bottom : 0;
-    bar.classList.toggle("is-shown", heroBottom < line * 2);
+    const shown = st.hero ? st.hero.getBoundingClientRect().bottom < line * 2 : true;
+    if (shown !== st.shown) {
+      st.shown = shown;
+      st.bar.classList.toggle("is-shown", shown);
+    }
   };
-  barObserver = new IntersectionObserver(update, { rootMargin: "0px 0px -90% 0px", threshold: [0, 1] });
-  fields.forEach((f) => barObserver.observe(f));
-  if (hero) barObserver.observe(hero);
-  if (!setupBar.bound) {
-    window.addEventListener("scroll", () => requestAnimationFrame(update), { passive: true });
-    window.addEventListener("resize", update);
-    setupBar.bound = true;
+  const schedule = () => {
+    if (barState.ticking) return;
+    barState.ticking = true;
+    requestAnimationFrame(update);
+  };
+  if (first) {
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule, { passive: true });
   }
   update();
 }
@@ -209,19 +221,28 @@ function setupReveal() {
 function setupHeroDrift() {
   const media = document.querySelector("[data-hero-media]");
   if (!media || reduceMotion) return;
+  let img = media.querySelector(".hero__img");
+  // Se mueve la foto directamente (solo transform, en la GPU) y solo mientras
+  // el inicio está a la vista.
+  let visible = true;
   let ticking = false;
+  new IntersectionObserver(([entry]) => {
+    visible = entry.isIntersecting;
+  }).observe(media);
   const move = () => {
     ticking = false;
+    // El repintado en vivo puede cambiar la foto: se vuelve a buscar si hace falta.
+    if (!img?.isConnected) img = media.querySelector(".hero__img");
+    if (!img) return;
     const y = Math.min(window.scrollY, window.innerHeight);
-    media.style.setProperty("--drift", `${(y * 0.12).toFixed(1)}px`);
+    img.style.transform = `translate3d(0, ${(y * 0.12).toFixed(1)}px, 0) scale(1.08)`;
   };
   window.addEventListener(
     "scroll",
     () => {
-      if (!ticking) {
-        ticking = true;
-        requestAnimationFrame(move);
-      }
+      if (!visible || ticking) return;
+      ticking = true;
+      requestAnimationFrame(move);
     },
     { passive: true },
   );
