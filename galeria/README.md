@@ -38,7 +38,10 @@ anterior → *Rollback*.
 |---|---|
 | `assets/js/render.js` | Datos de la API → HTML. Escapa todo texto, valida URLs `/media/` y colores `#rrggbb`. Lo usan el navegador y el prerender. |
 | `assets/js/app.js` | Capa viva: refresco desde la API, verificador, acordeón, barra con el color del capítulo, entradas. |
-| `assets/js/boot.js` | Marca `html.js` antes de pintar (sin scripts en línea por la CSP). |
+| `index.html` (script en línea) | Marca `html.js` antes de pintar; la CSP lo permite por su hash sha256 en `_headers`. Si lo cambias, recalcula el hash. |
+| `assets/js/fotos.js` | Mapa de copias reducidas de las fotos. En el repo va vacío; `scripts/fotos.py` lo llena al publicar. |
+| `scripts/fotos.py` | Copias WebP de 480/960 px de las fotos de piezas y artesanos (Pillow). |
+| `assets/fonts/` | Red Hat Display 900 y Red Hat Text (latin, OFL), servidas desde aquí. |
 | `scripts/prerender.mjs` | Llena las regiones `live:*` de `index.html` con lo publicado hoy. |
 | `_headers` | CSP y caché. |
 | `assets/credits.json` | Créditos de las fotos abiertas (Wikimedia Commons); el pie de página los cita. |

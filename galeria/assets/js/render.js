@@ -8,6 +8,8 @@
 // Todo texto que viene de la API pasa por esc(); toda URL de media pasa por
 // mediaUrl() y todo color por color(). Nada de la API entra crudo al HTML.
 
+import { FOTOS } from "./fotos.js";
+
 export const API_ORIGIN = "https://api.artesanfc.com";
 export const API_BASE = `${API_ORIGIN}/api/v1`;
 export const INFO_ORIGIN = "https://info.artesanfc.com";
@@ -141,7 +143,13 @@ function img(media, { alt, sizes = "100vw", eager = false, cls = "" } = {}) {
   if (!src) return "";
   const w = Number(media.format?.width) || 1200;
   const h = Number(media.format?.height) || 1600;
-  return `<img${cls ? ` class="${cls}"` : ""} src="${esc(src)}" alt="${esc(alt ?? media.alt_text ?? "")}" width="${w}" height="${h}" sizes="${esc(sizes)}" decoding="async"${eager ? ' fetchpriority="high"' : ' loading="lazy"'}>`;
+  // Copias WebP reducidas que deja scripts/fotos.py al publicar (solo rutas
+  // propias assets/fotos/…); la original queda como la opción más grande.
+  const copies = (FOTOS[media.url] || []).filter(
+    ([cw, u]) => Number.isInteger(cw) && cw < w && /^assets\/fotos\/[a-f0-9]{12}-\d+\.webp$/.test(u),
+  );
+  const srcset = copies.length ? ` srcset="${esc([...copies.map(([cw, u]) => `${u} ${cw}w`), `${src} ${w}w`].join(", "))}"` : "";
+  return `<img${cls ? ` class="${cls}"` : ""} src="${esc(src)}"${srcset} alt="${esc(alt ?? media.alt_text ?? "")}" width="${w}" height="${h}" sizes="${esc(sizes)}" decoding="async"${eager ? ' fetchpriority="high"' : ' loading="lazy"'}>`;
 }
 
 /* ---------- secciones ---------- */

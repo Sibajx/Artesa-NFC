@@ -3,6 +3,24 @@
    tomado de las máscaras (laca negra, grana, ocre, crema, verde de agave) y
    cada pieza toma el color más vivo de su propia paleta en Gestión. */
 
+/* Fuentes servidas desde la galería (latin, OFL). Antes venían de Google
+   Fonts y su hoja bloqueaba el primer pintado ~0.9 s en móvil. */
+@font-face {
+  font-family: "Red Hat Display";
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url("../fonts/red-hat-display-900-latin-v21.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Red Hat Text";
+  font-style: normal;
+  font-weight: 400 500;
+  font-display: swap;
+  src: url("../fonts/red-hat-text-latin-v19.woff2") format("woff2");
+}
+
 :root {
   --black: #140d0b;
   --cream: #dfe4d4; /* cantera verde, pálida */
@@ -270,13 +288,13 @@ ul {
 .hero__img {
   object-fit: cover;
   object-position: 50% 42%;
-  transform: translateY(var(--drift, 0px)) scale(1.08);
+  transform: translate3d(0, 0, 0) scale(1.08);
   animation: hero-settle 1600ms var(--ease-out) both;
 }
 
 @keyframes hero-settle {
   from {
-    transform: translateY(var(--drift, 0px)) scale(1.18);
+    transform: translate3d(0, 0, 0) scale(1.18);
     opacity: 0.4;
   }
 }

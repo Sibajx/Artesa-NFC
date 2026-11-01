@@ -20,11 +20,10 @@
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 
   <link rel="preconnect" href="https://api.artesanfc.com" crossorigin>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@900&family=Red+Hat+Text:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="preload" href="assets/fonts/red-hat-display-900-latin-v21.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/red-hat-text-latin-v19.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="assets/css/site.css">
-  <script src="assets/js/boot.js"></script>
+  <script>document.documentElement.classList.replace("no-js","js")</script>
   <script type="module" src="assets/js/app.js"></script>
 </head>
 <body>
@@ -110,7 +109,7 @@
 
     <section class="chapter dance" id="danza" data-field style="--field:#f2b632;--ink:#140d0b" aria-labelledby="danza-title">
       <figure class="dance__photo" data-reveal>
-        <img src="assets/danza-de-la-pluma.jpg" alt="Danzante de la Danza de la Pluma saltando frente a una iglesia, con penacho de plumas y papel picado" width="1920" height="1920" sizes="(min-width: 900px) 50vw, 100vw" loading="lazy" decoding="async">
+        <img src="assets/danza-de-la-pluma.jpg" srcset="assets/danza-de-la-pluma-640.webp 640w, assets/danza-de-la-pluma-960.webp 960w, assets/danza-de-la-pluma-1440.webp 1440w, assets/danza-de-la-pluma.jpg 1920w" alt="Danzante de la Danza de la Pluma saltando frente a una iglesia, con penacho de plumas y papel picado" width="1920" height="1920" sizes="(min-width: 900px) 50vw, 100vw" loading="lazy" decoding="async">
         <figcaption>La Danza de la Pluma en los Valles Centrales de Oaxaca.</figcaption>
       </figure>
       <div class="dance__text">
@@ -118,7 +117,7 @@
         <p class="dance__lead" data-reveal>En Cuilápam de Guerrero, el Negrito acompaña a la Danza de la Pluma: mientras los danzantes cuentan la conquista, él pone el humor, la fiesta y la memoria del pueblo.</p>
         <p data-reveal>Estas máscaras nacen de esa tradición. Rigoberto Ramírez Robles las talla en zompantle, una madera ligera que sale de árboles caídos o ya secos: él no tala árboles vivos. Empieza sin boceto, con un bloque y una idea, y quita madera hasta que aparece la cara.</p>
         <figure class="dance__still" data-reveal>
-          <img src="assets/estatuadedanzante-cuilapam-de-guerrero-oaxaca-mexico.jpg" alt="Estatua de un danzante de la pluma con su penacho, sobre un pedestal en un jardín de Cuilápam de Guerrero" width="1920" height="2564" sizes="(min-width: 900px) 18vw, 40vw" loading="lazy" decoding="async">
+          <img src="assets/estatuadedanzante-cuilapam-de-guerrero-oaxaca-mexico.jpg" srcset="assets/estatuadedanzante-cuilapam-de-guerrero-oaxaca-mexico-400.webp 400w, assets/estatuadedanzante-cuilapam-de-guerrero-oaxaca-mexico-800.webp 800w, assets/estatuadedanzante-cuilapam-de-guerrero-oaxaca-mexico.jpg 1920w" alt="Estatua de un danzante de la pluma con su penacho, sobre un pedestal en un jardín de Cuilápam de Guerrero" width="1920" height="2564" sizes="(min-width: 900px) 18vw, 40vw" loading="lazy" decoding="async">
           <figcaption>El danzante de la pluma en el jardín de Cuilápam.</figcaption>
         </figure>
       </div>
