@@ -1,143 +1,237 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" class="no-js">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ArtesaNFC · Galería de artesanía oaxaqueña</title>
-  <meta name="description" content="Galería de artesanía oaxaqueña: cada pieza con su origen, su proceso y la persona que la hizo.">
+  <title>ArtesaNFC · Máscaras talladas a mano en Oaxaca</title>
+  <meta name="description" content="Máscaras y tallas de madera hechas a mano en Oaxaca. Cada pieza lleva un chip NFC con su certificado y el nombre de quien la talló.">
   <meta name="robots" content="index, follow">
   <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#140d0b">
+  <link rel="canonical" href="https://artesanfc.com/">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="es_MX">
+  <meta property="og:site_name" content="ArtesaNFC">
+  <meta property="og:title" content="Cada máscara tiene autor · ArtesaNFC">
+  <meta property="og:description" content="Máscaras y tallas de madera hechas a mano en Oaxaca, cada una con su certificado NFC y el nombre de quien la talló.">
+  <meta property="og:url" content="https://artesanfc.com/">
+  <meta property="og:image" content="https://api.artesanfc.com/media/sitio/collection-entry/df1123b20c25.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 
+  <link rel="preconnect" href="https://api.artesanfc.com" crossorigin>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Manrope:wght@400;600&display=swap" rel="stylesheet">
-
+  <link href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@900&family=Red+Hat+Text:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="assets/css/site.css">
+  <script src="assets/js/boot.js"></script>
+  <script type="module" src="assets/js/app.js"></script>
 </head>
 <body>
 
   <a class="skip-link" href="#main">Saltar al contenido</a>
 
-  <header class="site-header">
-    <a class="wordmark" href="/">ArtesaNFC</a>
-    <nav class="site-nav" aria-label="Principal">
-      <a href="#galeria">Galería</a>
-      <a href="#nosotros">Nosotros</a>
-      <a href="https://info.artesanfc.com/">Para artesanos</a>
+  <header class="bar" data-bar>
+    <a class="bar__mark" href="#inicio">ArtesaNFC</a>
+    <nav class="bar__nav" aria-label="Secciones">
+      <a href="#piezas">Piezas</a>
+      <a href="#taller">Quién las talla</a>
+      <a href="#como">Cómo funciona</a>
     </nav>
-    <a class="button button--small" href="#hazte-miembro">Hazte miembro</a>
+    <a class="bar__action" href="#miembro">Hazte miembro</a>
   </header>
 
   <main id="main">
 
-    <section class="hero" aria-labelledby="hero-title">
-      <h1 id="hero-title" class="hero__title">
-        Cada pieza guarda
-        <span class="hero__media">
-          <img src="assets/barro-negro-de-oaxaca.jpg" alt="Piezas de barro negro expuestas en un taller de San Bartolo Coyotepec" width="1920" height="1440">
-        </span>
-        su origen.
-      </h1>
-      <div class="hero__body">
-        <div class="hero__copy">
-          <p class="hero__lead">
-            Una galería de artesanía oaxaqueña. Cada obra llega con su
-            historia, su proceso y el nombre de quien la hizo.
-          </p>
-          <a class="button" href="#galeria">Ver la galería</a>
+    <section class="hero" id="inicio" aria-labelledby="hero-title">
+      <div class="hero__view">
+        <div class="hero__media" data-hero-media data-sig="1cvo4e8">
+          <!-- live:hero -->
+<picture><source type="image/avif" srcset="https://api.artesanfc.com/media/sitio/collection-entry/df1123b20c25.avif"><source type="image/webp" srcset="https://api.artesanfc.com/media/sitio/collection-entry/df1123b20c25.webp"><img class="hero__img" src="https://api.artesanfc.com/media/sitio/collection-entry/df1123b20c25.jpg" alt="Las máscaras de El Negrito y El Viejito, talladas en zompantle, sobre musgo" width="914" height="1142" fetchpriority="high" decoding="async"></picture>
+<!-- /live:hero -->
         </div>
-        <figure class="hero__still">
-          <img src="assets/weavingloomzaa.jpg" alt="Telar de cintura en uso en el mercado de Zaachila" width="1920" height="1285">
+        <a class="hero__mark" href="#inicio" aria-label="ArtesaNFC, inicio">ArtesaNFC</a>
+        <h1 class="hero__title" id="hero-title">Cada máscara tiene autor</h1>
+        <p class="hero__lead">Máscaras y tallas de madera hechas a mano en Oaxaca. Cada pieza lleva un chip NFC con su certificado y el nombre de quien la talló.</p>
+        <a class="button button--accent hero__action" href="#piezas">Ver las piezas</a>
+      </div>
+      <nav class="swatches" aria-label="Capítulos">
+        <a class="swatch" href="#piezas" style="--sw:#dfe4d4;--sw-ink:#140d0b">Piezas</a>
+        <a class="swatch" href="#danza" style="--sw:#f2b632;--sw-ink:#140d0b">La danza</a>
+        <a class="swatch" href="#taller" style="--sw:#b3241f;--sw-ink:#ffffff">Quién las talla</a>
+        <a class="swatch" href="#como" style="--sw:#33452c;--sw-ink:#ffffff">Cómo funciona</a>
+        <a class="swatch" href="#miembro" style="--sw:#140d0b;--sw-ink:#ffffff">Hazte miembro</a>
+      </nav>
+    </section>
+
+    <section class="chapter wall" id="piezas" data-field style="--field:#dfe4d4;--ink:#140d0b" aria-labelledby="piezas-title">
+      <div class="wall__head">
+        <h2 class="wall__title" id="piezas-title" data-reveal>Las piezas</h2>
+        <p class="wall__note" data-reveal>Lo que está publicado en Gestión, tal como está hoy. Cada losa abre su pieza.</p>
+      </div>
+      <div class="wall__body" data-live="wall" data-sig="16wuei4">
+        <!-- live:wall -->
+<div class="wall__grid"><a class="tile tile--photo" href="#pieza-el-negrito" aria-label="El Negrito" style="--tile:#d50919"><img src="https://api.artesanfc.com/media/piezas/el-negrito/gallery-01.jpg" alt="" width="1200" height="1600" sizes="(min-width: 760px) 25vw, 50vw" decoding="async" loading="lazy"></a><a class="tile tile--word" href="#pieza-el-negrito" style="--tile:#d50919;--tile-ink:#ffffff"><span class="tile__word">El Negrito</span><span class="tile__cap">ANFC-6AJA2J</span></a><a class="tile tile--photo" href="#pieza-el-viejito" aria-label="El Viejito" style="--tile:#db8546"><img src="https://api.artesanfc.com/media/piezas/el-viejito/gallery-01.jpg" alt="" width="1200" height="1600" sizes="(min-width: 760px) 25vw, 50vw" decoding="async" loading="lazy"></a><a class="tile tile--word" href="#pieza-el-viejito" style="--tile:#db8546;--tile-ink:#140d0b"><span class="tile__word">El Viejito</span><span class="tile__cap">ANFC-GYPZXY</span></a><a class="tile tile--photo" href="#pieza-prueba-1" aria-label="Pequeña Bestia" style="--tile:#2c1a12"><img src="https://api.artesanfc.com/media/piezas/prueba-1/hero-02.jpg" alt="" width="1507" height="848" sizes="(min-width: 760px) 25vw, 50vw" decoding="async" loading="lazy"></a><a class="tile tile--word" href="#pieza-prueba-1" style="--tile:#2c1a12;--tile-ink:#ffffff"><span class="tile__word">Pequeña Bestia</span><span class="tile__cap">ANFC-UN7FBX</span></a><div class="tile tile--fact"><span class="tile__word tile__word--small">Zompantle</span><span class="tile__cap">Madera</span></div><a class="tile tile--count" href="https://info.artesanfc.com/piezas/"><span class="tile__word">3</span><span class="tile__cap">piezas certificadas · ver el catálogo</span></a></div>
+<!-- /live:wall -->
+      </div>
+    </section>
+
+    <div class="chapters" data-live="chapters" data-sig="os9zre">
+    <!-- live:chapters -->
+<section class="chapter piece" id="pieza-el-negrito" data-field style="--field:#d50919;--ink:#ffffff;--detail:#130e0e" aria-labelledby="pieza-el-negrito-t">
+  <div class="piece__media" data-reveal><img src="https://api.artesanfc.com/media/piezas/el-negrito/gallery-01.jpg" alt="La mascara del Negrito fue tallada a mano" width="1200" height="1600" sizes="(min-width: 900px) 45vw, 100vw" decoding="async" loading="lazy"></div>
+  <div class="piece__text">
+    <h2 class="piece__name" id="pieza-el-negrito-t" data-reveal>El Negrito</h2>
+    <p class="piece__story" data-reveal>El Negrito es uno de los personajes que acompañan la Danza de la Pluma de Cuilápam de Guerrero, Oaxaca, y forma parte de la riqueza cultural y festiva que caracteriza esta tradición. Su presencia contribuye a mantener viva la memoria colectiva de la comunidad, incorporando elementos de convivencia, alegría y expresión popular que complementan la representación de la danza.</p>
+    <dl class="piece__facts" data-reveal><div><dt>Quién la talló</dt><dd><a href="https://info.artesanfc.com/artesanos/rigoberto-ramirez-robles/">Rigoberto Ramírez Robles</a></dd></div><div><dt>Material</dt><dd>Zompantle</dd></div><div><dt>Técnica</dt><dd>Tallado con madera</dd></div><div><dt>Origen</dt><dd>Cuilápan de Guerrero</dd></div><div><dt>Año</dt><dd>2026</dd></div><div><dt>Estado</dt><dd>En exhibición</dd></div><div><dt>Código</dt><dd>ANFC-6AJA2J</dd></div></dl>
+    <a class="button button--ink" href="https://info.artesanfc.com/piezas/el-negrito/" data-reveal>Ver su certificado y su historia</a>
+  </div>
+</section>
+<section class="chapter piece piece--flip" id="pieza-el-viejito" data-field style="--field:#db8546;--ink:#140d0b;--detail:#0d0808" aria-labelledby="pieza-el-viejito-t">
+  <div class="piece__media" data-reveal><img src="https://api.artesanfc.com/media/piezas/el-viejito/gallery-01.jpg" alt="La máscara está inspirada en la Danza de los Viejitos y representa un rostro masculino de edad avanzada. Destacan sus ojos grandes, cejas marcadas, nariz alargada, arrugas, cabello y barba abundante." width="1200" height="1600" sizes="(min-width: 900px) 45vw, 100vw" decoding="async" loading="lazy"></div>
+  <div class="piece__text">
+    <h2 class="piece__name" id="pieza-el-viejito-t" data-reveal>El Viejito</h2>
+    <p class="piece__story" data-reveal>La máscara está inspirada en la Danza de los Viejitos y representa un rostro masculino de edad avanzada, con una expresión serena y marcada. Destacan sus ojos grandes, cejas pronunciadas, nariz alargada, arrugas, cabello y barba abundante, elementos que le dan carácter y profundidad al rostro.</p>
+    <dl class="piece__facts" data-reveal><div><dt>Quién la talló</dt><dd><a href="https://info.artesanfc.com/artesanos/rigoberto-ramirez-robles/">Rigoberto Ramírez Robles</a></dd></div><div><dt>Material</dt><dd>Madera de Zompantle</dd></div><div><dt>Técnica</dt><dd>Tallado con madera</dd></div><div><dt>Origen</dt><dd>Cuilápan de Guerrero</dd></div><div><dt>Año</dt><dd>2026</dd></div><div><dt>Estado</dt><dd>En exhibición</dd></div><div><dt>Código</dt><dd>ANFC-GYPZXY</dd></div></dl>
+    <a class="button button--ink" href="https://info.artesanfc.com/piezas/el-viejito/" data-reveal>Ver su certificado y su historia</a>
+  </div>
+</section>
+<section class="chapter piece" id="pieza-prueba-1" data-field style="--field:#2c1a12;--ink:#ffffff;--detail:#ffffff" aria-labelledby="pieza-prueba-1-t">
+  <div class="piece__media" data-reveal><img src="https://api.artesanfc.com/media/piezas/prueba-1/hero-02.jpg" alt="A través de sus ojos..." width="1507" height="848" sizes="(min-width: 900px) 45vw, 100vw" decoding="async" loading="lazy"></div>
+  <div class="piece__text">
+    <h2 class="piece__name" id="pieza-prueba-1-t" data-reveal>Pequeña Bestia</h2>
+    <p class="piece__story" data-reveal>Retrato de una mente sin recuerdos.</p>
+    <dl class="piece__facts" data-reveal><div><dt>Quién la talló</dt><dd><a href="https://info.artesanfc.com/artesanos/maria-soledad/">Maria Soledad Cruz Mtz (M4ri)</a></dd></div><div><dt>Material</dt><dd>Haluro de plata</dd></div><div><dt>Técnica</dt><dd>Improvisada</dd></div><div><dt>Origen</dt><dd>Sierra Norte</dd></div><div><dt>Año</dt><dd>2024</dd></div><div><dt>Estado</dt><dd>Disponible</dd></div><div><dt>Código</dt><dd>ANFC-UN7FBX</dd></div></dl>
+    <a class="button button--ink" href="https://info.artesanfc.com/piezas/prueba-1/" data-reveal>Ver su certificado y su historia</a>
+  </div>
+</section>
+<!-- /live:chapters -->
+    </div>
+
+    <section class="chapter dance" id="danza" data-field style="--field:#f2b632;--ink:#140d0b" aria-labelledby="danza-title">
+      <figure class="dance__photo" data-reveal>
+        <img src="assets/danza-de-la-pluma.jpg" alt="Danzante de la Danza de la Pluma saltando frente a una iglesia, con penacho de plumas y papel picado" width="1920" height="1920" sizes="(min-width: 900px) 50vw, 100vw" loading="lazy" decoding="async">
+        <figcaption>La Danza de la Pluma en los Valles Centrales de Oaxaca.</figcaption>
+      </figure>
+      <div class="dance__text">
+        <h2 class="dance__title" id="danza-title" data-reveal>La danza las pide</h2>
+        <p class="dance__lead" data-reveal>En Cuilápam de Guerrero, el Negrito acompaña a la Danza de la Pluma: mientras los danzantes cuentan la conquista, él pone el humor, la fiesta y la memoria del pueblo.</p>
+        <p data-reveal>Estas máscaras nacen de esa tradición. Rigoberto Ramírez Robles las talla en zompantle, una madera ligera que sale de árboles caídos o ya secos: él no tala árboles vivos. Empieza sin boceto, con un bloque y una idea, y quita madera hasta que aparece la cara.</p>
+        <figure class="dance__still" data-reveal>
+          <img src="assets/estatuadedanzante-cuilapam-de-guerrero-oaxaca-mexico.jpg" alt="Estatua de un danzante de la pluma con su penacho, sobre un pedestal en un jardín de Cuilápam de Guerrero" width="1920" height="2564" sizes="(min-width: 900px) 18vw, 40vw" loading="lazy" decoding="async">
+          <figcaption>El danzante de la pluma en el jardín de Cuilápam.</figcaption>
         </figure>
       </div>
     </section>
 
-    <section id="galeria" class="gallery" aria-labelledby="gallery-title">
-      <header class="section-head">
-        <h2 id="gallery-title" class="section-title">Piezas</h2>
-        <p class="section-note">Pasa el cursor sobre una imagen para verla en gris.</p>
-      </header>
-
-      <ul class="grid" role="list">
-        <li class="work work--wide">
-          <figure>
-            <img src="assets/barro-negro-y-normal-san-bartolo-coyotepec.jpg" alt="Tienda con barro negro y barro pintado apilado en estantes" width="1920" height="2564" loading="lazy">
-            <figcaption>
-              <span class="work__title">Barro negro y barro pintado</span>
-              <span class="work__place">San Bartolo Coyotepec, Oaxaca</span>
-            </figcaption>
-          </figure>
-        </li>
-        <li class="work">
-          <figure>
-            <img src="assets/woman-on-a-backstrap-loom-in-oaxaca.jpg" alt="Mujer tejiendo en telar de cintura sentada en una silla al aire libre" width="1920" height="1312" loading="lazy">
-            <figcaption>
-              <span class="work__title">Telar de cintura</span>
-              <span class="work__place">Oaxaca</span>
-            </figcaption>
-          </figure>
-        </li>
-        <li class="work">
-          <figure>
-            <img src="assets/national-museum-of-ethnology-osaka-alebrije-wood.jpg" alt="Alebrijes de madera pintados, de animales de patas largas y cuerpo de colores, exhibidos sobre una mesa negra" width="1920" height="1440" loading="lazy">
-            <figcaption>
-              <span class="work__title">Alebrijes de madera</span>
-              <span class="work__place">Oaxaca, exhibidos en Osaka</span>
-            </figcaption>
-          </figure>
-        </li>
-        <li class="work work--wide">
-          <figure>
-            <img src="assets/ollas-de-barro-negro-a-la-venta.jpg" alt="Ollas de barro negro acomodadas para la venta" width="1920" height="2571" loading="lazy">
-            <figcaption>
-              <span class="work__title">Ollas de barro negro</span>
-              <span class="work__place">San Bartolo Coyotepec, Oaxaca</span>
-            </figcaption>
-          </figure>
-        </li>
-      </ul>
+    <section class="chapter makers-ch" id="taller" data-field style="--field:#b3241f;--ink:#ffffff" aria-labelledby="taller-title">
+      <h2 class="makers-ch__title" id="taller-title" data-reveal>Quién las talla</h2>
+      <div class="makers-ch__body" data-live="makers" data-sig="weq148">
+        <!-- live:makers -->
+<div class="maker__lead">
+    <p class="maker__name" data-reveal><a href="https://info.artesanfc.com/artesanos/rigoberto-ramirez-robles/">Rigoberto Ramírez Robles</a><span>Cuilápam de Guerrero, Oaxaca</span></p>
+    <p class="maker__bio" data-reveal>Rigoberto Ramírez Robles es un artesano originario de Cuilápan de Guerrero, dedicado principalmente a la elaboración de máscaras, figuras talladas en madera y artesanías realizadas a partir de materiales reutilizados.</p>
+    <p class="maker__bio" data-reveal>La trayectoria artesanal de Rigoberto Ramírez Robles, comenzó en 2007, después de sufrir un accidente en motocicleta que le ocasionó fracturas y lo obligó a permanecer inactivo durante un periodo. Debido al tiempo libre y a una situación económica complicada, buscó una actividad que le permitiera generar ingresos.</p>
+  </div><div class="makers"><a class="maker" href="https://info.artesanfc.com/artesanos/rigoberto-ramirez-robles/" data-reveal>
+      <span class="maker__frame"><img src="https://api.artesanfc.com/media/piezas/el-negrito/gallery-01.jpg" alt="Rigoberto Ramírez Robles" width="1200" height="1600" sizes="(min-width: 760px) 22vw, 45vw" decoding="async" loading="lazy"></span>
+      <span class="maker__who">Rigoberto Ramírez Robles</span>
+      <span class="maker__role">Cuilápam de Guerrero · 2 piezas</span>
+    </a><a class="maker" href="https://info.artesanfc.com/artesanos/maria-soledad/" data-reveal>
+      <span class="maker__frame"><img src="https://api.artesanfc.com/media/artesanos/maria-soledad/portrait-07.jpg" alt="Maria Soledad Cruz Mtz (M4ri)" width="736" height="736" sizes="(min-width: 760px) 22vw, 45vw" decoding="async" loading="lazy"></span>
+      <span class="maker__who">Maria Soledad Cruz Mtz (M4ri)</span>
+      <span class="maker__role">La Trinidad · 1 pieza</span>
+    </a></div>
+<!-- /live:makers -->
+      </div>
     </section>
 
-    <section id="nosotros" class="about" aria-labelledby="about-title">
-      <div class="about__copy">
-        <h2 id="about-title" class="section-title">Nosotros</h2>
-        <p class="about__text">
-          Unimos cada pieza con quien la hizo, cómo y dónde. La historia
-          viaja en una etiqueta NFC, junto al objeto.
-        </p>
+    <section class="chapter how" id="como" data-field style="--field:#33452c;--ink:#ffffff" aria-labelledby="como-title">
+      <div class="how__intro">
+        <h2 class="how__title" id="como-title" data-reveal>Acércale el teléfono</h2>
+        <p class="how__lead" data-reveal>Cada pieza sale del taller con un chip NFC escondido y un código impreso. Acerca el teléfono, o escribe el código aquí abajo, y ves quién la hizo, de qué y cuándo.</p>
       </div>
-      <figure class="about__still">
-        <img src="assets/woman-on-a-backstrap-loom-in-oaxaca.jpg" alt="Mujer tejiendo en telar de cintura sentada en una silla al aire libre" width="1920" height="1312" loading="lazy">
-      </figure>
+      <div class="stages" data-stages>
+        <section class="stage is-open" style="--st:#1c2618">
+          <h3 class="stage__name"><button type="button" aria-expanded="true" aria-controls="st-1" id="st-1-b">Se talla</button></h3>
+          <div class="stage__body" id="st-1" role="region" aria-labelledby="st-1-b">
+            <p>Un bloque de zompantle, una gubia y días de trabajo. Cada arruga del Viejito se quitó a mano; ninguna sale de un molde.</p>
+          </div>
+        </section>
+        <section class="stage" style="--st:#2a3923">
+          <h3 class="stage__name"><button type="button" aria-expanded="false" aria-controls="st-2" id="st-2-b">Se registra</button></h3>
+          <div class="stage__body" id="st-2" role="region" aria-labelledby="st-2-b" hidden>
+            <p>El equipo de ArtesaNFC la fotografía y escribe con el artesano su historia, su madera, su técnica y el año en que se hizo.</p>
+          </div>
+        </section>
+        <section class="stage" style="--st:#3d5233">
+          <h3 class="stage__name"><button type="button" aria-expanded="false" aria-controls="st-3" id="st-3-b">Lleva su chip</button></h3>
+          <div class="stage__body" id="st-3" role="region" aria-labelledby="st-3-b" hidden>
+            <p>Se graba un chip NFC con su certificado y se bloquea para que nadie lo reescriba. El código, como ANFC-6AJA2J, queda en la etiqueta.</p>
+          </div>
+        </section>
+        <section class="stage" style="--st:#566e48">
+          <h3 class="stage__name"><button type="button" aria-expanded="false" aria-controls="st-4" id="st-4-b">La acercas</button></h3>
+          <div class="stage__body" id="st-4" role="region" aria-labelledby="st-4-b" hidden>
+            <p>Con cualquier teléfono con NFC, la acercas y se abre su certificado: la pieza, quien la talló y su historia, sin instalar nada.</p>
+          </div>
+        </section>
+        <section class="stage" style="--st:#7a9466">
+          <h3 class="stage__name"><button type="button" aria-expanded="false" aria-controls="st-5" id="st-5-b">Es tuya</button></h3>
+          <div class="stage__body" id="st-5" role="region" aria-labelledby="st-5-b" hidden>
+            <p>Quien la compra recibe el certificado original con un PIN. Si un día la regala o la vende, el certificado viaja con ella.</p>
+          </div>
+        </section>
+      </div>
+      <div class="verify">
+        <form class="verify__form" action="https://info.artesanfc.com/piezas/" method="get" data-verify>
+          <label class="verify__label" for="codigo">Escribe el código de tu pieza</label>
+          <div class="verify__row">
+            <input class="verify__input" id="codigo" name="codigo" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ANFC-6AJA2J" maxlength="20" aria-describedby="verify-out">
+            <button class="button button--accent" type="submit">Comprobar</button>
+          </div>
+        </form>
+        <div class="verify__out" id="verify-out" aria-live="polite" data-verify-out>
+          <p>El código está en la etiqueta de la pieza y en su certificado.</p>
+        </div>
+      </div>
     </section>
 
-    <section id="hazte-miembro" class="membership" aria-labelledby="membership-title">
-      <div class="membership__copy">
-        <h2 id="membership-title" class="membership__title">Hazte miembro, pues.</h2>
-        <p class="membership__text">
-          Entras a la comunidad que cuida el oficio. Recibes novedades de las
-          piezas, de quienes las hacen y de los talleres que visitamos, y ayudas
-          a que el artesano se quede con lo que vale su trabajo.
-        </p>
-        <a class="button" href="#hazte-miembro">Quiero ser miembro</a>
+    <section class="chapter close" id="miembro" data-field style="--field:#140d0b;--ink:#ffffff" aria-labelledby="miembro-title">
+      <h2 class="close__title" id="miembro-title" data-reveal>Tu pieza, con su autor</h2>
+      <div class="close__row">
+        <p class="close__lead" data-reveal>Hazte miembro y te escribimos antes que a nadie cuando salga una pieza nueva, con su historia, sus fotos y su precio.</p>
+        <a class="button button--accent close__action" data-reveal href="mailto:contacto@artesanfc.com?subject=Quiero%20ser%20miembro%20de%20ArtesaNFC&amp;body=Hola%2C%20quiero%20ser%20miembro.%0A%0AMi%20nombre%3A%20%0AMi%20WhatsApp%20(opcional)%3A%20%0AMe%20interesan%3A%20m%C3%A1scaras%20%2F%20tallas%20%2F%20todo%0A">Quiero ser miembro</a>
       </div>
-      <figure class="membership__still">
-        <img src="assets/national-museum-of-ethnology-osaka-wood-carving.jpg" alt="Figuras de madera talladas y pintadas a mano de perro y animales, de Oaxaca" width="1920" height="1440" loading="lazy">
-      </figure>
     </section>
 
   </main>
 
-  <footer class="site-footer">
-    <div class="site-footer__main">
-      <p class="wordmark">ArtesaNFC</p>
-      <nav class="site-footer__nav" aria-label="Pie de página">
-        <a href="#galeria">Galería</a>
-        <a href="#nosotros">Nosotros</a>
-        <a href="https://info.artesanfc.com/">Panel para artesanos</a>
-      </nav>
+  <footer class="foot" data-field style="--field:#b3241f;--ink:#ffffff">
+    <p class="foot__name" aria-hidden="true">ArtesaNFC</p>
+    <div class="foot__row">
+      <ul class="foot__places">
+        <li><a href="mailto:contacto@artesanfc.com">contacto@artesanfc.com</a></li>
+        <li><a href="https://info.artesanfc.com/">Panel para artesanos</a></li>
+        <li><span>Cuilápam de Guerrero, Oaxaca</span></li>
+      </ul>
+      <div class="foot__links">
+        <ul>
+          <li><a href="#piezas">Piezas</a></li>
+          <li><a href="#danza">La danza</a></li>
+          <li><a href="#taller">Quién las talla</a></li>
+        </ul>
+        <ul>
+          <li><a href="#como">Comprobar un código</a></li>
+          <li><a href="https://info.artesanfc.com/piezas/">Catálogo completo</a></li>
+          <li><a href="https://info.artesanfc.com/artesanos/">Artesanos</a></li>
+        </ul>
+      </div>
     </div>
-    <p class="credits">Fotografías: <a href="https://commons.wikimedia.org/wiki/File:Barro_Negro_y_normal-San_Bartolo_Coyotepec-Oaxaca-Mexico.jpg">“Barro Negro y normal-San Bartolo Coyotepec-Oaxaca-Mexico”</a> de User:Gengiskanhg, <a href="https://creativecommons.org/licenses/by-sa/3.0/">CC BY-SA 3.0</a>, vía Wikimedia Commons; <a href="https://commons.wikimedia.org/wiki/File:Barro_negro_de_Oaxaca.JPG">“Barro negro de Oaxaca”</a> de Slevinr, <a href="https://creativecommons.org/licenses/by/3.0">CC BY 3.0</a>, vía Wikimedia Commons; <a href="https://commons.wikimedia.org/wiki/File:Woman_on_a_backstrap_loom_in_Oaxaca.jpg">“Woman on a backstrap loom in Oaxaca”</a> de David.Clay.Photography, <a href="https://creativecommons.org/licenses/by-sa/4.0">CC BY-SA 4.0</a>, vía Wikimedia Commons; <a href="https://commons.wikimedia.org/wiki/File:WeavingLoomZaa.JPG">“WeavingLoomZaa”</a> de AlejandroLinaresGarcia, <a href="https://creativecommons.org/licenses/by-sa/4.0">CC BY-SA 4.0</a>, vía Wikimedia Commons; <a href="https://commons.wikimedia.org/wiki/File:Ollas_de_barro_negro_a_la_venta_en_San_Bartolo_Coyotepec,_Oaxaca.jpg">“Ollas de barro negro a la venta en San Bartolo Coyotepec, Oaxaca”</a> de Juanscott, <a href="https://creativecommons.org/licenses/by-sa/4.0">CC BY-SA 4.0</a>, vía Wikimedia Commons; <a href="https://commons.wikimedia.org/wiki/File:National_Museum_of_Ethnology,_Osaka_-_Alebrije,_wood_carvings_from_State_of_Oaxaca,_Mexico.jpg">“National Museum of Ethnology, Osaka - Alebrije, wood carvings from State of Oaxaca, Mexico”</a> de Yanajin33, <a href="https://creativecommons.org/licenses/by-sa/3.0">CC BY-SA 3.0</a>, vía Wikimedia Commons; <a href="https://commons.wikimedia.org/wiki/File:National_Museum_of_Ethnology,_Osaka_-_Wood_carving_(nahual)_-_Oaxaca_in_Mexico_-_Made_by_Ang%C3%A9lico_Jim%C3%A9nez,_Isa%C3%ADas_Jim%C3%A9nez_and_Manuel_Jim%C3%A9nez_-_Collected_in_2010.jpg">“National Museum of Ethnology, Osaka - Wood carving (nahual)”</a> de Yanajin33, <a href="https://creativecommons.org/licenses/by-sa/3.0">CC BY-SA 3.0</a>, vía Wikimedia Commons.</p>
+    <p class="credits">Fotografías de las piezas: ArtesaNFC. Danza de la Pluma: <a href="https://commons.wikimedia.org/wiki/File:Danza_de_la_pluma.jpg">“Danza de la pluma”</a> de Garykarolli, <a href="https://creativecommons.org/licenses/by-sa/4.0">CC BY-SA 4.0</a>. Danzante de Cuilápam: <a href="https://commons.wikimedia.org/wiki/File:EstatuaDeDanzante-Cuilapam_de_Guerrero_Oaxaca_Mexico.jpg">“EstatuaDeDanzante-Cuilapam de Guerrero Oaxaca Mexico”</a> de Gengiskanhg, <a href="https://creativecommons.org/licenses/by-sa/3.0/">CC BY-SA 3.0</a>. Ambas vía Wikimedia Commons.</p>
+    <div class="foot__legal">
+      <span>© 2026 ArtesaNFC · Oaxaca, México</span>
+      <a href="#inicio">Volver arriba</a>
+    </div>
   </footer>
 
 </body>
