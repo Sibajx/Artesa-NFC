@@ -21,11 +21,13 @@ conectado a Gestión por la API pública `https://api.artesanfc.com/api/v1`.
 ## Publicar
 
 ```bash
-node galeria/scripts/prerender.mjs          # refresca la copia estática
-D=$(mktemp -d) && cp -r galeria/index.html galeria/_headers galeria/_redirects galeria/assets "$D"/ \
-  && rm -f "$D/assets/credits.json" \
-  && npx wrangler@4 pages deploy "$D" --project-name artesanfc-galeria --branch main
+galeria/scripts/publicar.sh          # prerender + versiones ?v= en CSS/JS + subida
+galeria/scripts/publicar.sh --seco   # solo arma la copia, sin subir
 ```
+
+No subas la carpeta a mano: sin el `?v=` la caché de artesanfc.com puede
+servir el HTML nuevo con el CSS viejo (pasó el 2026-11-01 y la página salió
+sin estilos).
 
 Volver atrás: Cloudflare → Pages → `artesanfc-galeria` → Deployments → la
 anterior → *Rollback*.
