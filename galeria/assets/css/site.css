@@ -1346,8 +1346,14 @@ ul {
     flex-direction: column;
   }
 
+  /* En columna, flex: 1 (base 0) le gana a height y aplasta el campo. */
+  .verify__input {
+    flex: none;
+  }
+
   .close {
-    min-height: 80svh;
+    min-height: 0;
+    gap: 40px;
   }
 
   .close__title {
@@ -1378,6 +1384,22 @@ ul {
   .foot__links {
     margin-top: 40px;
     font-size: 0.9375rem;
+  }
+
+  /* Área táctil de 44 px sin cambiar cómo se ve la lista. */
+  .foot__links ul {
+    gap: 0;
+  }
+
+  .foot__legal {
+    align-items: center;
+  }
+
+  .foot__links a,
+  .foot__legal a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
   }
 
   .credits {
