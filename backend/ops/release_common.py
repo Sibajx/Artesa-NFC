@@ -34,7 +34,9 @@ PRODUCTION_REF = "origin/main"
 PRODUCTION_REF_FULL = "refs/remotes/origin/main"
 PRODUCTION_FRONTEND_ORIGIN = "https://artesanfc.com"
 # Same rule as app/core/config.py (N-01): nothing but these may be allowed.
-PRODUCTION_ALLOWED_ORIGINS = frozenset({PRODUCTION_FRONTEND_ORIGIN, "https://www.artesanfc.com"})
+PRODUCTION_ALLOWED_ORIGINS = frozenset(
+    {PRODUCTION_FRONTEND_ORIGIN, "https://www.artesanfc.com", "https://info.artesanfc.com"}
+)
 PUBLIC_API_BASE = "https://api.artesanfc.com"
 PRODUCTION_PORT = 8000
 CANDIDATE_PORT = 8001

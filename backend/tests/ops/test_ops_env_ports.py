@@ -84,6 +84,18 @@ def test_validate_production_env_accepts_a_correct_configuration():
     rp.validate_production_env({"APP_ENV": " Production ", "DATABASE_URL": DATABASE_URL, "DEBUG": "False", "CORS_ALLOWED_ORIGINS": "https://artesanfc.com, https://www.artesanfc.com"})
 
 
+def test_validate_production_env_accepts_the_info_site():
+    rp.validate_production_env({"APP_ENV": "production", "DATABASE_URL": DATABASE_URL, "DEBUG": "False",
+                                "CORS_ALLOWED_ORIGINS": "https://artesanfc.com,https://www.artesanfc.com,https://info.artesanfc.com"})
+
+
+def test_production_origins_match_the_app_guard():
+    # The deploy preflight must accept exactly what the app accepts at startup,
+    # or a valid shared/.env blocks every deploy (2026-11-01).
+    from app.core import config
+    assert rc.PRODUCTION_ALLOWED_ORIGINS == config.PRODUCTION_ALLOWED_ORIGINS
+
+
 _PROD = {"APP_ENV": "production", "DATABASE_URL": DATABASE_URL, "DEBUG": "False", "CORS_ALLOWED_ORIGINS": "https://artesanfc.com"}
 _ADMIN = {"ADMIN_ACCESS_TEAM_DOMAIN": "artesanfc.cloudflareaccess.com", "ADMIN_ACCESS_AUD": "a" * 64, "ADMIN_EMAILS": "ops@example.org"}
 
