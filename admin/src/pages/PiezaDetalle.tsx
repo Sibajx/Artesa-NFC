@@ -6,6 +6,7 @@ import { useLoad } from '../hooks';
 import { MediaSection } from '../MediaSection';
 import { PaletteSection } from '../PaletteSection';
 import { VentaSection } from '../VentaSection';
+import { PrecioSection } from '../PrecioSection';
 import { UbicacionSection } from '../UbicacionSection';
 import { usePermissions } from '../roles-context';
 import { PublishChecklist } from '../PublishChecklist';
@@ -145,6 +146,10 @@ export default function PiezaDetalle() {
               <h2 id="production-heading" className="text-xl font-serif text-botanica-negro mb-4">Seguimiento de producción</h2>
               <ProductionTimeline pieceId={p.id} />
             </section>
+
+            <Gate permission="sales">
+              <PrecioSection key={`price:${p.updated_at}`} piece={p} onChanged={() => setRevision((r) => r + 1)} />
+            </Gate>
 
             <Gate permission="sales">
               <VentaSection key={`sale:${p.updated_at}`} piece={p} onChanged={() => setRevision((r) => r + 1)} />

@@ -22,6 +22,8 @@ from app.api.admin.production import reads as admin_production_reads
 from app.api.admin.production import uploads as admin_production_uploads
 from app.api.admin.production import writes as admin_production_writes
 from app.api.admin.router import router as admin_router
+from app.api.admin.pricing import reads as admin_pricing_reads
+from app.api.admin.pricing import writes as admin_pricing_writes
 from app.api.admin.supplies import reads as admin_supplies_reads
 from app.api.admin.training import reads as admin_training_reads
 from app.api.admin.training import uploads as admin_training_uploads
@@ -254,6 +256,8 @@ app.include_router(admin_router)
 app.include_router(admin_custody_router)
 app.include_router(admin_custody_writes_router)
 app.include_router(admin_exports_router)
+app.include_router(admin_pricing_reads)
+app.include_router(admin_pricing_writes)
 app.include_router(admin_supplies_reads)
 app.include_router(admin_supplies_writes)
 app.include_router(admin_production_reads)

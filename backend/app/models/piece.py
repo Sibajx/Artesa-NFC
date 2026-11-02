@@ -3,8 +3,9 @@ from __future__ import annotations
 import enum
 import uuid
 from datetime import date, datetime
+from decimal import Decimal
 
-from sqlalchemy import CheckConstraint, Date, DateTime, Enum, ForeignKey, Integer, SmallInteger, Text, func
+from sqlalchemy import CheckConstraint, Date, DateTime, Enum, ForeignKey, Integer, Numeric, SmallInteger, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -25,6 +26,8 @@ class Piece(Base):
     __tablename__ = "piece"
     __table_args__ = (
         CheckConstraint("price_cents IS NULL OR price_cents >= 0", name="ck_piece_price_cents"),
+        CheckConstraint("artisan_price_cents IS NULL OR artisan_price_cents >= 0", name="ck_piece_artisan_price_cents"),
+        CheckConstraint("commission_pct IS NULL OR commission_pct BETWEEN 0 AND 100", name="ck_piece_commission_pct"),
         CheckConstraint("creation_year IS NULL OR creation_year BETWEEN 1 AND 9999", name="ck_piece_creation_year"),
         CheckConstraint("length(btrim(slug)) > 0", name="ck_piece_slug_not_blank"),
     )
@@ -77,6 +80,10 @@ class Piece(Base):
     # sums never drift.
     price_cents: Mapped[int | None] = mapped_column(Integer)
     price_currency: Mapped[str] = mapped_column(Text, nullable=False, server_default="MXN", default="MXN")
+    # Calculadora de precios: what the artisan receives in full, and this
+    # piece's commission (None: the settings' tier for its amount). Gestión only.
+    artisan_price_cents: Mapped[int | None] = mapped_column(Integer)
+    commission_pct: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
 
     artisan: Mapped["Artisan"] = relationship(back_populates="pieces")
     media_assets: Mapped[list["MediaAsset"]] = relationship(back_populates="piece")

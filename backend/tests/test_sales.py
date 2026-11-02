@@ -89,3 +89,16 @@ def test_a_piece_with_a_sale_cannot_be_purged(client):
     piece = client.post(f"/api/admin/v1/pieces/{piece['id']}/trash", json={},
                         headers=H(**{"If-Match": piece["updated_at"]})).json()
     assert piece["purge_blocker"] == "has_sale"
+
+
+def test_artisan_price_and_commission_are_gestion_only(client):
+    piece = published(client)
+    r = client.patch(f"/api/admin/v1/pieces/{piece['id']}", json={"artisan_price_cents": 600000, "commission_pct": "20"},
+                     headers=H(**{"If-Match": piece["updated_at"]}))
+    assert r.status_code == 200, r.text
+    assert r.json()["artisan_price_cents"] == 600000 and float(r.json()["commission_pct"]) == 20
+    bad = client.patch(f"/api/admin/v1/pieces/{piece['id']}", json={"commission_pct": 101},
+                       headers=H(**{"If-Match": r.json()["updated_at"]}))
+    assert bad.status_code == 422
+    public = client.get(f"/api/v1/pieces/{piece['slug']}").json()
+    assert "artisan_price_cents" not in public and "commission_pct" not in public

@@ -16,6 +16,7 @@ import Certificacion from './pages/Certificacion';
 import CertificarPieza from './pages/CertificarPieza';
 import DisenoCertificado from './pages/DisenoCertificado';
 import Usuarios from './pages/Usuarios';
+import AjustesPrecios from './pages/AjustesPrecios';
 import Insumos from './pages/Insumos';
 import Produccion from './pages/Produccion';
 import Capacitaciones from './pages/Capacitaciones';
@@ -86,6 +87,12 @@ const icons: Record<string, ReactElement> = {
       <line x1="10" y1="12" x2="14" y2="12"/>
     </svg>
   ),
+  Precios: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+      <line x1="7" y1="7" x2="7.01" y2="7"/>
+    </svg>
+  ),
   Usuarios: (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
@@ -151,6 +158,7 @@ const menuGroups: { title?: string; items: MenuItem[] }[] = [
     title: 'Administración',
     items: [
       { name: 'Auditoría', path: '/auditoria' },
+      { name: 'Precios', path: '/precios', role: 'owner' },
       { name: 'Usuarios', path: '/usuarios', role: 'owner' },
     ],
   },
@@ -288,6 +296,7 @@ export default function App() {
           {can('nfc', 'revocations') && <Route path="/certificacion/:id" element={<CertificarPieza />} />}
           {can('design') && <Route path="/diseno/:id" element={<DisenoCertificado />} />}
           {roles.includes('owner') && <Route path="/usuarios" element={<Usuarios />} />}
+          {roles.includes('owner') && <Route path="/precios" element={<AjustesPrecios />} />}
           {can('hero') && <Route path="/hero" element={<Hero />} />}
           <Route path="/archivo" element={<Archivo />} />
           <Route path="/archivados" element={<Navigate to="/archivo" replace />} />
