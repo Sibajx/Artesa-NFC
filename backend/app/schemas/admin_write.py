@@ -8,6 +8,7 @@ from __future__ import annotations
 import re
 import uuid
 from datetime import date
+from decimal import Decimal
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
@@ -97,6 +98,10 @@ class PieceFields(_Body):
     # P-026 G2: list price in cents, Gestión only.
     price_cents: int | None = Field(default=None, ge=0, le=10_000_000_000)
     price_currency: Literal["MXN", "USD"] | None = None
+    # Calculadora de precios: what the artisan receives, and this piece's
+    # commission (None: the tier for its amount).
+    artisan_price_cents: int | None = Field(default=None, ge=0, le=10_000_000_000)
+    commission_pct: Decimal | None = Field(default=None, ge=0, le=100, max_digits=5, decimal_places=2)
 
     _blank = field_validator("description", "history", "technique", "origin", mode="before")(_blank_to_none)
 

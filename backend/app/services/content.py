@@ -24,6 +24,7 @@ import re
 import secrets
 import unicodedata
 import uuid
+from decimal import Decimal
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -50,6 +51,7 @@ _PRIVATE_ARTISAN_FIELDS = ("public_contact", "validation_whatsapp", "validation_
 PIECE_FIELDS = (
     "name", "description", "history", "technique", "materials", "origin",
     "creation_year", "creation_date", "dimensions", "price_cents", "price_currency",
+    "artisan_price_cents", "commission_pct",
 )
 # Public URLs and the code printed with the piece: only editable while the
 # record is a draft (never published, or taken back to draft).
@@ -132,6 +134,8 @@ def _jsonable(value: Any) -> Any:
         return value.isoformat()
     if hasattr(value, "value"):
         return value.value
+    if isinstance(value, Decimal):
+        return str(value)
     return value
 
 

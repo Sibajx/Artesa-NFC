@@ -12,6 +12,7 @@ stay in the provisioning CLI).
 from __future__ import annotations
 
 import uuid
+from decimal import Decimal
 from datetime import date, datetime
 
 from pydantic import BaseModel
@@ -202,6 +203,8 @@ class AdminPieceDetail(BaseModel):
     # P-026 G2: list price (cents), Gestión only.
     price_cents: int | None = None
     price_currency: str = "MXN"
+    artisan_price_cents: int | None = None
+    commission_pct: Decimal | None = None
     availability_status: str
     publication_status: str
     # True only when the piece and its artisan are both published

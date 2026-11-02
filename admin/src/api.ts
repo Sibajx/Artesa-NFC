@@ -535,6 +535,10 @@ export interface PieceDetail {
   // P-026: list price in cents (Gestión only) and every sale, newest first.
   price_cents?: number | null;
   price_currency?: string;
+  // Calculadora de precios: what the artisan receives (cents) and this piece's
+  // commission ("20.00"; null = the tier for its amount).
+  artisan_price_cents?: number | null;
+  commission_pct?: string | null;
   sales?: Sale[];
   // P-026 G12: where the piece is, newest move first.
   locations?: PieceLocation[];
@@ -826,9 +830,47 @@ export interface PieceInput {
   availability_status?: string;
   price_cents?: number | null;
   price_currency?: string;
+  artisan_price_cents?: number | null;
+  commission_pct?: string | null;
+}
+
+// Calculadora de precios. Percentages travel as decimal strings ("3.60").
+export interface PricingTier { up_to_cents: number | null; pct: string }
+export interface PricingConfig {
+  mode: 'intermediario' | 'revendedor';
+  tiers: PricingTier[];
+  card_pct: string;
+  card_fixed_cents: number;
+  iva_pct: string;
+  isr_pct: string;
+  ret_isr_pct: string;
+  ret_iva_pct: string;
+  direct_fee_cents: number;
+  round_to_cents: number;
+}
+export interface PricingSettings { config: PricingConfig; updated_at: string | null; updated_by: string | null }
+export interface PriceQuote {
+  mode: PricingConfig['mode'];
+  commission_pct: string;
+  artisan_cents: number;
+  retentions_cents: number;
+  agreed_commission_cents: number;
+  exact_price_cents: number;
+  public_price_cents: number;
+  rounding_cents: number;
+  card_fee_cents: number;
+  iva_cents: number;
+  gross_commission_cents: number;
+  isr_cents: number;
+  net_cents: number;
+  direct_sale_cents: number;
 }
 
 export const adminApi = {
+  pricingSettings: (signal?: AbortSignal) => get<PricingSettings>('/pricing/settings', undefined, signal),
+  savePricingSettings: (config: PricingConfig) => request<PricingSettings>('PUT', '/pricing/settings', { body: config }),
+  priceQuote: (artisanPriceCents: number, commissionPct: string | null) =>
+    request<PriceQuote>('POST', '/pricing/quote', { body: { artisan_price_cents: artisanPriceCents, commission_pct: commissionPct } }),
   me: (signal?: AbortSignal) => get<{ email: string; roles: string[]; permissions: string[] }>('/me', undefined, signal),
   custodyPieces: (signal?: AbortSignal) => get<ListEnvelope<CustodyPiece>>('/custody/pieces', undefined, signal),
   custodyState: (id: string, signal?: AbortSignal) => get<CustodyState>(`/custody/pieces/${encodeURIComponent(id)}/state`, undefined, signal),

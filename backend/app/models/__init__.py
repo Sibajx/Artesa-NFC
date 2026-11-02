@@ -14,6 +14,7 @@ from app.models.ownership import OwnerVerification, OwnershipCard, PieceClaim
 from app.models.piece import Piece
 from app.models.production import ProductionPhoto, ProductionStep
 from app.models.piece_location import PieceLocation
+from app.models.pricing import PricingSettings
 from app.models.sale import Sale
 from app.models.site_image import SiteImage
 from app.models.supply import Supply, SupplyMovement
@@ -22,4 +23,4 @@ from app.models.collection_entry import CollectionEntry
 from app.models.visit import Visit
 from app.models.visit_photo import VisitPhoto
 
-__all__ = ["Base", "Artisan", "Piece", "MediaAsset", "Certificate", "NfcTag", "AuditEvent", "OwnershipCard", "PieceClaim", "OwnerVerification", "CertificateDesign", "Sale", "AdminAccount", "ArtisanAuthorization", "HeroCampaign", "PieceLocation", "CertificateArt", "SiteImage", "Supply", "SupplyMovement", "ProductionStep", "ProductionPhoto", "Visit", "VisitPhoto", "AdminRoleProfile", "TrainingManual", "TrainingImage", "CollectionEntry"]
+__all__ = ["Base", "Artisan", "Piece", "MediaAsset", "Certificate", "NfcTag", "AuditEvent", "OwnershipCard", "PieceClaim", "OwnerVerification", "CertificateDesign", "Sale", "AdminAccount", "ArtisanAuthorization", "HeroCampaign", "PieceLocation", "CertificateArt", "SiteImage", "Supply", "SupplyMovement", "ProductionStep", "ProductionPhoto", "Visit", "VisitPhoto", "AdminRoleProfile", "TrainingManual", "TrainingImage", "CollectionEntry", "PricingSettings"]

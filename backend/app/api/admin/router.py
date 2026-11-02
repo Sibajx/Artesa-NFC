@@ -259,6 +259,8 @@ def get_piece(piece_id: uuid.UUID, db: Session = Depends(get_db),
         visual_theme=piece.visual_theme,
         price_cents=piece.price_cents,
         price_currency=piece.price_currency,
+        artisan_price_cents=piece.artisan_price_cents,
+        commission_pct=piece.commission_pct,
         availability_status=piece.availability_status.value,
         publication_status=piece.publication_status.value,
         sales=[AdminSale(**{f: getattr(s, f) for f in AdminSale.model_fields if f != "status"}, status=s.status.value)
