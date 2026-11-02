@@ -68,7 +68,11 @@
 html {
   -webkit-text-size-adjust: 100%;
   scroll-behavior: smooth;
-  scroll-padding-top: 64px;
+  /* Al saltar a un capítulo, su borde queda pegado arriba: la barra (56 px) cae
+     sobre el margen del mismo capítulo (96 px o más) y toma su color. Con un
+     margen de salto, la barra se quedaba con el color del capítulo anterior y
+     asomaba una franja de él. */
+  scroll-padding-top: 0;
 }
 
 body {
