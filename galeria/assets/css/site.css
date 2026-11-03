@@ -185,7 +185,7 @@ ul {
 }
 
 .button:active {
-  transform: scale(0.96);
+  transform: scale(var(--btn-press, 0.96));
   transition-duration: 120ms;
 }
 
@@ -213,7 +213,7 @@ ul {
 
 @media (hover: hover) and (pointer: fine) {
   .button:hover {
-    transform: scale(1.05);
+    transform: scale(var(--btn-hover, 1.05));
   }
 }
 
@@ -395,12 +395,12 @@ ul {
 }
 
 .hero__action:active {
-  transform: translateX(-50%) scale(0.96);
+  transform: translateX(-50%) scale(var(--btn-press, 0.96));
 }
 
 @media (hover: hover) and (pointer: fine) {
   .hero__action:hover {
-    transform: translateX(-50%) scale(1.05);
+    transform: translateX(-50%) scale(var(--btn-hover, 1.05));
   }
 }
 
@@ -1151,6 +1151,81 @@ ul {
   font-size: var(--step-small);
 }
 
+/* ---------- propuestas de botón (2026-11-01) ----------
+   Elegida «museo» (como Pace): <html data-boton="museo">. Sin atributo
+   queda la píldora anterior. Esquina recta, sin brillo, minúsculas
+   normales y una flecha. */
+
+[data-boton] .button,
+[data-boton] .bar__action {
+  --btn-hover: 1;
+  --btn-press: 0.98;
+  gap: 14px;
+  min-height: 50px;
+  padding: 0 22px;
+  border-radius: 0;
+  box-shadow: none;
+  font: 500 var(--step-body) / 1 var(--text);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+[data-boton] .button::after {
+  content: "→";
+  display: inline-block;
+  font-weight: 400;
+  transition: transform var(--t-mid) var(--ease-out);
+}
+
+[data-boton] .button:hover::after,
+[data-boton] .button:focus-visible::after {
+  transform: translateX(5px);
+}
+
+[data-boton] .bar__action {
+  min-height: 0;
+  padding: 9px 16px;
+  font-size: var(--step-small);
+}
+
+/* Museo (Pace): rectángulo de borde fino que se llena de tinta. */
+[data-boton="museo"] .button--accent {
+  border: 1px solid rgb(239 227 204 / 0.75);
+  background: transparent;
+  color: var(--paper);
+}
+
+[data-boton="museo"] .button--accent:hover {
+  background: var(--paper);
+  color: var(--black);
+}
+
+[data-boton="museo"] .hero__action {
+  background: rgb(13 11 10 / 0.25);
+}
+
+/* Campo del código: recto como los botones. */
+[data-boton] .verify__input {
+  border: 0;
+  border-radius: 0;
+}
+
+/* Uffizi: la foto se vuelve gris bajo el cursor (en las tres propuestas). */
+@media (hover: hover) and (pointer: fine) {
+  [data-boton] .tile--photo img,
+  [data-boton] .piece__media img {
+    transition:
+      filter 400ms ease,
+      transform var(--t-pop) var(--ease-out);
+  }
+
+  [data-boton] .tile--photo:hover img,
+  [data-boton] .piece__media:hover img {
+    filter: grayscale(1);
+    transform: scale(1.02);
+  }
+}
+
 /* ---------- enlaces en texto ----------
    Como en info: un resalte de cempasúchil que sube bajo la palabra. */
 
@@ -1195,12 +1270,12 @@ ul {
 }
 
 .js .button[data-reveal].is-in:active {
-  transform: scale(0.96);
+  transform: scale(var(--btn-press, 0.96));
 }
 
 @media (hover: hover) and (pointer: fine) {
   .js .button[data-reveal].is-in:hover {
-    transform: scale(1.05);
+    transform: scale(var(--btn-hover, 1.05));
   }
 }
 
