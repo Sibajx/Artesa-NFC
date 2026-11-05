@@ -47,6 +47,9 @@ Meta: costo fijo mensual $0; solo se paga comisión cuando el comprador escoge t
 - **Factura:** se emite a mano en el servicio gratuito del SAT; la tienda solo guarda los datos
   fiscales y Gestión marca «Factura pendiente». Timbrado automático solo si crece el volumen.
 - **Modelo fiscal supuesto:** intermediario (Artesa factura su comisión). Lo confirma el contador (§8).
+- **Persona (2026-11-05):** Artesa será una **SAS** (persona moral, 5 personas; régimen probable RESICO
+  persona moral). Cuentas reales de Mercado Pago, banco (CLABE) y Envia a nombre de la SAS antes de abrir;
+  las credenciales de prueba actuales sirven para desarrollar. Los textos legales nombran a la SAS.
 - **Envío:** se cotiza y se cobra en el mismo pago (como Mercado Libre) con un cotizador de paqueterías
   sin mensualidad y saldo prepagado: **Envia.com o Skydropx** (el PO elige al abrir la cuenta). Se
   ofrece además **recoger gratis** en el taller o en ferias.
@@ -217,7 +220,7 @@ Bloquean la apertura al público, no el desarrollo (se trabaja con credenciales 
 - [x] Precio por transferencia: descuento medio (2026-11-05).
 - [x] Cotizador: Envia.com (2026-11-05; falta su token de pruebas para generar guías).
 - [x] Cuenta de Mercado Pago y claves de prueba (2026-11-05).
-- [ ] Dar la CLABE donde se recibirán las transferencias.
+- [ ] Constituir la SAS y pasar a su nombre Mercado Pago, cuenta bancaria (CLABE) y Envia.
 - [ ] Pasar las preguntas fiscales al contador (régimen, plataforma digital, artesanos sin RFC,
       cuota de venta directa). Intermediario: orientación general (2026-11-05) dice que sí se puede
       como comisión mercantil; falta que el contador confirme para Artesa:
