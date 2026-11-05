@@ -35,8 +35,9 @@ los registros.
 Meta: costo fijo mensual $0; solo se paga comisión cuando el comprador escoge tarjeta.
 - **Cobro:** SPEI directo a la CLABE de Artesa como opción principal ($0) y **Mercado Pago solo para
   tarjeta** (y meses sin intereses). Sin OXXO ni efectivo por ahora.
-- **Precio por transferencia:** puede llevar descuento sobre el de tarjeta (recomendado: descuento
-  medio, p. ej. $7,600 vs $7,800). La cifra la decide el PO (§8); el sistema la toma de un ajuste.
+- **Precio por transferencia (decidido 2026-11-05): descuento medio.** El precio SPEI es el de
+  tarjeta menos ≈ 2.5 %, redondeado a la centena de abajo (p. ej. $7,800 → $7,600: el comprador
+  ahorra $200 y a Artesa le quedan ≈ $966, más que con tarjeta). El porcentaje es un ajuste editable.
 - **Apartado:** 20 minutos con tarjeta; 24 horas con SPEI.
 - **Confirmación del SPEI:** manual en v1. El dueño ve el depósito en su banco y pulsa «Pago recibido»
   en Gestión. Sin API de SPEI con conciliación (se evalúa si crece el volumen).
@@ -176,9 +177,9 @@ Aviso interno a Artesa por cada pedido pagado.
 
 ## 8. Decisiones pendientes del PO
 Bloquean la apertura al público, no el desarrollo (se trabaja con credenciales de prueba):
-- [ ] Precio por transferencia: un solo precio, descuento medio (recomendado) o precio justo.
+- [x] Precio por transferencia: descuento medio (2026-11-05).
+- [x] Cotizador: Envia.com (2026-11-05; falta su token de pruebas para generar guías).
 - [ ] Abrir la cuenta de Mercado Pago y pasar las claves de prueba.
-- [ ] Abrir la cuenta de Envia.com o Skydropx.
 - [ ] Dar la CLABE donde se recibirán las transferencias.
 - [ ] Pasar las preguntas fiscales al contador (régimen, intermediario, plataforma digital,
       artesanos sin RFC, cuota de venta directa).
