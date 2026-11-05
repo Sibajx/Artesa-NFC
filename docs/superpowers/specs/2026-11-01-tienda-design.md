@@ -38,6 +38,9 @@ Meta: costo fijo mensual $0; solo se paga comisión cuando el comprador escoge t
 - **Precio por transferencia (decidido 2026-11-05): descuento medio.** El precio SPEI es el de
   tarjeta menos ≈ 2.5 %, redondeado a la centena de abajo (p. ej. $7,800 → $7,600: el comprador
   ahorra $200 y a Artesa le quedan ≈ $966, más que con tarjeta). El porcentaje es un ajuste editable.
+  **Tope (2026-11-05):** el descuento nunca supera lo que costaría cobrar esa pieza con tarjeta
+  (tasa de Gestión → Precios, con IVA). Si lo rebasa, se redondea a la centena de arriba; si queda
+  igual al de tarjeta, la pieza muestra un solo precio. Se calcula **por pieza**, nunca sobre el total.
 - **Apartado:** 20 minutos con tarjeta; 24 horas con SPEI.
 - **Confirmación del SPEI:** manual en v1. El dueño ve el depósito en su banco y pulsa «Pago recibido»
   en Gestión. Sin API de SPEI con conciliación (se evalúa si crece el volumen).
@@ -128,6 +131,24 @@ en la auditoría, sin datos personales.
 - Si la cotización vence antes de generar la guía y el precio cambió, se avisa en Gestión. La
   diferencia la absorbe Artesa; al comprador no se le cobra de nuevo.
 
+### 5.4.1 Comisión de la tarjeta sobre el envío
+Mercado Pago cobra su comisión sobre **todo** el pago, envío incluido. Con tarjeta, el envío que ve
+el comprador = cotización + comisión de tarjeta sobre esa cotización; con SPEI, la cotización sola.
+Así la comisión del envío no sale del margen de Artesa ni del artesano.
+
+### 5.4.2 Precios: reglas que el servidor debe cumplir
+- El artesano recibe siempre su precio completo: el descuento SPEI y las comisiones salen solo de la
+  parte de Artesa. Si una combinación de tasas dejara la comisión de Artesa negativa, la pieza no se
+  puede poner «A la venta» y Gestión lo explica.
+- **Meses sin intereses:** en Mercado Pago le cuestan al vendedor una tasa extra (mayor a más
+  meses). En v1 se **desactivan** en la preferencia; se activan solo cuando el PO decida si los
+  absorbe o los sube al precio, con su tasa en Gestión → Precios.
+- **Tarjetas extranjeras:** pueden llevar cargo extra de Mercado Pago. Se registra la tasa real de
+  cada pago (la API la devuelve) para ver la ganancia neta; el precio no cambia.
+- El SPEI solo funciona desde bancos de México: a un comprador con dirección fuera de México solo
+  se le ofrece tarjeta.
+- Todos los montos se recalculan en el servidor al crear el pedido y quedan congelados en él.
+
 ### 5.5 Factura
 - Casilla «Necesito factura» con RFC, razón social, régimen fiscal, código postal fiscal y uso del
   CFDI (se valida el formato).
@@ -163,6 +184,14 @@ Aviso interno a Artesa por cada pedido pagado.
 - **CORS:** solo artesanfc.com (y el sitio nuevo cuando exista). La validación de arranque en
   producción rechaza otros orígenes (incidente del 2026-11-01): cualquier origen nuevo es un cambio de código.
 - **Límite de peticiones** también para los POST de la tienda; hoy solo cubre los GET.
+- **Apartados abusivos:** el apartado SPEI de 24 h bloquea piezas únicas. Límites: un pedido SPEI
+  pendiente por correo y por IP a la vez, y a lo más 3 piezas por pedido SPEI. Gestión permite al
+  dueño liberar un apartado a mano.
+- **SPEI con monto o concepto distinto:** «Pago recibido» exige escribir el monto depositado; si no
+  coincide con el total, no confirma y marca «Revisar pago» (falta o sobra dinero, o llegó sin folio).
+  No hay pagos parciales.
+- **Cotización vencida:** con el apartado SPEI de 24 h la cotización puede vencer antes del pago; al
+  confirmar se recotiza y, si subió, Artesa absorbe la diferencia (§5.4) y Gestión la muestra.
 - Migraciones aditivas y registradas en `ops/migration-classes.json`.
 - Todo el dinero en centavos enteros, en MXN.
 - **Webhook** público sin Cloudflare Access (como el resto de `/api/v1`), verificado por firma y por consulta.
