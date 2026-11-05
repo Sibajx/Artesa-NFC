@@ -120,6 +120,13 @@ en la auditoría, sin datos personales.
     del pedido, consultado con el token.
 11. Un barrido periódico (o al consultar) marca `expirado` los pedidos vencidos y libera las piezas.
 
+### 5.3.1 API de Mercado Pago (2026-11-05)
+La app «ArtesaNFC tienda» se creó con Checkout Pro sobre la **API de Orders**: Mercado Pago avisa que
+la de Preferences se descontinuará. Donde este documento dice «preferencia», el constructor usa el
+equivalente de Orders (referencia externa = pedido, URLs de regreso, vencimiento, una sola
+exhibición) y verifica en la documentación vigente cómo se excluyen medios. La cuenta ofrece
+`ticket` (OXXO, Paycash) y `bank_transfer` (CLABE): se excluyen; solo tarjetas.
+
 ### 5.4 Envíos (Envia.com o Skydropx)
 - La cotización se hace del lado del servidor, con peso y medidas empacadas, origen (taller o
   artesano) y destino, detrás de una interfaz `cotizador` con un adaptador por proveedor, para
@@ -209,7 +216,7 @@ Aviso interno a Artesa por cada pedido pagado.
 Bloquean la apertura al público, no el desarrollo (se trabaja con credenciales de prueba):
 - [x] Precio por transferencia: descuento medio (2026-11-05).
 - [x] Cotizador: Envia.com (2026-11-05; falta su token de pruebas para generar guías).
-- [ ] Abrir la cuenta de Mercado Pago y pasar las claves de prueba.
+- [x] Cuenta de Mercado Pago y claves de prueba (2026-11-05).
 - [ ] Dar la CLABE donde se recibirán las transferencias.
 - [ ] Pasar las preguntas fiscales al contador (régimen, plataforma digital, artesanos sin RFC,
       cuota de venta directa). Intermediario: orientación general (2026-11-05) dice que sí se puede
