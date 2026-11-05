@@ -141,7 +141,8 @@ Así la comisión del envío no sale del margen de Artesa ni del artesano.
   parte de Artesa. Si una combinación de tasas dejara la comisión de Artesa negativa, la pieza no se
   puede poner «A la venta» y Gestión lo explica.
 - **Meses sin intereses:** en Mercado Pago le cuestan al vendedor una tasa extra (mayor a más
-  meses). En v1 se **desactivan** en la preferencia; se activan solo cuando el PO decida si los
+  meses; 3x = 8.19 %, 12x = 16.39 %). El alta de Mercado Pago obliga a elegir al menos 3x, así que en v1
+  cada preferencia lleva `payment_methods.installments = 1` (una sola exhibición); se activan solo cuando el PO decida si los
   absorbe o los sube al precio, con su tasa en Gestión → Precios.
 - **Tarjetas extranjeras:** pueden llevar cargo extra de Mercado Pago. Se registra la tasa real de
   cada pago (la API la devuelve) para ver la ganancia neta; el precio no cambia.
