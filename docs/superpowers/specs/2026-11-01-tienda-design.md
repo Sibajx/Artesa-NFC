@@ -210,7 +210,13 @@ Bloquean la apertura al público, no el desarrollo (se trabaja con credenciales 
 - [x] Cotizador: Envia.com (2026-11-05; falta su token de pruebas para generar guías).
 - [ ] Abrir la cuenta de Mercado Pago y pasar las claves de prueba.
 - [ ] Dar la CLABE donde se recibirán las transferencias.
-- [ ] Pasar las preguntas fiscales al contador (régimen, intermediario, plataforma digital,
-      artesanos sin RFC, cuota de venta directa).
+- [ ] Pasar las preguntas fiscales al contador (régimen, plataforma digital, artesanos sin RFC,
+      cuota de venta directa). Intermediario: orientación general (2026-11-05) dice que sí se puede
+      como comisión mercantil; falta que el contador confirme para Artesa:
+      - contrato de comisión por escrito con cada artesano (la pieza es suya; comisión pactada);
+      - cómo justificar ante el SAT que del depósito completo solo la comisión es ingreso de Artesa
+        (comprobante de cada pago al artesano ligado a la venta);
+      - quién factura el valor de la pieza al comprador si el artesano no tiene RFC;
+      - piezas guardadas en el taller como consignación, no inventario de Artesa.
 - [ ] Redactar los textos legales: términos, aviso de privacidad, devoluciones y envíos.
 - [ ] Registrar en Gestión peso y medidas empacada de las piezas a la venta.
